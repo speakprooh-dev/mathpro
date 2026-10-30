@@ -4,13 +4,12 @@ from datetime import date
 import re
 import urllib.parse
 
-# 네이버 통합검색을 활용한 카페 문항 검색 URL 생성 함수
+# 네이버 카페 내부 검색 URL 생성 함수 (카페 ID: 30250669 활용)
 def get_cafe_search_url(unit_code, num_int):
     full_code = f"{unit_code}{num_int:03d}"
-    # mathpro2020 카페 내에서 해당 문항 코드로 바로 검색되도록 네이버 통합검색 활용
-    query_str = f"mathpro2020 {full_code}"
-    encoded_query = urllib.parse.quote(query_str)
-    return f"https://search.naver.com/search.naver?where=article&query={encoded_query}"
+    encoded_query = urllib.parse.quote(full_code)
+    # mathpro2020 카페 내부 검색 결과 페이지로 직링 생성
+    return f"https://cafe.naver.com/ArticleSearchList.nhn?search.clubid=30250669&search.query={encoded_query}"
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
