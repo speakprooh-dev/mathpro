@@ -578,7 +578,7 @@ if url_student and url_student in student_list:
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 번호 관리함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
             
             entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
             
@@ -586,7 +586,7 @@ if url_student and url_student in student_list:
             saved_text = get_student_wrong_entry(selected_student, current_unit)
             saved_nums = parse_numbers(saved_text)
 
-            # 1. [먼저 위쪽에] 번호 추가/삭제 입력란 배치 (학생들이 바로 입력할 수 있도록)
+            # 1. 번호 추가/삭제 입력란 배치
             st.markdown("---")
             col_add, col_del = st.columns(2)
             with col_add:
@@ -596,7 +596,12 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
 
-            # 2. [가장 아래쪽에] 현재 저장된 오답 목록 및 해설 찾기 버튼 배치
+            # 2. [저장 버튼]을 위쪽(입력란 바로 아래)으로 배치
+            submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
+
+            st.markdown("---")
+
+            # 3. [가장 아래쪽에] 현재 저장된 오답 목록 및 해설 찾기 버튼 배치
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
@@ -620,8 +625,6 @@ if url_student and url_student in student_list:
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
-        st.divider()
-        submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
         if submit_clicked:
             save_student_progress(selected_student, m_checked_results, h_checked_results)
             if entered_unit_code:
