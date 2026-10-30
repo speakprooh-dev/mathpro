@@ -413,7 +413,7 @@ def save_progress(student_name, m_checked, h_checked):
     conn.close()
 
 # --- 웹 UI 구성 ---
-st.title("📐 학생 맞춤 학습 로드맵")
+st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 st.divider()
 
@@ -476,7 +476,6 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            # 완료 문구 없이 깔끔한 체크박스 유지
                             m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
@@ -490,7 +489,6 @@ if url_student and url_student in student_list:
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    # 완료 문구 없이 깔끔한 체크박스 유지
                     h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
