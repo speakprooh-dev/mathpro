@@ -593,33 +593,33 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
 
-            # --- [저장하기 버튼을 오답 목록 위로 이동] ---
+            # 저장하기 버튼을 오답 목록 위로 올리기 위해 폼 내부에 배치하되 구조에 맞게 수정
             submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
-            st.markdown("---")
 
-            saved_text = get_student_wrong_entry(selected_student, current_unit)
-            saved_nums = parse_numbers(saved_text)
+        # 폼 바깥에서 오답 목록을 안전하게 출력
+        saved_text = get_student_wrong_entry(selected_student, current_unit)
+        saved_nums = parse_numbers(saved_text)
 
-            st.markdown("### 📋 현재 저장된 오답 목록")
-            if saved_nums:
-                cafe_main_url = get_cafe_search_url(current_unit, 1)
-                col_info, col_btn = st.columns([3, 1])
-                with col_info:
-                    st.caption(f"총 {len(saved_nums)}문제 저장됨 | 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
-                with col_btn:
-                    st.markdown(
-                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
-                        unsafe_allow_html=True
-                    )
-                
-                sorted_nums_list = sorted(list(saved_nums))
-                cols_grid = st.columns(3)
-                for idx, num_int in enumerate(sorted_nums_list):
-                    full_code = f"{current_unit}{num_int:03d}"
-                    with cols_grid[idx % 3]:
-                        st.code(full_code, language="text")
-            else:
-                st.info("📋 현재 저장된 오답 번호가 없습니다.")
+        st.markdown("### 📋 현재 저장된 오답 목록")
+        if saved_nums:
+            cafe_main_url = get_cafe_search_url(current_unit, 1)
+            col_info, col_btn = st.columns([3, 1])
+            with col_info:
+                st.caption(f"총 {len(saved_nums)}문제 저장됨 | 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
+            with col_btn:
+                st.markdown(
+                    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
+                    unsafe_allow_html=True
+                )
+            
+            sorted_nums_list = sorted(list(saved_nums))
+            cols_grid = st.columns(3)
+            for idx, num_int in enumerate(sorted_nums_list):
+                full_code = f"{current_unit}{num_int:03d}"
+                with cols_grid[idx % 3]:
+                    st.code(full_code, language="text")
+        else:
+            st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
         if submit_clicked:
             save_student_progress(selected_student, m_checked_results, h_checked_results)
