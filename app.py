@@ -11,7 +11,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (마일스톤 테이블 삭제 오류 수정 완료)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -44,7 +44,7 @@ def init_db():
         )
     ''')
     
-    # 학생별 마일스톤 (CREATE TABLE IF NOT EXISTS로 변경하여 데이터 유지)
+    # 학생별 마일스톤
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -414,7 +414,9 @@ if url_student and url_student in student_list:
 
     all_hws_flat = get_all_homework()
     total_tasks = len(milestones) + len(all_hws_flat)
-    completed_m = sum(1 for m_id, _, _, _, _ in milestones if m_progress.get(m_id, False))
+    
+    # 안전하게 마일스톤 행 구조(id, sub, ch, t_name)에 맞추어 카운트
+    completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
     completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
     total_completed = completed_m + completed_h
     progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
