@@ -246,12 +246,10 @@ def delete_chapter_type(type_id):
     conn.commit()
     conn.close()
 
-# 특정 단원에 유형들만 일괄 등록하는 함수 (자동 번호 매김)
 def bulk_insert_types_for_chapter(chapter_id, text_data):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
-    # 기존에 등록된 유형 개수를 확인하여 번호 이어서 매기기
     c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     count_row = c.fetchone()
     type_counter = (count_row[0] if count_row else 0) + 1
@@ -283,31 +281,32 @@ def get_student_milestones(student_name):
     conn.close()
     return rows
 
-def assign_chapter_to_student(student_name, chapter_id):
+def assign_chapters_to_student(student_name, chapter_ids):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
-    ch_row = c.fetchone()
-    if not ch_row:
-        conn.close()
-        return
-    sub, ch_name = ch_row
     
-    c.execute("SELECT name FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-    type_rows = c.fetchall()
-    
-    types_to_add = [r[0] for r in type_rows]
-    if not types_to_add:
-        types_to_add = ["단원 전체 기본 학습"]
+    for chapter_id in chapter_ids:
+        c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
+        ch_row = c.fetchone()
+        if not ch_row:
+            continue
+        sub, ch_name = ch_row
         
-    c.execute("SELECT chapter, type_name FROM milestones WHERE student_name = ?", (student_name,))
-    existing = {(r[0], r[1]) for r in c.fetchall()}
-    
-    for t_name in types_to_add:
-        if (ch_name, t_name) not in existing:
-            c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", 
-                      (student_name, sub, ch_name, t_name))
+        c.execute("SELECT name FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
+        type_rows = c.fetchall()
+        
+        types_to_add = [r[0] for r in type_rows]
+        if not types_to_add:
+            types_to_add = ["단원 전체 기본 학습"]
             
+        c.execute("SELECT chapter, type_name FROM milestones WHERE student_name = ?", (student_name,))
+        existing = {(r[0], r[1]) for r in c.fetchall()}
+        
+        for t_name in types_to_add:
+            if (ch_name, t_name) not in existing:
+                c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", 
+                          (student_name, sub, ch_name, t_name))
+                
     conn.commit()
     conn.close()
 
@@ -523,9 +522,8 @@ else:
         subject_names = [s[1] for s in subjects_data]
 
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
-        st.info("단원 제목은 직접 추가하고, 각 단원 하단에서 **유형 목록만 복사해서 대량으로 일괄 등록**할 수 있습니다.")
 
-        # 1. 새 과목 추가 영역
+        # 새 과목 추가 영역
         with st.form("unified_sub_form"):
             col_u1, col_u2 = st.columns([3, 1])
             with col_u1:
@@ -546,7 +544,7 @@ else:
 
         st.markdown("---")
 
-        # 2. 과목별 접이식(Expander) 계층형 관리 화면
+        # 과목별 접이식(Expander) 계층형 관리 화면
         if subjects_data:
             for sub_id, sub_name in subjects_data:
                 with st.expander(f"📚 [과목] {sub_name}", expanded=False):
@@ -570,7 +568,6 @@ else:
 
                     st.markdown("---")
 
-                    # 단원 추가 폼
                     with st.form(f"add_ch_form_{sub_id}"):
                         col_ac1, col_ac2 = st.columns([3, 1])
                         with col_ac1:
@@ -612,7 +609,6 @@ else:
                                         st.warning("단원이 삭제되었습니다.")
                                         st.rerun()
 
-                                # --- [새로운 기능] 단원별 유형 대량 복붙 등록 ---
                                 with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
                                     st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
                                     with st.form(f"bulk_t_form_{ch_id}"):
@@ -624,7 +620,6 @@ else:
                                                 st.rerun()
                                             else:
                                                 st.error("내용을 입력해주세요.")
-                                # ------------------------------------------------
 
                                 types_list = get_chapter_types(ch_id)
                                 with st.form(f"add_t_{ch_id}"):
@@ -634,7 +629,6 @@ else:
                                     with tc2:
                                         if st.form_submit_button("유형 추가"):
                                             if t_in.strip():
-                                                # 개별 추가 시에도 자동 번호 부여 규칙 적용
                                                 c_conn = sqlite3.connect("mathpro_roadmap.db")
                                                 c_cur = c_conn.cursor()
                                                 c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
@@ -665,7 +659,7 @@ else:
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정 영역
+        # 3. 학생별 진도 일괄 배정 영역 (폼 구조 해제하여 안정성 확보)
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
             st.info("마스터 라이브러리에 등록된 단원 중 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 싹 배정됩니다!")
@@ -674,21 +668,18 @@ else:
             if all_chapters:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
                 
-                with st.form("batch_assign_form"):
-                    selected_ch_ids = []
-                    for ch_id, ch_sub, ch_name in all_chapters:
-                        is_already = ch_name in assigned_chapters
-                        label = f"[{ch_sub}] {ch_name}" + (" (이미 부여됨)" if is_already else "")
-                        if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
-                            selected_ch_ids.append(ch_id)
-                    
-                    st.write("")
-                    batch_submit = st.form_submit_button("📥 선택한 단원들 일괄 부여하기", type="primary")
+                # 폼 외부에서 체크박스들을 관리하여 즉시 반영되도록 수정
+                selected_ch_ids = []
+                for ch_id, ch_sub, ch_name in all_chapters:
+                    is_already = ch_name in assigned_chapters
+                    label = f"[{ch_sub}] {ch_name}" + (" (이미 부여됨)" if is_already else "")
+                    if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
+                        selected_ch_ids.append(ch_id)
                 
-                if batch_submit:
+                st.write("")
+                if st.button("📥 선택한 단원들 일괄 부여하기", type="primary"):
                     if selected_ch_ids:
-                        for ch_id in selected_ch_ids:
-                            assign_chapter_to_student(selected_student, ch_id)
+                        assign_chapters_to_student(selected_student, selected_ch_ids)
                         st.success(f"'{selected_student}' 학생에게 선택한 단원들이 성공적으로 배정되었습니다!")
                         st.rerun()
                     else:
