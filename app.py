@@ -983,10 +983,10 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합 (묶음 복사 + 선생님 직접 편집 기능 추가)
+    # [탭 4] 학생 오답노트 취합 (개별 상세 목록 제거, 깔끔한 묶음 복사 및 편집 위주로 정돈)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
-        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 확인하고, 묶음 형태로 복사하거나 직접 수정할 수 있습니다.")
+        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 묶음 형태로 확인하고 복사하거나 수정할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1033,21 +1033,6 @@ else:
                                 <button onclick="copyBundle_{u_code}()" style="background-color:#03C75A; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
                                 """
                                 st.markdown(bundle_copy_js, unsafe_allow_html=True)
-                            
-                            st.markdown("---")
-                            st.caption("개별 문항 상세 및 해설 링크")
-                            for num_int in sorted(list(parsed_s)):
-                                full_code = f"{u_code}{num_int:03d}"
-                                search_url = get_cafe_search_url(u_code, num_int)
-                                
-                                c1, c2 = st.columns([3, 1])
-                                with c1:
-                                    st.write(f"▫️ **{num_int}번** (`{full_code}`)")
-                                with c2:
-                                    st.markdown(
-                                        f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
-                                        unsafe_allow_html=True
-                                    )
             else:
                 st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
         else:
