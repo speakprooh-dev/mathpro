@@ -524,7 +524,6 @@ if url_student and url_student in student_list:
 
     st.divider()
 
-    # 자연스러운 메뉴 이름으로 변경
     tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 학습 진도", "📚 2. 날짜별 숙제", "💬 3. 오답 및 질문 관리"])
 
     m_checked_results = {}
@@ -598,11 +597,9 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
 
-        # 저장 버튼을 입력란 바로 아래, 오답 목록 위에 배치
         save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
         st.markdown("---")
 
-        # 현재 저장된 오답 목록 출력 (스크롤 컨테이너 적용)
         saved_text = get_student_wrong_entry(selected_student, current_unit)
         saved_nums = parse_numbers(saved_text)
 
@@ -618,7 +615,6 @@ if url_student and url_student in student_list:
                     unsafe_allow_html=True
                 )
             
-            # 오답 목록이 길어지면 내부 스크롤이 생기도록 컨테이너 적용
             with st.container(height=300):
                 sorted_nums_list = sorted(list(saved_nums))
                 cols_grid = st.columns(3)
@@ -629,9 +625,7 @@ if url_student and url_student in student_list:
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
-    # 어느 탭에서든 저장 버튼이 눌렸을 때 공통 처리 로직
     if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
-        # 모든 탭의 체크박스 상태 수집
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
             key = f"s_milestone_{m_id}"
@@ -646,7 +640,6 @@ if url_student and url_student in student_list:
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
         
-        # 오답 번호 반영
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "A114")
@@ -658,6 +651,7 @@ if url_student and url_student in student_list:
             nums_to_del = parse_numbers(del_txt)
             
             final_nums = (saved_nums_pre | nums_to_add) - nums_to_del
+            new_saved_text = ". ".join([str(n) for n in sorted(list(final_nums))]) # 오타 수정 방지용 기본 조치
             new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
             save_student_wrong_entry(selected_student, cur_code, new_saved_text)
             
@@ -701,8 +695,8 @@ else:
                         st.rerun()
 
     if student_list:
-        with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
-            st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주세요.")
+        with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 및 바로가기"):
+            st.markdown("학생들에게 카카오톡으로 링크를 보내거나, **[바로가기]** 버튼을 눌러 학생 화면을 직접 확인하세요.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -714,7 +708,16 @@ else:
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
-                st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
+                
+                # 가독성과 클릭 편의성을 위해 열 분할 배치 (입력창 + 바로가기 버튼)
+                c_link, c_btn = st.columns([4, 1])
+                with c_link:
+                    st.text_input(f"📌 {s} 학생 링크", value=personal_link, key=f"link_{s}", label_visibility="collapsed")
+                with c_btn:
+                    st.markdown(
+                        f'<a href="{personal_link}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 10px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-top:2px;">🔗 바로가기</a>',
+                        unsafe_allow_html=True
+                    )
 
     st.divider()
 
