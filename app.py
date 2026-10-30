@@ -585,12 +585,22 @@ if url_student and url_student in student_list:
             current_unit = entered_unit_code if entered_unit_code else "A114"
             saved_text = get_student_wrong_entry(selected_student, current_unit)
             saved_nums = parse_numbers(saved_text)
-            
+
+            # 1. [먼저 위쪽에] 번호 추가/삭제 입력란 배치 (학생들이 바로 입력할 수 있도록)
+            st.markdown("---")
+            col_add, col_del = st.columns(2)
+            with col_add:
+                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
+            with col_del:
+                del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
+
+            st.markdown("---")
+
+            # 2. [가장 아래쪽에] 현재 저장된 오답 목록 및 해설 찾기 버튼 배치
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
                 
-                # 상단 우측에 해설찾기 버튼 딱 하나만 배치
                 cafe_main_url = get_cafe_search_url(current_unit, 1)
                 col_info, col_btn = st.columns([3, 1])
                 with col_info:
@@ -601,7 +611,6 @@ if url_student and url_student in student_list:
                         unsafe_allow_html=True
                     )
                 
-                # 가로 3열 Grid 배치로 공간 압축
                 sorted_nums_list = sorted(list(saved_nums))
                 cols_grid = st.columns(3)
                 for idx, num_int in enumerate(sorted_nums_list):
@@ -610,13 +619,6 @@ if url_student and url_student in student_list:
                         st.code(full_code, language="text")
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
-
-            st.markdown("---")
-            col_add, col_del = st.columns(2)
-            with col_add:
-                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
-            with col_del:
-                del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
         st.divider()
         submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
