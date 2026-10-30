@@ -411,18 +411,29 @@ if url_student and url_student in student_list:
     hw_dates = get_homework_dates()
     m_progress = get_milestone_progress(selected_student)
     h_progress = get_homework_progress(selected_student)
-
     all_hws_flat = get_all_homework()
-    total_tasks = len(milestones) + len(all_hws_flat)
-    
+
+    # 진도 마일스톤 달성도 계산
+    total_m = len(milestones)
     completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
-    completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
-    total_completed = completed_m + completed_h
-    progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
+    m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
+
+    # 과제 달성도 계산
+    total_h = len(all_hws_flat)
+    completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
+    h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
     st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
-    st.write(f"**전체 커리큘럼 및 과제 달성도: {progress_val}%** ({total_completed}/{total_tasks} 완료)")
-    st.progress(progress_val / 100 if total_tasks > 0 else 0)
+    
+    # 진도와 과제 달성도를 각각 독립된 프로그레스 바 영역으로 출력
+    col_stat1, col_stat2 = st.columns(2)
+    with col_stat1:
+        st.write(f"**🎯 진도 마일스톤 달성도: {m_percent}%** ({completed_m}/{total_m} 완료)")
+        st.progress(m_percent / 100 if total_m > 0 else 0)
+    with col_stat2:
+        st.write(f"**📚 과제 달성도: {h_percent}%** ({completed_h}/{total_h} 완료)")
+        st.progress(h_percent / 100 if total_h > 0 else 0)
+
     st.divider()
 
     tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 코멘트 & 질문방"])
@@ -673,7 +684,7 @@ else:
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정 영역 (과목별 접이식 폴더로 개편)
+        # 3. 학생별 진도 일괄 배정 영역
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
             st.info("과목별 폴더를 열어 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 배정됩니다!")
@@ -685,8 +696,6 @@ else:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
                 
                 selected_ch_ids = []
-                
-                # 과목별로 단원들을 묶어서 접이식(Expander)으로 제공
                 for sub_id, sub_name in subjects_data:
                     sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
                     if sub_chapters:
