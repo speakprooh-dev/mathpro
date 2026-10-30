@@ -704,7 +704,7 @@ else:
             
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
-            s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
+            s_completed_m = sum(1 for m in milestones if s_m_progress.get(m[0], False))
             s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
@@ -712,67 +712,58 @@ else:
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
             st.markdown("##### 📘 단원별 마일스톤 현황 및 직접 진도 체크")
-            st.info("💡 선생님 화면에서는 각 단원별로 **[일괄 체크 (전체 선택/해제)]** 버튼을 누르거나 개별 체크 후 하단의 **[선생님 진도 상태 저장하기]** 버튼을 눌러 저장할 수 있습니다!")
+            st.info("💡 각 단원별 **[전체 선택]** 또는 **[전체 해제]** 버튼을 누르면 즉시 반영되며, 수정 후 하단의 **[선생님 진도 상태 저장하기]** 버튼을 꼭 눌러주세요!")
 
             if s_milestones:
-                with st.form("teacher_milestone_form"):
-                    teacher_m_checked = {}
-                    grouped_t_milestones = {}
-                    for m_id, sub, ch, t_name, v_url in s_milestones:
-                        key = (sub, ch)
-                        if key not in grouped_t_milestones:
-                            grouped_t_milestones[key] = []
-                        grouped_t_milestones[key].append((m_id, t_name, v_url))
+                teacher_m_checked = {}
+                grouped_t_milestones = {}
+                for m_id, sub, ch, t_name, v_url in s_milestones:
+                    key = (sub, ch)
+                    if key not in grouped_t_milestones:
+                        grouped_t_milestones[key] = []
+                    grouped_t_milestones[key].append((m_id, t_name, v_url))
 
-                    for (sub, ch), items in grouped_t_milestones.items():
-                        done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
-                        exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                # 세션 상태로 단원별 일괄 선택 상태 관리
+                for (sub, ch), items in grouped_t_milestones.items():
+                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                    exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                    
+                    with st.expander(exp_title, expanded=False):
+                        col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+                        with col_btn1:
+                            if st.button("☑️ 전체 선택", key=f"t_all_on_{sub}_{ch}"):
+                                for m_id, _, _ in items:
+                                    st.session_state[f"t_milestone_{m_id}"] = True
+                                st.rerun()
+                        with col_btn2:
+                            if st.button("◻️ 전체 해제", key=f"t_all_off_{sub}_{ch}"):
+                                for m_id, _, _ in items:
+                                    st.session_state[f"t_milestone_{m_id}"] = False
+                                st.rerun()
                         
-                        with st.expander(exp_title, expanded=False):
-                            # 단원별 일괄 선택 버튼 추가 (체크박스 대신 라디오나 버튼 활용)
-                            col_all_1, col_all_2 = st.columns(2)
-                            with col_all_1:
-                                batch_on = st.form_submit_button(f"📌 [{ch}] 전체 선택", key=f"batch_on_{sub}_{ch}")
-                            with col_all_2:
-                                batch_off = st.form_submit_button(f"🔄 [{ch}] 전체 해제", key=f"batch_off_{sub}_{ch}")
-                            
-                            st.markdown("---")
+                        st.markdown("---")
 
-                            for m_id, t_name, v_url in items:
-                                is_done = s_m_progress.get(m_id, False)
-                                # 버튼이 눌렸을 때 상태 강제 지정
-                                if batch_on:
-                                    is_done = True
-                                elif batch_off:
-                                    is_done = False
+                        for m_id, t_name, v_url in items:
+                            is_done = s_m_progress.get(m_id, False)
+                            teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
+                            st.divider()
 
-                                teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
-                                st.divider()
+                st.divider()
+                if st.button("선생님 진도 상태 저장하기", type="primary", key="teacher_save_btn"):
+                    conn = sqlite3.connect("mathpro_roadmap.db")
+                    c = conn.cursor()
+                    for m_id, val in teacher_m_checked.items():
+                        c.execute('''
+                            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
+                        ''', (selected_student, m_id, int(val), int(val)))
+                    conn.commit()
+                    conn.close()
+                    st.success("진도 상태가 성공적으로 저장되었습니다!")
+                    st.rerun()
 
-                    st.divider()
-                    teacher_save_clicked = st.form_submit_button("선생님 진도 상태 저장하기", type="primary")
-
-                    if teacher_save_clicked or batch_on or batch_off:
-                        conn = sqlite3.connect("mathpro_roadmap.db")
-                        c = conn.cursor()
-                        for m_id, val in teacher_m_checked.items():
-                            # batch_on/off 상태도 반영
-                            if batch_on:
-                                val = True
-                            elif batch_off:
-                                val = False
-                            
-                            c.execute('''
-                                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-                                VALUES (?, ?, ?)
-                                ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-                            ''', (selected_student, m_id, int(val), int(val)))
-                        conn.commit()
-                        conn.close()
-                        st.success("진도 상태가 성공적으로 저장되었습니다!")
-                        st.rerun()
-
-                # 개별 항목 삭제는 폼 바깥에서 팝오버로 처리
+                # 개별 항목 삭제 관리
                 st.markdown("##### 🗑️ 개별 마일스톤 항목 삭제 관리")
                 with st.expander("항목별 삭제 열기"):
                     for m_id, sub, ch, t_name, v_url in s_milestones:
