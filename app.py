@@ -4,11 +4,9 @@ from datetime import date
 import re
 import urllib.parse
 
-# 네이버 카페 내부 검색 URL 생성 함수 (m.cafe.naver.com 주소 활용)
+# 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
-    full_code = f"{unit_code}{num_int:03d}"
-    encoded_query = urllib.parse.quote(full_code)
-    return f"https://m.cafe.naver.com/ArticleSearchList.nhn?search.clubid=30250669&search.query={encoded_query}"
+    return "https://cafe.naver.com/mathpro2020"
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -591,17 +589,30 @@ if url_student and url_student in student_list:
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
+                st.caption("💡 **[📋 코드 복사]** 버튼을 눌러 코드를 복사한 뒤, **[🎥 카페 해설 찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요!")
                 
                 for num_int in sorted(list(saved_nums)):
                     full_code = f"{current_unit}{num_int:03d}"
-                    search_url = get_cafe_search_url(current_unit, num_int)
+                    cafe_url = get_cafe_search_url(current_unit, num_int)
                     
-                    c1, c2 = st.columns([3, 1])
+                    c1, c2, c3 = st.columns([2, 1, 1])
                     with c1:
-                        st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
+                        st.write(f"▫️ **{num_int}번** (`{full_code}`)")
                     with c2:
+                        # 자바스크립트를 활용한 클립보드 복사 버튼
+                        copy_js = f"""
+                        <script>
+                        function copyToClipboard_{num_int}() {{
+                            navigator.clipboard.writeText("{full_code}");
+                            alert("클립보드에 복사되었습니다: {full_code}");
+                        }}
+                        </script>
+                        <button onclick="copyToClipboard_{num_int}()" style="background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 코드복사</button>
+                        """
+                        st.markdown(copy_js, unsafe_allow_html=True)
+                    with c3:
                         st.markdown(
-                            f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
+                            f'<a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; width:100%;">🎥 해설찾기</a>',
                             unsafe_allow_html=True
                         )
             else:
@@ -977,14 +988,25 @@ else:
                         
                         for num_int in sorted(list(parsed_s)):
                             full_code = f"{u_code}{num_int:03d}"
-                            search_url = get_cafe_search_url(u_code, num_int)
+                            cafe_url = get_cafe_search_url(u_code, num_int)
                             
-                            c1, c2 = st.columns([3, 1])
+                            c1, c2, c3 = st.columns([2, 1, 1])
                             with c1:
-                                st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
+                                st.write(f"▫️ **{num_int}번** (`{full_code}`)")
                             with c2:
+                                copy_js = f"""
+                                <script>
+                                function copyToClipboard_{u_code}_{num_int}() {{
+                                    navigator.clipboard.writeText("{full_code}");
+                                    alert("클립보드에 복사되었습니다: {full_code}");
+                                }}
+                                </script>
+                                <button onclick="copyToClipboard_{u_code}_{num_int}()" style="background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 코드복사</button>
+                                """
+                                st.markdown(copy_js, unsafe_allow_html=True)
+                            with c3:
                                 st.markdown(
-                                    f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
+                                    f'<a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; width:100%;">🎥 해설찾기</a>',
                                     unsafe_allow_html=True
                                 )
             else:
