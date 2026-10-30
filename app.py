@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date
 
 # 페이지 기본 설정
-st.set_page_config(page_title="MathPro 학습 로드맵", page_icon="📐", layout="centered")
+st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
 # 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
@@ -11,12 +11,20 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (구조 충돌 방지를 위해 기존 테이블 재생성 처리)
+# 1. 데이터베이스 초기화 (과목 관리 테이블 추가)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
+    
+    # 과목 관리 테이블
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS subjects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
+    ''')
     
     # 단원 중심 커리큘럼 풀
     c.execute('''
@@ -27,8 +35,7 @@ def init_db():
         )
     ''')
     
-    # 만약 예전 버전의 milestones 테이블이 남아있다면 에러를 내므로 안전하게 새로 생성
-    # (이 과정에서 기존에 잘못 들어갔던 마일스톤 데이터는 깔끔하게 초기화됩니다)
+    # 학생별 마일스톤 (구조 충돌 방지를 위해 DROP 후 재생성)
     c.execute("DROP TABLE IF EXISTS milestones")
     c.execute('''
         CREATE TABLE milestones (
@@ -64,6 +71,16 @@ def init_db():
         )
     ''')
     
+    # 초기 기본 과목 데이터
+    c.execute("SELECT COUNT(*) FROM subjects")
+    if c.fetchone()[0] == 0:
+        default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
+        for sub in default_subjects:
+            try:
+                c.execute("INSERT INTO subjects (name) VALUES (?)", (sub,))
+            except sqlite3.IntegrityError:
+                pass
+                
     # 초기 샘플 단원 데이터
     c.execute("SELECT COUNT(*) FROM curriculum_pool")
     if c.fetchone()[0] == 0:
@@ -121,6 +138,49 @@ def delete_student(name):
     c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
     c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
+    conn.commit()
+    conn.close()
+
+# 과목 관리 함수
+def get_subjects():
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM subjects ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_subject(name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
+        conn.commit()
+        success = True
+    except sqlite3.IntegrityError:
+        success = False
+    conn.close()
+    return success
+
+def update_subject(sub_id, old_name, new_name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE subjects SET name = ? WHERE id = ?", (new_name, sub_id))
+        # 연결된 커리큘럼 풀과 마일스톤의 과목명도 함께 업데이트
+        c.execute("UPDATE curriculum_pool SET subject = ? WHERE subject = ?", (new_name, old_name))
+        c.execute("UPDATE milestones SET subject = ? WHERE subject = ?", (new_name, old_name))
+        conn.commit()
+        success = True
+    except sqlite3.IntegrityError:
+        success = False
+    conn.close()
+    return success
+
+def delete_subject(sub_id, name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM subjects WHERE id = ?", (sub_id,))
     conn.commit()
     conn.close()
 
@@ -373,29 +433,85 @@ else:
     st.divider()
 
     st.markdown("### ⚙️ [선생님 전용] 커리큘럼 및 과제 통합 관리 설정")
-    t_cfg1, t_cfg2 = st.tabs(["📚 1. 마스터 단원 라이브러리 및 일괄 진도 배정", "📅 2. 날짜별 과제 관리"])
+    t_cfg1, t_cfg2 = st.tabs(["📚 1. 과목 및 단원 라이브러리 관리", "📅 2. 날짜별 과제 관리"])
 
     with t_cfg1:
-        st.markdown("#### 🛠️ 새로운 단원 라이브러리 추가")
-        with st.form("pool_form"):
-            col_p1, col_p2, col_p3 = st.columns([2, 3, 1])
-            subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
-            with col_p1:
-                p_sub = st.selectbox("과목", subjects)
-            with col_p2:
-                p_ch = st.text_input("단원명 (예: 01. 다항식의 연산)")
-            with col_p3:
-                st.write("")
-                st.write("")
-                add_pool_btn = st.form_submit_button("단원 추가")
-        
-        if add_pool_btn:
-            if p_ch.strip():
-                add_curriculum_pool(p_sub, p_ch.strip())
-                st.success("단원이 라이브러리에 등록되었습니다!")
-                st.rerun()
+        subjects_data = get_subjects()
+        subject_names = [s[1] for s in subjects_data]
+
+        # 1. 과목 관리 섹션
+        with st.expander("🏷️ 과목명 추가 / 수정 / 삭제 관리", expanded=False):
+            with st.form("add_sub_form"):
+                col_sub1, col_sub2 = st.columns([3, 1])
+                with col_sub1:
+                    new_sub_name = st.text_input("새로운 과목명 입력 (예: 수능 특강)")
+                with col_sub2:
+                    st.write("")
+                    st.write("")
+                    add_sub_btn = st.form_submit_button("과목 추가")
+            if add_sub_btn:
+                if new_sub_name.strip():
+                    if add_subject(new_sub_name.strip()):
+                        st.success(f"'{new_sub_name.strip()}' 과목이 추가되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("이미 존재하는 과목명입니다.")
+                else:
+                    st.error("과목명을 입력하세요.")
+
+            st.markdown("---")
+            st.markdown("#### 📋 등록된 과목 목록")
+            if subjects_data:
+                for sub_id, sub_name in subjects_data:
+                    c_s1, c_s2, c_s3 = st.columns([3, 1, 1])
+                    with c_s1:
+                        st.write(f"▫️ **{sub_name}**")
+                    with c_s2:
+                        with st.popover("✏️ 수정"):
+                            with st.form(f"edit_sub_form_{sub_id}"):
+                                edit_name = st.text_input("과목명 수정", value=sub_name, key=f"edit_sub_name_{sub_id}")
+                                if st.form_submit_button("저장"):
+                                    if edit_name.strip():
+                                        if update_subject(sub_id, sub_name, edit_name.strip()):
+                                            st.success("수정되었습니다!")
+                                            st.rerun()
+                                        else:
+                                            st.warning("이미 존재하는 과목명입니다.")
+                                    else:
+                                        st.error("과목명을 입력하세요.")
+                    with c_s3:
+                        if st.button("🗑️ 삭제", key=f"del_sub_{sub_id}"):
+                            delete_subject(sub_id, sub_name)
+                            st.warning("과목이 삭제되었습니다.")
+                            st.rerun()
             else:
-                st.error("단원명을 입력해주세요.")
+                st.info("등록된 과목이 없습니다.")
+
+        st.divider()
+
+        # 2. 단원 추가 섹션
+        st.markdown("#### 🛠️ 새로운 단원 라이브러리 추가")
+        if subject_names:
+            with st.form("pool_form"):
+                col_p1, col_p2, col_p3 = st.columns([2, 3, 1])
+                with col_p1:
+                    p_sub = st.selectbox("과목 선택", subject_names)
+                with col_p2:
+                    p_ch = st.text_input("단원명 (예: 01. 다항식의 연산)")
+                with col_p3:
+                    st.write("")
+                    st.write("")
+                    add_pool_btn = st.form_submit_button("단원 추가")
+            
+            if add_pool_btn:
+                if p_ch.strip():
+                    add_curriculum_pool(p_sub, p_ch.strip())
+                    st.success("단원이 라이브러리에 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("단원명을 입력해주세요.")
+        else:
+            st.warning("먼저 위에서 과목을 추가해 주세요!")
 
         st.markdown("---")
         
@@ -460,8 +576,8 @@ else:
                 with col_i2:
                     with st.popover("✏️ 수정"):
                         with st.form(f"edit_form_{p_id}"):
-                            sub_idx = subjects.index(p_sub) if p_sub in subjects else 0
-                            edit_sub = st.selectbox("과목", subjects, index=sub_idx, key=f"edit_sub_{p_id}")
+                            sub_idx = subject_names.index(p_sub) if p_sub in subject_names else 0
+                            edit_sub = st.selectbox("과목", subject_names, index=sub_idx, key=f"edit_sub_{p_id}")
                             edit_ch = st.text_input("단원명", value=p_ch, key=f"edit_ch_{p_id}")
                             if st.form_submit_button("저장"):
                                 if edit_ch.strip():
