@@ -413,7 +413,7 @@ def save_progress(student_name, m_checked, h_checked):
     conn.close()
 
 # --- 웹 UI 구성 ---
-st.title("📐 MathPro 학생 맞춤 학습 로드맵")
+st.title("📐 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 st.divider()
 
@@ -460,7 +460,7 @@ if url_student and url_student in student_list:
 
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
-            st.info("💡 **안내:** 완료한 학습 유형의 **[완료]** 체크박스를 누르고, 하단의 **[내 체크상태 저장하기]** 버튼을 눌러주세요!")
+            st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
@@ -476,22 +476,22 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            # 체크박스 왼쪽에 [완료] 문구를 명시하여 직관성 극대화
-                            m_checked_results[m_id] = st.checkbox(f"[완료] {t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                            # 완료 문구 없이 깔끔한 체크박스 유지
+                            m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
-            st.info("💡 **안내:** 완료한 숙제 항목의 **[완료]** 체크박스를 누르고, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
+            st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if hw_dates:
                 selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    # 과제 체크박스 왼쪽에 [완료] 문구 추가
-                    h_checked_results[h_id] = st.checkbox(f"[완료] {title}", value=default_val, key=f"s_hw_{h_id}")
+                    # 완료 문구 없이 깔끔한 체크박스 유지
+                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
@@ -805,17 +805,4 @@ else:
         st.markdown("#### 📋 등록된 날짜별 과제 목록 (삭제 관리)")
         current_hws = get_all_homework()
         if current_hws:
-            for h_id, hw_date, title in current_hws:
-                weekday_str = get_weekday_kr(hw_date)
-                c1, c2, c3 = st.columns([2, 3, 1])
-                with c1:
-                    st.write(f"**[{hw_date} ({weekday_str})]**")
-                with c2:
-                    st.write(title)
-                with c3:
-                    if st.button("삭제", key=f"del_hw_{h_id}"):
-                        delete_homework(h_id)
-                        st.warning("과제가 삭제되었습니다.")
-                        st.rerun()
-        else:
-            st.info("등록된 과제가 없습니다.")
+            for h_id, hw_date, title in current_h
