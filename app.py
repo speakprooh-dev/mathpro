@@ -434,10 +434,23 @@ if url_student and url_student in student_list:
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
             if milestones:
+                # 학생 화면에서도 단원별로 묶어서 접이식(Expander) 형태로 정리
+                grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
-                    label = f"[{sub}] {ch} ➔ {t_name}"
-                    default_val = m_progress.get(m_id, False)
-                    m_checked_results[m_id] = st.checkbox(label, value=default_val, key=f"s_milestone_{m_id}")
+                    key = (sub, ch)
+                    if key not in grouped_s_milestones:
+                        grouped_s_milestones[key] = []
+                    grouped_s_milestones[key].append((m_id, t_name))
+
+                for (sub, ch), items in grouped_s_milestones.items():
+                    # 단원별로 완료된 개수 계산
+                    done_cnt = sum(1 for m_id, _ in items if m_progress.get(m_id, False))
+                    exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                    
+                    with st.expander(exp_label, expanded=False):
+                        for m_id, t_name in items:
+                            default_val = m_progress.get(m_id, False)
+                            m_checked_results[m_id] = st.checkbox(t_name, value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
@@ -694,7 +707,6 @@ else:
             student_ms = get_student_milestones(selected_student)
             
             if student_ms:
-                # 단원별로 항목들 묶기
                 grouped_milestones = {}
                 for m_id, sub, ch, t_name in student_ms:
                     key = (sub, ch)
@@ -702,7 +714,6 @@ else:
                         grouped_milestones[key] = []
                     grouped_milestones[key].append((m_id, t_name))
 
-                # 각 단원을 접이식(Expander)으로 깔끔하게 출력
                 for (sub, ch), items in grouped_milestones.items():
                     with st.expander(f"📁 [{sub}] {ch} (총 {len(items)}개 유형 부여됨)"):
                         for m_id, t_name in items:
