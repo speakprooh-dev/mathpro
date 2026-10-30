@@ -207,16 +207,14 @@ st.divider()
 
 student_list = get_students()
 
-# URL 파라미터에서 학생 이름 읽어오기 (예: ?student=은성)
+# URL 파라미터에서 학생 이름 읽어오기
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 만약 URL에 학생 이름이 지정되어 있다면 해당 학생으로 고정
 if url_student and url_student in student_list:
     selected_student = url_student
     st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지로 접속중입니다.")
 else:
-    # 🔗 선생님용 / 관리자용 화면 또는 학생 선택 화면
     st.subheader("👥 학생 선택 및 관리 (선생님 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
 
@@ -249,11 +247,21 @@ else:
                     st.success("삭제되었습니다!")
                     st.rerun()
 
-    # 💡 [신규 기능] 선생님을 위한 '학생별 고유 링크 생성기' 박스!
+    # 🔗 [자동 완성] 현재 접속 중인 주소를 기반으로 고유 링크 생성!
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
             st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주면, **이름을 고를 필요 없이 곧바로 본인 화면**으로 접속됩니다.")
-            base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+            
+            # 스트림릿 클라우드의 공식 주소 추출 방식 적용 (에러 원천 차단)
+            try:
+                base_url = st.context.headers.get("Host", "")
+                if base_url:
+                    base_url = f"https://{base_url}"
+                else:
+                    base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+            except:
+                base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
@@ -301,7 +309,7 @@ if selected_student:
             st.markdown("### 📝 날짜별 과제함")
             if hw_dates:
                 selected_date = st.selectbox(
-                    "확인할 과제 날짜를 선택하세요 (기본: 가장 최근 숙제)", 
+                    "확인할 과제 날짜를 선택하세요", 
                     hw_dates,
                     format_func=lambda x: f"{x} ({get_weekday_kr(x)})"
                 )
@@ -309,16 +317,13 @@ if selected_student:
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    h_checked_rules = h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"hw_{h_id}")
+                    h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
         with tab3:
             st.markdown("### 💬 선생님의 1:1 맞춤 코멘트")
-            st.info(f"""
-            **[{selected_student} 학생 맞춤 피드백]**
-            오늘도 꼼꼼하게 오답 정리하고 숙제 체크하기! 질문이 있다면 아래에 남겨주세요.
-            """)
+            st.info(f"**[{selected_student} 학생 맞춤 피드백]** 오늘도 꼼꼼하게 오답 정리하고 숙제 체크하기!")
             st.markdown("### ✏️ 오늘의 학습 다짐 / 질문하기")
             user_note_input = st.text_area("오늘 공부한 내용이나 궁금한 점을 적어보세요.")
 
@@ -330,11 +335,9 @@ if selected_student:
             st.success(f"'{selected_student}' 학생의 진도와 과제 상태가 저장되었습니다!")
             st.rerun()
 
-# 3. 하단: 웹 설정 (과제 등록/수정/삭제 및 마일스톤 관리)
+# 3. 하단: 웹 설정
 st.divider()
 with st.expander("⚙️ 과제 및 마일스톤 웹 관리 설정"):
-    st.markdown("여기서 **날짜별 숙제**를 새로 등록하거나 삭제할 수 있습니다.")
-    
     st.markdown("#### 📅 날짜별 과제 등록하기")
     col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
     with col_h1:
