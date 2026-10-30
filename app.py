@@ -226,7 +226,8 @@ def delete_subject(sub_id):
 def get_chapters():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, subject, name FROM chapters ORDER BY subject, name")
+    # 단원 이름 앞의 숫자를 추출하여 숫자(Numeric) 기준으로 오름차순 정렬
+    c.execute("SELECT id, subject, name FROM chapters ORDER BY subject, CAST(SUBSTR(name, 1, INSTR(name || '.', '.') - 1) AS INTEGER), name")
     rows = c.fetchall()
     conn.close()
     return rows
