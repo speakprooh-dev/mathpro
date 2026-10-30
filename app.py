@@ -590,7 +590,7 @@ if url_student and url_student in student_list:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
                 
-                # 상단 적절한 위치에 해설찾기 버튼 딱 하나 배치
+                # 상단 우측에 해설찾기 버튼 딱 하나만 배치
                 cafe_main_url = get_cafe_search_url(current_unit, 1)
                 col_info, col_btn = st.columns([3, 1])
                 with col_info:
@@ -601,10 +601,13 @@ if url_student and url_student in student_list:
                         unsafe_allow_html=True
                     )
                 
-                # 번호 라벨 없이 공간 효율적인 가로 배치
-                for num_int in sorted(list(saved_nums)):
+                # 가로 3열 Grid 배치로 공간 압축
+                sorted_nums_list = sorted(list(saved_nums))
+                cols_grid = st.columns(3)
+                for idx, num_int in enumerate(sorted_nums_list):
                     full_code = f"{current_unit}{num_int:03d}"
-                    st.code(full_code, language="text")
+                    with cols_grid[idx % 3]:
+                        st.code(full_code, language="text")
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
