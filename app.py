@@ -246,6 +246,39 @@ def delete_chapter_type(type_id):
     conn.commit()
     conn.close()
 
+def bulk_insert_curriculum(text_data):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    
+    current_sub = None
+    current_ch_id = None
+    
+    lines = text_data.strip().split('\n')
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        
+        # [과목명] 형태인 경우
+        if line_str.startswith('[') and line_str.endswith(']'):
+            current_sub = line_str[1:-1].strip()
+            c.execute("INSERT OR IGNORE INTO subjects (name) VALUES (?)", (current_sub,))
+            current_ch_id = None
+        # 유형인 경우 (-, *, • 로 시작)
+        elif line_str.startswith('-') or line_str.startswith('•') or line_str.startswith('*'):
+            type_name = line_str.lstrip('-•* ').strip()
+            if current_ch_id and type_name:
+                c.execute("INSERT INTO chapter_types (chapter_id, name) VALUES (?, ?)", (current_ch_id, type_name))
+        else:
+            # 단원명인 경우
+            if current_sub:
+                chapter_name = line_str
+                c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (current_sub, chapter_name))
+                current_ch_id = c.lastrowid
+                
+    conn.commit()
+    conn.close()
+
 def get_student_milestones(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -494,7 +527,29 @@ else:
         subject_names = [s[1] for s in subjects_data]
 
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
-        st.info("과목별로 접고 펼칠 수 있는 **폴더(Expander)형태**로 정리되어 화면이 깔끔합니다. 관리할 과목만 톡 눌러서 펼쳐보세요!")
+        
+        # --- [새로운 기능] 텍스트 대량 일괄 등록 Expander ---
+        with st.expander("📥 텍스트 복사 & 붙여넣기 (대량 일괄 등록)", expanded=False):
+            st.markdown("메모장이나 문서에 아래 형식을 맞춰 적은 뒤 붙여넣고 버튼을 누르세요.")
+            st.code("""[수학(상)]
+01. 다항식의 연산과 인수분해
+  - 다항식의 연산
+  - 나머지정리와 인수분해
+02. 복소수와 이차방정식
+  - 복소수의 연산""", language="text")
+            
+            with st.form("bulk_text_form"):
+                bulk_text_area = st.text_area("커리큘럼 텍스트 입력", height=150)
+                bulk_submit = st.form_submit_button("일괄 등록 실행")
+            
+            if bulk_submit:
+                if bulk_text_area.strip():
+                    bulk_insert_curriculum(bulk_text_area)
+                    st.success("커리큘럼이 성공적으로 일괄 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("등록할 텍스트를 입력해주세요.")
+        # ----------------------------------------------------
 
         # 1. 새 과목 추가 영역
         with st.form("unified_sub_form"):
@@ -520,9 +575,7 @@ else:
         # 2. 과목별 접이식(Expander) 계층형 관리 화면
         if subjects_data:
             for sub_id, sub_name in subjects_data:
-                # 각 과목을 접이식 폴더(Expander)로 깔끔하게 감싸기
                 with st.expander(f"📚 [과목] {sub_name}", expanded=False):
-                    # 과목명 수정 및 삭제 버튼
                     col_h1, col_h2 = st.columns([1, 1])
                     with col_h1:
                         with st.popover("✏️ 과목명 수정"):
@@ -543,7 +596,6 @@ else:
 
                     st.markdown("---")
 
-                    # 해당 과목에 단원 추가 폼
                     with st.form(f"add_ch_form_{sub_id}"):
                         col_ac1, col_ac2 = st.columns([3, 1])
                         with col_ac1:
@@ -560,7 +612,6 @@ else:
                         else:
                             st.error("단원명을 입력하세요.")
 
-                    # 해당 과목의 단원 및 유형 목록 출력
                     chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
                     if chapters_data:
                         st.markdown("##### 📌 등록된 단원 및 세부 유형 목록")
@@ -586,7 +637,6 @@ else:
                                         st.warning("단원이 삭제되었습니다.")
                                         st.rerun()
 
-                                # 하위 세부 유형 관리
                                 types_list = get_chapter_types(ch_id)
                                 with st.form(f"add_t_{ch_id}"):
                                     tc1, tc2 = st.columns([3, 1])
