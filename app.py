@@ -446,11 +446,8 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
 def parse_and_format_numbers(numbers_text):
     if not numbers_text:
         return []
-    # 숫자만 추출
     nums = re.findall(r'\d+', numbers_text)
-    # 정수형으로 변환 후 중복 제거 및 정렬
     unique_nums = sorted(list(set(int(n) for n in nums)))
-    # 3자리 포맷 (001, 005 등)
     formatted = [f"{n:03d}" for n in unique_nums]
     return formatted
 
@@ -537,14 +534,13 @@ if url_student and url_student in student_list:
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 번호 대량 입력함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 틀린 문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 질문&오답문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
             
             entered_unit_code = st.text_input("단원코드 입력", value="A1351").strip().upper()
             saved_text = get_student_wrong_entry(selected_student, entered_unit_code if entered_unit_code else "A1351")
             
             entered_nums_text = st.text_area("틀린 문제 번호 입력 (예: 1, 5, 12, 23)", value=saved_text, placeholder="예: 1, 5, 12, 25")
             
-            # 입력 즉시 파싱하여 확인용 프리뷰 제공
             if entered_nums_text:
                 parsed_list = parse_and_format_numbers(entered_nums_text)
                 if parsed_list:
