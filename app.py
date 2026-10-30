@@ -17,7 +17,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 초기화 (학생별 개별 과제 테이블 student_homework 추가)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -67,9 +67,20 @@ def init_db():
         )
     ''')
     
+    # 전체 공통 과제 테이블 (기존 호환용)
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hw_date TEXT NOT NULL,
+            title TEXT NOT NULL
+        )
+    ''')
+    
+    # [신규] 학생별 개별 과제 테이블
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS student_homework (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT NOT NULL,
             hw_date TEXT NOT NULL,
             title TEXT NOT NULL
         )
@@ -89,6 +100,16 @@ def init_db():
             homework_id INTEGER,
             is_checked INTEGER,
             PRIMARY KEY (student_name, homework_id)
+        )
+    ''')
+    
+    # [신규] 학생별 개별 과제 진행 상태 테이블
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS student_homework_progress (
+            student_name TEXT,
+            student_hw_id INTEGER,
+            is_checked INTEGER,
+            PRIMARY KEY (student_name, student_hw_id)
         )
     ''')
     
@@ -126,16 +147,6 @@ def init_db():
             for t_name, t_url in types:
                 c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (ch_id, t_name, t_url))
             
-    c.execute("SELECT COUNT(*) FROM homework")
-    if c.fetchone()[0] == 0:
-        today_str = str(date.today())
-        default_hws = [
-            (today_str, "쎈 수학(상) p.45~48 대표유형 풀이"),
-            (today_str, "주간 오답노트 재시험 통과")
-        ]
-        for d, t in default_hws:
-            c.execute("INSERT INTO homework (hw_date, title) VALUES (?, ?)", (d, t))
-            
     conn.commit()
     conn.close()
 
@@ -169,6 +180,8 @@ def delete_student(name):
     c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
     c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM student_homework WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM student_homework_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
@@ -354,48 +367,34 @@ def delete_student_milestone(m_id):
     conn.commit()
     conn.close()
 
-def get_homework_dates():
+# 학생별 개별 과제 함수들
+def get_student_homework_dates(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT DISTINCT hw_date FROM homework ORDER BY hw_date DESC")
+    c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
     conn.close()
     return [r[0] for r in rows]
 
-def get_homework_by_date(hw_date):
+def get_student_homework_by_date(student_name, hw_date):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, title FROM homework WHERE hw_date = ?", (hw_date,))
+    c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     rows = c.fetchall()
     conn.close()
     return rows
 
-def get_all_homework():
+def get_all_student_homework(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, hw_date, title FROM homework ORDER BY hw_date DESC")
+    c.execute("SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
     conn.close()
     return rows
 
-def add_homework(hw_date, title):
+def bulk_insert_student_homework(student_name, hw_date, text_data):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("INSERT INTO homework (hw_date, title) VALUES (?, ?)", (hw_date, title))
-    conn.commit()
-    conn.close()
-
-def update_homework(hw_id, hw_date, title):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("UPDATE homework SET hw_date = ?, title = ? WHERE id = ?", (hw_date, title, hw_id))
-    conn.commit()
-    conn.close()
-
-def bulk_insert_homework(hw_date, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    
     lines = text_data.strip().split('\n')
     added_count = 0
     for line in lines:
@@ -404,18 +403,24 @@ def bulk_insert_homework(hw_date, text_data):
             continue
         title = line_str.lstrip('-•* ').strip()
         if title:
-            c.execute("INSERT INTO homework (hw_date, title) VALUES (?, ?)", (hw_date, title))
+            c.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (?, ?, ?)", (student_name, hw_date, title))
             added_count += 1
-            
     conn.commit()
     conn.close()
     return added_count
 
-def delete_homework(hw_id):
+def update_student_homework(shw_id, hw_date, title):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("DELETE FROM homework WHERE id = ?", (hw_id,))
-    c.execute("DELETE FROM homework_progress WHERE homework_id = ?", (hw_id,))
+    c.execute("UPDATE student_homework SET hw_date = ?, title = ? WHERE id = ?", (hw_date, title, shw_id))
+    conn.commit()
+    conn.close()
+
+def delete_student_homework(shw_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM student_homework WHERE id = ?", (shw_id,))
+    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (shw_id,))
     conn.commit()
     conn.close()
 
@@ -427,15 +432,15 @@ def get_milestone_progress(student_name):
     conn.close()
     return {r[0]: bool(r[1]) for r in rows}
 
-def get_homework_progress(student_name):
+def get_student_homework_progress(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT homework_id, is_checked FROM homework_progress WHERE student_name = ?", (student_name,))
+    c.execute("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
     conn.close()
     return {r[0]: bool(r[1]) for r in rows}
 
-def save_progress(student_name, m_checked, h_checked):
+def save_student_progress(student_name, m_checked, h_checked):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     for m_id, val in m_checked.items():
@@ -446,9 +451,9 @@ def save_progress(student_name, m_checked, h_checked):
         ''', (student_name, m_id, int(val), int(val)))
     for h_id, val in h_checked.items():
         c.execute('''
-            INSERT INTO homework_progress (student_name, homework_id, is_checked)
+            INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
             VALUES (?, ?, ?)
-            ON CONFLICT(student_name, homework_id) DO UPDATE SET is_checked = ?
+            ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
         ''', (student_name, h_id, int(val), int(val)))
     conn.commit()
     conn.close()
@@ -499,10 +504,10 @@ if url_student and url_student in student_list:
     st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
     
     milestones = get_student_milestones(selected_student)
-    hw_dates = get_homework_dates()
+    hw_dates = get_student_homework_dates(selected_student)
     m_progress = get_milestone_progress(selected_student)
-    h_progress = get_homework_progress(selected_student)
-    all_hws_flat = get_all_homework()
+    h_progress = get_student_homework_progress(selected_student)
+    all_hws_flat = get_all_student_homework(selected_student)
 
     total_m = len(milestones)
     completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
@@ -569,7 +574,7 @@ if url_student and url_student in student_list:
             if hw_dates:
                 selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
-                target_hws = get_homework_by_date(selected_date)
+                target_hws = get_student_homework_by_date(selected_student, selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
                     h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
@@ -627,7 +632,7 @@ if url_student and url_student in student_list:
         st.divider()
         submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
         if submit_clicked:
-            save_progress(selected_student, m_checked_results, h_checked_results)
+            save_student_progress(selected_student, m_checked_results, h_checked_results)
             if entered_unit_code:
                 nums_to_add = parse_numbers(add_input_text)
                 nums_to_del = parse_numbers(del_input_text)
@@ -698,11 +703,11 @@ else:
     t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong = st.tabs([
         f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
         "📚 2. 커리큘럼 및 진도 배정", 
-        "📅 3. 날짜별 과제 부여", 
+        "📅 3. 선택학생 개별 과제 관리", 
         "🔍 4. 학생 오답노트 취합"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (단원별 폴더형 접이식 구조로 깔끔하게 개선)
+    # [탭 1] 선택한 학생 개별 관리 (마일스톤 관리)
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
@@ -717,7 +722,6 @@ else:
             
             st.markdown("##### 📘 단원별 마일스톤 현황 및 개별 관리")
             if s_milestones:
-                # 단원별로 마일스톤 그룹화
                 grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     key = (sub, ch)
@@ -751,6 +755,7 @@ else:
         else:
             st.warning("상단에서 관리할 학생을 먼저 선택하거나 등록해 주세요.")
 
+    # [탭 2] 커리큘럼 및 진도 배정
     with t_cfg_curriculum:
         subjects_data = get_subjects()
         subject_names = [s[1] for s in subjects_data]
@@ -937,48 +942,53 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
+    # [탭 3] 선택학생 개별 과제 부여 및 관리
     with t_cfg_hw:
-        st.markdown("#### 📅 날짜별 과제 부여 및 관리")
-        with st.form("add_hw_form"):
-            hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
-            hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
-            hw_submit = st.form_submit_button("과제 등록하기", type="primary")
-            if hw_submit:
-                if hw_text_area.strip():
-                    date_str = str(hw_date_input)
-                    added_c = bulk_insert_homework(date_str, hw_text_area)
-                    st.success(f"총 {added_c}개의 과제가 {date_str} 자리에 등록되었습니다!")
-                    st.rerun()
-                else:
-                    st.error("과제 내용을 입력해주세요.")
-
-        st.markdown("---")
-        st.markdown("##### 📋 등록된 과제 목록, 수정 및 삭제")
-        all_hws = get_all_homework()
-        if all_hws:
-            for h_id, h_date, h_title in all_hws:
-                col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 1, 1])
-                with col_h1:
-                    st.write(f"📅 **{h_date}**")
-                with col_h2:
-                    st.write(f"📌 {h_title}")
-                with col_h3:
-                    with st.popover("수정"):
-                        with st.form(f"edit_hw_form_{h_id}"):
-                            ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_hw_d_{h_id}")
-                            ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_hw_t_{h_id}")
-                            if st.form_submit_button("변경사항 저장"):
-                                update_homework(h_id, str(ed_date), ed_title.strip())
-                                st.success("수정되었습니다!")
-                                st.rerun()
-                with col_h4:
-                    if st.button("삭제", key=f"del_hw_{h_id}"):
-                        delete_homework(h_id)
-                        st.success("삭제되었습니다!")
+        if selected_student:
+            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
+            with st.form("add_student_hw_form"):
+                hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
+                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
+                hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 과제 등록하기", type="primary")
+                if hw_submit:
+                    if hw_text_area.strip():
+                        date_str = str(hw_date_input)
+                        added_c = bulk_insert_student_homework(selected_student, date_str, hw_text_area)
+                        st.success(f"총 {added_c}개의 과제가 {selected_student} 학생에게 등록되었습니다!")
                         st.rerun()
-        else:
-            st.info("등록된 과제가 없습니다.")
+                    else:
+                        st.error("과제 내용을 입력해주세요.")
 
+            st.markdown("---")
+            st.markdown(f"##### 📋 [{selected_student}] 학생에게 등록된 과제 목록, 수정 및 삭제")
+            student_hws = get_all_student_homework(selected_student)
+            if student_hws:
+                for h_id, h_date, h_title in student_hws:
+                    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 1, 1])
+                    with col_h1:
+                        st.write(f"📅 **{h_date}**")
+                    with col_h2:
+                        st.write(f"📌 {h_title}")
+                    with col_h3:
+                        with st.popover("수정"):
+                            with st.form(f"edit_shw_form_{h_id}"):
+                                ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
+                                ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
+                                if st.form_submit_button("변경사항 저장"):
+                                    update_student_homework(h_id, str(ed_date), ed_title.strip())
+                                    st.success("수정되었습니다!")
+                                    st.rerun()
+                    with col_h4:
+                        if st.button("삭제", key=f"del_shw_{h_id}"):
+                            delete_student_homework(h_id)
+                            st.success("삭제되었습니다!")
+                            st.rerun()
+            else:
+                st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
+        else:
+            st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
+
+    # [탭 4] 학생 오답노트 취합
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
         st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고 관리할 수 있습니다.")
