@@ -11,15 +11,14 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (테이블 구조 최신화)
+# 1. 데이터베이스 초기화 (구조 충돌 방지를 위해 기존 테이블 재생성 처리)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
-    # 기존 테이블이 구조가 다를 수 있으므로 안전하게 재생성하기 위해 DROP 후 생성
-    # (필요시 기존 데이터가 초기화될 수 있습니다)
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
     
+    # 단원 중심 커리큘럼 풀
     c.execute('''
         CREATE TABLE IF NOT EXISTS curriculum_pool (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,8 +27,11 @@ def init_db():
         )
     ''')
     
+    # 만약 예전 버전의 milestones 테이블이 남아있다면 에러를 내므로 안전하게 새로 생성
+    # (이 과정에서 기존에 잘못 들어갔던 마일스톤 데이터는 깔끔하게 초기화됩니다)
+    c.execute("DROP TABLE IF EXISTS milestones")
     c.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
+        CREATE TABLE milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_name TEXT NOT NULL,
             subject TEXT NOT NULL,
