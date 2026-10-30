@@ -583,10 +583,7 @@ if url_student and url_student in student_list:
             entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
             
             current_unit = entered_unit_code if entered_unit_code else "A114"
-            saved_text = get_student_wrong_entry(selected_student, current_unit)
-            saved_nums = parse_numbers(saved_text)
-
-            # 1. 번호 추가/삭제 입력란 배치
+            
             st.markdown("---")
             col_add, col_del = st.columns(2)
             with col_add:
@@ -596,46 +593,50 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
 
-            # 2. [폼 내부 맨 마지막 규칙 준수] 저장 버튼 배치
-            submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
+        # 폼 내부 맨 마지막 규칙에 맞춘 제출 버튼
+        submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
 
-        # --- [폼 영역 종료 후] 가장 아래쪽에 현재 저장된 오답 목록 및 해설 찾기 버튼 배치 ---
-        st.divider()
-        st.markdown("### 📋 현재 저장된 오답 목록")
+    # --- [폼 영역 바깥] 저장된 오답 목록 및 해설 찾기 버튼 (가장 아래 배치) ---
+    saved_text = get_student_wrong_entry(selected_student, entered_unit_code if entered_unit_code else "A114")
+    saved_nums = parse_numbers(saved_text)
+
+    st.divider()
+    st.markdown("### 📋 현재 저장된 오답 목록")
+    
+    if saved_nums:
+        current_u = entered_unit_code if entered_unit_code else "A114"
+        cafe_main_url = get_cafe_search_url(current_u, 1)
+        col_info, col_btn = st.columns([3, 1])
+        with col_info:
+            st.caption(f"총 {len(saved_nums)}문제 저장됨 | 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
+        with col_btn:
+            st.markdown(
+                f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
+                unsafe_allow_html=True
+            )
         
-        if saved_nums:
-            cafe_main_url = get_cafe_search_url(current_unit, 1)
-            col_info, col_btn = st.columns([3, 1])
-            with col_info:
-                st.caption(f"총 {len(saved_nums)}문제 저장됨 | 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
-            with col_btn:
-                st.markdown(
-                    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
-                    unsafe_allow_html=True
-                )
-            
-            sorted_nums_list = sorted(list(saved_nums))
-            cols_grid = st.columns(3)
-            for idx, num_int in enumerate(sorted_nums_list):
-                full_code = f"{current_unit}{num_int:03d}"
-                with cols_grid[idx % 3]:
-                    st.code(full_code, language="text")
-        else:
-            st.info("📋 현재 저장된 오답 번호가 없습니다.")
+        sorted_nums_list = sorted(list(saved_nums))
+        cols_grid = st.columns(3)
+        for idx, num_int in enumerate(sorted_nums_list):
+            full_code = f"{current_u}{num_int:03d}"
+            with cols_grid[idx % 3]:
+                st.code(full_code, language="text")
+    else:
+        st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
-        if submit_clicked:
-            save_student_progress(selected_student, m_checked_results, h_checked_results)
-            if entered_unit_code:
-                nums_to_add = parse_numbers(add_input_text)
-                nums_to_del = parse_numbers(del_input_text)
-                
-                final_nums = (saved_nums | nums_to_add) - nums_to_del
-                
-                new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
-                save_student_wrong_entry(selected_student, entered_unit_code, new_saved_text)
-                
-            st.success("학습 상태가 안전하게 저장되었습니다!")
-            st.rerun()
+    if submit_clicked:
+        save_student_progress(selected_student, m_checked_results, h_checked_results)
+        if entered_unit_code:
+            nums_to_add = parse_numbers(add_input_text)
+            nums_to_del = parse_numbers(del_input_text)
+            
+            final_nums = (saved_nums | nums_to_add) - nums_to_del
+            
+            new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
+            save_student_wrong_entry(selected_student, entered_unit_code, new_saved_text)
+            
+        st.success("학습 상태가 안전하게 저장되었습니다!")
+        st.rerun()
 
 # 2. [선생님 전용 관리 모드]
 else:
