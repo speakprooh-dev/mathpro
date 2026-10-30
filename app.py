@@ -698,7 +698,7 @@ else:
         "🔍 4. 학생 오답노트 취합"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (마일스톤 관리)
+    # [탭 1] 선택한 학생 개별 관리 (마일스톤 관리 및 선생님 직접 체크)
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
@@ -710,37 +710,56 @@ else:
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             st.metric(label=f"{selected_student} 마일스톤 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+            st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
-            st.markdown("##### 📘 단원별 마일스톤 현황 및 개별 관리")
-            if s_milestones:
-                grouped_t_milestones = {}
-                for m_id, sub, ch, t_name, v_url in s_milestones:
-                    key = (sub, ch)
-                    if key not in grouped_t_milestones:
-                        grouped_t_milestones[key] = []
-                    grouped_t_milestones[key].append((m_id, t_name, v_url))
+            st.markdown("##### 📘 단원별 마일스톤 현황 및 직접 진도 체크")
+            st.info("💡 선생님 화면에서도 학생의 진도 완료 여부를 체크박스로 변경한 뒤, 하단의 **[선생님 진도 상태 저장하기]** 버튼을 눌러 저장할 수 있습니다!")
 
-                for (sub, ch), items in grouped_t_milestones.items():
-                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
-                    exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
-                    
-                    with st.expander(exp_title, expanded=False):
-                        for m_id, t_name, v_url in items:
-                            is_done = s_m_progress.get(m_id, False)
-                            col_m1, col_m2, col_m3 = st.columns([3, 1, 1])
-                            with col_m1:
-                                st.write(f"▪️ **{t_name}**")
-                            with col_m2:
-                                status_txt = "✅ 완료" if is_done else "⏳ 진행중"
-                                st.write(status_txt)
-                            with col_m3:
-                                with st.popover("삭제"):
-                                    st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
-                                    if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
-                                        delete_student_milestone(m_id)
-                                        st.success("삭제되었습니다!")
-                                        st.rerun()
-                            st.divider()
+            if s_milestones:
+                with st.form("teacher_milestone_form"):
+                    teacher_m_checked = {}
+                    grouped_t_milestones = {}
+                    for m_id, sub, ch, t_name, v_url in s_milestones:
+                        key = (sub, ch)
+                        if key not in grouped_t_milestones:
+                            grouped_t_milestones[key] = []
+                        grouped_t_milestones[key].append((m_id, t_name, v_url))
+
+                    for (sub, ch), items in grouped_t_milestones.items():
+                        done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                        exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                        
+                        with st.expander(exp_title, expanded=False):
+                            for m_id, t_name, v_url in items:
+                                is_done = s_m_progress.get(m_id, False)
+                                col_m1, col_m2 = st.columns([4, 1])
+                                with col_m1:
+                                    teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
+                                with col_m2:
+                                    with st.popover("항목 삭제"):
+                                        st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
+                                        if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
+                                            delete_student_milestone(m_id)
+                                            st.success("삭제되었습니다!")
+                                            st.rerun()
+                                st.divider()
+
+                    st.divider()
+                    teacher_save_clicked = st.form_submit_button("선생님 진도 상태 저장하기", type="primary")
+
+                    if teacher_save_clicked:
+                        conn = sqlite3.connect("mathpro_roadmap.db")
+                        c = conn.cursor()
+                        for m_id, val in teacher_m_checked.items():
+                            c.execute('''
+                                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                                VALUES (?, ?, ?)
+                                ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
+                            ''', (selected_student, m_id, int(val), int(val)))
+                        conn.commit()
+                        conn.close()
+                        st.success("진도 상태가 성공적으로 저장되었습니다!")
+                        st.rerun()
             else:
                 st.info("이 학생에게 부여된 마일스톤이 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
