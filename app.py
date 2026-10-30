@@ -515,5 +515,3 @@ else:
                         st.rerun()
         else:
             st.write("등록된 과제가 없습니다.")
-        else:
-            st.write("등록된 과제가 없습니다.")
