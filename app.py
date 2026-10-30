@@ -526,77 +526,90 @@ if url_student and url_student in student_list:
 
     tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 등록함"])
 
-    with st.form("student_roadmap_form"):
-        m_checked_results = {}
-        h_checked_results = {}
+    m_checked_results = {}
+    h_checked_results = {}
 
-        with tab1:
-            st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
-            st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
-            if milestones:
-                grouped_s_milestones = {}
-                for m_id, sub, ch, t_name, v_url in milestones:
-                    key = (sub, ch)
-                    if key not in grouped_s_milestones:
-                        grouped_s_milestones[key] = []
-                    grouped_s_milestones[key].append((m_id, t_name, v_url))
+    with tab1:
+        st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
+        st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
+        if milestones:
+            grouped_s_milestones = {}
+            for m_id, sub, ch, t_name, v_url in milestones:
+                key = (sub, ch)
+                if key not in grouped_s_milestones:
+                    grouped_s_milestones[key] = []
+                grouped_s_milestones[key].append((m_id, t_name, v_url))
 
-                for (sub, ch), items in grouped_s_milestones.items():
-                    done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                    exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
-                    
-                    with st.expander(exp_label, expanded=False):
-                        for m_id, t_name, v_url in items:
-                            default_val = m_progress.get(m_id, False)
-                            
-                            cols = st.columns([4, 1])
-                            with cols[0]:
-                                m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
-                            with cols[1]:
-                                if v_url and v_url.strip() != "":
-                                    st.markdown(
-                                        f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 개념해설</a>',
-                                        unsafe_allow_html=True
-                                    )
-                                else:
-                                    st.caption("영상 없음")
-            else:
-                st.info("아직 부여된 학습 마일스톤이 없습니다.")
+            for (sub, ch), items in grouped_s_milestones.items():
+                done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
+                exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                
+                with st.expander(exp_label, expanded=False):
+                    for m_id, t_name, v_url in items:
+                        default_val = m_progress.get(m_id, False)
+                        
+                        cols = st.columns([4, 1])
+                        with cols[0]:
+                            m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                        with cols[1]:
+                            if v_url and v_url.strip() != "":
+                                st.markdown(
+                                    f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 개념해설</a>',
+                                    unsafe_allow_html=True
+                                )
+                            else:
+                                st.caption("영상 없음")
+        else:
+            st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
-        with tab2:
-            st.markdown("### 📝 날짜별 과제함")
-            st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
-            if hw_dates:
-                selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-                st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
-                target_hws = get_student_homework_by_date(selected_student, selected_date)
-                for h_id, title in target_hws:
-                    default_val = h_progress.get(h_id, False)
-                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
-            else:
-                st.info("등록된 날짜별 과제가 없습니다.")
+    with tab2:
+        st.markdown("### 📝 날짜별 과제함")
+        st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
+        if hw_dates:
+            selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+            st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
+            target_hws = get_student_homework_by_date(selected_student, selected_date)
+            for h_id, title in target_hws:
+                default_val = h_progress.get(h_id, False)
+                h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
+        else:
+            st.info("등록된 날짜별 과제가 없습니다.")
 
-        with tab3:
-            st.markdown("### 💬 오답 및 질문 번호 관리함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
-            
-            entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
-            
-            current_unit = entered_unit_code if entered_unit_code else "A114"
-            
-            st.markdown("---")
-            col_add, col_del = st.columns(2)
-            with col_add:
-                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
-            with col_del:
-                del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
+    with tab3:
+        st.markdown("### 💬 오답 및 질문 번호 관리함")
+        st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
+        
+        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
+        current_unit = entered_unit_code if entered_unit_code else "A114"
+        
+        st.markdown("---")
+        col_add, col_del = st.columns(2)
+        with col_add:
+            add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
+        with col_del:
+            del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
-            st.markdown("---")
+        st.markdown("---")
 
-            # 저장하기 버튼을 오답 목록 위로 올리기 위해 폼 내부에 배치하되 구조에 맞게 수정
-            submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
+        # --- [저장하기 버튼을 오답 목록 위로 배치] ---
+        if st.button("내 학습 상태 저장하기", type="primary", key="student_save_btn"):
+            save_student_progress(selected_student, m_checked_results, h_checked_results)
+            if entered_unit_code:
+                saved_text_pre = get_student_wrong_entry(selected_student, current_unit)
+                saved_nums_pre = parse_numbers(saved_text_pre)
+                nums_to_add = parse_numbers(add_input_text)
+                nums_to_del = parse_numbers(del_input_text)
+                
+                final_nums = (saved_nums_pre | nums_to_add) - nums_to_del
+                new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
+                save_student_wrong_entry(selected_student, current_unit, new_saved_text)
+                
+            st.success("학습 상태가 안전하게 저장되었습니다!")
+            st.rerun()
 
-        # 폼 바깥에서 오답 목록을 안전하게 출력
+        st.markdown("---")
+
+        # 현재 저장된 오답 목록 출력
         saved_text = get_student_wrong_entry(selected_student, current_unit)
         saved_nums = parse_numbers(saved_text)
 
@@ -620,20 +633,6 @@ if url_student and url_student in student_list:
                     st.code(full_code, language="text")
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
-
-        if submit_clicked:
-            save_student_progress(selected_student, m_checked_results, h_checked_results)
-            if entered_unit_code:
-                nums_to_add = parse_numbers(add_input_text)
-                nums_to_del = parse_numbers(del_input_text)
-                
-                final_nums = (saved_nums | nums_to_add) - nums_to_del
-                
-                new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
-                save_student_wrong_entry(selected_student, entered_unit_code, new_saved_text)
-                
-            st.success("학습 상태가 안전하게 저장되었습니다!")
-            st.rerun()
 
 # 2. [선생님 전용 관리 모드]
 else:
