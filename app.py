@@ -704,7 +704,7 @@ else:
             
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
-            s_completed_m = sum(1 for m in milestones if s_m_progress.get(m[0], False))
+            s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
             s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
@@ -723,7 +723,6 @@ else:
                         grouped_t_milestones[key] = []
                     grouped_t_milestones[key].append((m_id, t_name, v_url))
 
-                # 세션 상태로 단원별 일괄 선택 상태 관리
                 for (sub, ch), items in grouped_t_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
                     exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
