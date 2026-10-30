@@ -732,16 +732,7 @@ else:
                         with st.expander(exp_title, expanded=False):
                             for m_id, t_name, v_url in items:
                                 is_done = s_m_progress.get(m_id, False)
-                                col_m1, col_m2 = st.columns([4, 1])
-                                with col_m1:
-                                    teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
-                                with col_m2:
-                                    with st.popover("항목 삭제"):
-                                        st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
-                                        if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
-                                            delete_student_milestone(m_id)
-                                            st.success("삭제되었습니다!")
-                                            st.rerun()
+                                teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
                                 st.divider()
 
                     st.divider()
@@ -760,6 +751,21 @@ else:
                         conn.close()
                         st.success("진도 상태가 성공적으로 저장되었습니다!")
                         st.rerun()
+
+                # 개별 항목 삭제는 폼 바깥에서 팝오버로 처리
+                st.markdown("##### 🗑️ 개별 마일스톤 항목 삭제 관리")
+                with st.expander("항목별 삭제 열기"):
+                    for m_id, sub, ch, t_name, v_url in s_milestones:
+                        col_del1, col_del2 = st.columns([4, 1])
+                        with col_del1:
+                            st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
+                        with col_del2:
+                            with st.popover("삭제"):
+                                st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
+                                if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
+                                    delete_student_milestone(m_id)
+                                    st.success("삭제되었습니다!")
+                                    st.rerun()
             else:
                 st.info("이 학생에게 부여된 마일스톤이 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
