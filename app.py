@@ -11,7 +11,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 초기화 (마일스톤 테이블 삭제 오류 수정 완료)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -44,10 +44,9 @@ def init_db():
         )
     ''')
     
-    # 학생별 마일스톤
-    c.execute("DROP TABLE IF EXISTS milestones")
+    # 학생별 마일스톤 (CREATE TABLE IF NOT EXISTS로 변경하여 데이터 유지)
     c.execute('''
-        CREATE TABLE milestones (
+        CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_name TEXT NOT NULL,
             subject TEXT NOT NULL,
@@ -297,7 +296,6 @@ def assign_chapters_to_student(student_name, chapter_ids):
         type_rows = c.fetchall()
         
         types_to_add = [r[0] for r in type_rows]
-        # 유형이 아예 등록되지 않은 단원이라면 단원 이름 자체를 마일스톤으로 부여
         if not types_to_add:
             types_to_add = ["단원 기본 학습"]
             
