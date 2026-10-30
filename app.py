@@ -589,31 +589,33 @@ if url_student and url_student in student_list:
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
-                st.caption("💡 **[📋 코드 복사]** 버튼을 눌러 코드를 복사한 뒤, **[🎥 해설 찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요!")
+                st.caption("💡 **코드를 클릭**하면 곧바로 클립보드에 복사됩니다! 이후 **[🎥 해설찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요.")
                 
                 for num_int in sorted(list(saved_nums)):
                     full_code = f"{current_unit}{num_int:03d}"
                     cafe_url = get_cafe_search_url(current_unit, num_int)
                     
-                    c1, c2, c3 = st.columns([2, 1, 1])
-                    with c1:
-                        st.write(f"▫️ **{num_int}번** (`{full_code}`)")
-                    with c2:
-                        copy_js = f"""
-                        <script>
-                        function copyToClipboard_{num_int}() {{
-                            navigator.clipboard.writeText("{full_code}");
-                            alert("클립보드에 복사되었습니다: {full_code}");
-                        }}
-                        </script>
-                        <button onclick="copyToClipboard_{num_int}()" style="background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 코드복사</button>
-                        """
-                        st.markdown(copy_js, unsafe_allow_html=True)
-                    with c3:
-                        st.markdown(
-                            f'<a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; width:100%;">🎥 해설찾기</a>',
-                            unsafe_allow_html=True
-                        )
+                    # 코드 글자 클릭 복사 JS 컴포넌트 및 해설찾기 버튼 배치
+                    click_copy_html = f"""
+                    <script>
+                    function copyCode_{num_int}() {{
+                        navigator.clipboard.writeText("{full_code}");
+                        alert("클립보드에 복사되었습니다: {full_code}");
+                    }}
+                    </script>
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f2f6;">
+                        <div style="font-weight: 600; color: #262730;">
+                            ▫️ {num_int}번 &nbsp;&nbsp; 
+                            <span onclick="copyCode_{num_int}()" style="background-color: #f0f2f6; color: #03C75A; border: 1px solid #d6d6d6; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 14px; cursor: pointer;" title="클릭하면 복사됩니다">
+                                {full_code} 📋
+                            </span>
+                        </div>
+                        <div>
+                            <a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:5px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold;">🎥 해설찾기</a>
+                        </div>
+                    </div>
+                    """
+                    st.markdown(click_copy_html, unsafe_allow_html=True)
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
@@ -983,7 +985,7 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합 (개별 상세 목록 제거, 깔끔한 묶음 복사 및 편집 위주로 정돈)
+    # [탭 4] 학생 오답노트 취합
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
         st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 묶음 형태로 확인하고 복사하거나 수정할 수 있습니다.")
