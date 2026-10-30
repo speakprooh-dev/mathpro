@@ -415,7 +415,6 @@ if url_student and url_student in student_list:
     all_hws_flat = get_all_homework()
     total_tasks = len(milestones) + len(all_hws_flat)
     
-    # 안전하게 마일스톤 행 구조(id, sub, ch, t_name)에 맞추어 카운트
     completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
     completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
     total_completed = completed_m + completed_h
@@ -675,7 +674,7 @@ else:
                 selected_ch_ids = []
                 for ch_id, ch_sub, ch_name in all_chapters:
                     is_already = ch_name in assigned_chapters
-                    label = f"[{ch_sub}] {ch_name}" + (" (이미 부여됨)" if is_already else "")
+                    label = f"[{ch_sub}] {ch_name}" + (" (이미 부여된 단원)" if is_already else "")
                     if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
                         selected_ch_ids.append(ch_id)
                 
@@ -693,16 +692,28 @@ else:
             st.markdown("---")
             st.markdown(f"#### 📋 현재 [{selected_student}] 학생에게 부여된 학습 항목 목록")
             student_ms = get_student_milestones(selected_student)
+            
             if student_ms:
+                # 단원별로 항목들 묶기
+                grouped_milestones = {}
                 for m_id, sub, ch, t_name in student_ms:
-                    c1, c2 = st.columns([4, 1])
-                    with c1:
-                        st.write(f"✔️ **[{sub}]** {ch} ➔ {t_name}")
-                    with c2:
-                        if st.button("부여 취소", key=f"del_ms_{m_id}"):
-                            delete_student_milestone(m_id)
-                            st.warning("제외되었습니다.")
-                            st.rerun()
+                    key = (sub, ch)
+                    if key not in grouped_milestones:
+                        grouped_milestones[key] = []
+                    grouped_milestones[key].append((m_id, t_name))
+
+                # 각 단원을 접이식(Expander)으로 깔끔하게 출력
+                for (sub, ch), items in grouped_milestones.items():
+                    with st.expander(f"📁 [{sub}] {ch} (총 {len(items)}개 유형 부여됨)"):
+                        for m_id, t_name in items:
+                            col_m1, col_m2 = st.columns([4, 1])
+                            with col_m1:
+                                st.write(f"✔️ {t_name}")
+                            with col_m2:
+                                if st.button("부여 취소", key=f"del_ms_{m_id}"):
+                                    delete_student_milestone(m_id)
+                                    st.warning("제외되었습니다.")
+                                    st.rerun()
             else:
                 st.info("이 학생에게 부여된 학습 항목이 아직 없습니다.")
         else:
