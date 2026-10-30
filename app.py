@@ -597,7 +597,11 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
 
-        # 현재 저장된 오답 목록 출력
+        # --- [저장 버튼을 입력란 바로 아래, 오답 목록 위로 배치] ---
+        save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
+        st.markdown("---")
+
+        # 현재 저장된 오답 목록 출력 (스크롤 컨테이너 적용하여 리스트가 길어져도 버튼이 밀리지 않음)
         saved_text = get_student_wrong_entry(selected_student, current_unit)
         saved_nums = parse_numbers(saved_text)
 
@@ -613,17 +617,16 @@ if url_student and url_student in student_list:
                     unsafe_allow_html=True
                 )
             
-            sorted_nums_list = sorted(list(saved_nums))
-            cols_grid = st.columns(3)
-            for idx, num_int in enumerate(sorted_nums_list):
-                full_code = f"{current_unit}{num_int:03d}"
-                with cols_grid[idx % 3]:
-                    st.code(full_code, language="text")
+            # 오답 목록이 길어지면 내부 스크롤이 생기도록 컨테이너(높이 300px) 지정
+            with st.container(height=300):
+                sorted_nums_list = sorted(list(saved_nums))
+                cols_grid = st.columns(3)
+                for idx, num_int in enumerate(sorted_nums_list):
+                    full_code = f"{current_unit}{num_int:03d}"
+                    with cols_grid[idx % 3]:
+                        st.code(full_code, language="text")
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
-            
-        st.markdown("---")
-        save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
 
     # 어느 탭에서든 저장 버튼이 눌렸을 때 공통 처리 로직
     if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
@@ -642,7 +645,7 @@ if url_student and url_student in student_list:
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
         
-        # 오답 번호 반영 (탭 3에서 입력한 값 반영)
+        # 오답 번호 반영
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "A114")
