@@ -2,6 +2,18 @@ import streamlit as st
 import sqlite3
 from datetime import date
 import re
+import urllib.parse
+
+# 네이버 카페 메인 주소 설정
+NAVER_CAFE_URL = "https://cafe.naver.com/mathpro2020"
+
+# 네이버 카페 문항 검색 URL 생성 함수
+def get_cafe_search_url(unit_code, num_int):
+    # 단원코드와 번호를 조합하여 검색어 생성 (예: A114 + 103 -> A114103)
+    full_code = f"{unit_code}{num_int:03d}"
+    encoded_query = urllib.parse.quote(full_code)
+    # 네이버 카페 내 해당 문항 검색 URL
+    return f"{NAVER_CAFE_URL}?iframe_url=/ArticleSearchList.nhn%3Fsearch.query%3D{encoded_query}"
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -12,7 +24,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (해설 영상 URL 컬럼 포함)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -46,7 +58,6 @@ def init_db():
         )
     ''')
     
-    # 기존 DB에 video_url 컬럼이 없을 경우를 대비한 안전 장치
     try:
         c.execute("ALTER TABLE chapter_types ADD COLUMN video_url TEXT DEFAULT ''")
     except sqlite3.OperationalError:
@@ -88,7 +99,7 @@ def init_db():
         )
     ''')
     
-    # 학생 오답/질문 저장 테이블 (단원코드 + 저장된 번호 집합 문자열)
+    # 학생 오답/질문 저장 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_wrong_entries (
             student_name TEXT,
@@ -551,7 +562,7 @@ if url_student and url_student in student_list:
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
                                     st.markdown(
-                                        f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 해설보기</a>',
+                                        f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 개념해설</a>',
                                         unsafe_allow_html=True
                                     )
                                 else:
@@ -574,25 +585,38 @@ if url_student and url_student in student_list:
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 번호 관리함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
             
-            entered_unit_code = st.text_input("단원코드 입력", value="A1351").strip().upper()
+            entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
             
-            current_unit = entered_unit_code if entered_unit_code else "A1351"
+            current_unit = entered_unit_code if entered_unit_code else "A114"
             saved_text = get_student_wrong_entry(selected_student, current_unit)
             saved_nums = parse_numbers(saved_text)
             
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
-                preview_str = ", ".join([f"{n}번" for n in formatted_saved])
-                st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제):** [{preview_str}]")
+                st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
+                
+                # 각 문항별로 네이버 카페 검색 연동 버튼 생성
+                for num_int in sorted(list(saved_nums)):
+                    full_code = f"{current_unit}{num_int:03d}"
+                    search_url = get_cafe_search_url(current_unit, num_int)
+                    
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
+                    with c2:
+                        st.markdown(
+                            f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
+                            unsafe_allow_html=True
+                        )
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
             st.markdown("---")
             col_add, col_del = st.columns(2)
             with col_add:
-                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 23)", placeholder="예: 5, 12")
+                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
             with col_del:
                 del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
@@ -842,7 +866,7 @@ else:
                                             with st.form(f"url_form_{t_id}"):
                                                 u_col1, u_col2 = st.columns([3, 1])
                                                 with u_col1:
-                                                    new_url_input = st.text_input("네이버 카페 영상 URL", value=t_url, key=f"url_in_{t_id}", label_visibility="collapsed", placeholder="https://cafe.naver.com/...")
+                                                    new_url_input = st.text_input("개념해설 영상 URL", value=t_url, key=f"url_in_{t_id}", label_visibility="collapsed", placeholder="https://cafe.naver.com/...")
                                                 with u_col2:
                                                     if st.form_submit_button("링크 저장"):
                                                         update_chapter_type_url(t_id, new_url_input.strip())
@@ -956,8 +980,19 @@ else:
                         st.markdown(f"##### 📖 단원코드: `{u_code}`")
                         parsed_s = parse_numbers(nums_txt)
                         formatted_s = format_numbers_list(parsed_s)
-                        display_str = ", ".join([f"{n}번" for n in formatted_s]) if formatted_s else "없음"
-                        st.write(f"**저장된 오답/질문 번호:** [{display_str}]")
+                        
+                        for num_int in sorted(list(parsed_s)):
+                            full_code = f"{u_code}{num_int:03d}"
+                            search_url = get_cafe_search_url(u_code, num_int)
+                            
+                            c1, c2 = st.columns([3, 1])
+                            with c1:
+                                st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
+                            with c2:
+                                st.markdown(
+                                    f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
+                                    unsafe_allow_html=True
+                                )
             else:
                 st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
         else:
