@@ -112,21 +112,6 @@ def get_milestones():
     conn.close()
     return rows
 
-def add_milestone(title):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO milestones (title) VALUES (?)", (title,))
-    conn.commit()
-    conn.close()
-
-def delete_milestone(m_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
-    c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
-    conn.commit()
-    conn.close()
-
 def get_homework_dates():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -207,18 +192,17 @@ st.divider()
 
 student_list = get_students()
 
-# URL 파라미터에서 학생 이름 읽어오기
+# URL 파라미터 안전하게 가져오기
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 만약 URL에 학생이 지정되어 있다면 -> [학생 전용 모드] (관리 설정 아예 숨김!)
+# 1. [학생 전용 모드] URL에 정확한 학생 이름이 들어온 경우
 if url_student and url_student in student_list:
     selected_student = url_student
     st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
     
     milestones = get_milestones()
     hw_dates = get_homework_dates()
-    
     m_progress = get_milestone_progress(selected_student)
     h_progress = get_homework_progress(selected_student)
 
@@ -227,13 +211,11 @@ if url_student and url_student in student_list:
     completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
     completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
     total_completed = completed_m + completed_h
-    
     progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
 
     st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
     st.write(f"**전체 커리큘럼 및 과제 달성도: {progress_val}%** ({total_completed}/{total_tasks} 완료)")
     st.progress(progress_val / 100 if total_tasks > 0 else 0)
-
     st.divider()
 
     tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 완성 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 코멘트 & 질문방"])
@@ -254,11 +236,7 @@ if url_student and url_student in student_list:
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
             if hw_dates:
-                selected_date = st.selectbox(
-                    "확인할 과제 날짜를 선택하세요", 
-                    hw_dates,
-                    format_func=lambda x: f"{x} ({get_weekday_kr(x)})"
-                )
+                selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
@@ -271,21 +249,16 @@ if url_student and url_student in student_list:
             st.markdown("### 💬 선생님의 1:1 맞춤 코멘트")
             st.info(f"**[{selected_student} 학생 맞춤 피드백]** 오늘도 꼼꼼하게 오답 정리하고 숙제 체크하기!")
             st.markdown("### ✏️ 오늘의 학습 다짐 / 질문하기")
-            user_note_input = st.text_area("오늘 공부한 내용이나 궁금한 점을 적어보세요.")
+            st.text_area("오늘 공부한 내용이나 궁금한 점을 적어보세요.")
 
         st.divider()
-        submitted = st.form_submit_button("내 체크상태 저장하기", type="primary")
-        
-        if submitted:
+        if st.form_submit_button("내 체크상태 저장하기", type="primary"):
             save_progress(selected_student, m_checked_results, h_checked_results)
             st.success("학습 상태가 저장되었습니다!")
             st.rerun()
 
-# 만약 URL에 학생 이름이 없다면 -> [선생님 전용 관리 모드]
+# 2. [선생님 전용 관리 모드] 주소 뒤에 student 파라미터가 없을 때
 else:
-    if url_student:
-        st.error(f"'{url_student}'는 등록되지 않았거나 잘못된 링크입니다. 선생님 메인 화면으로 이동합니다.")
-    
     st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
 
@@ -298,31 +271,30 @@ else:
 
     with col_s2:
         with st.expander("➕ 학생 추가"):
-            new_s_name = st.text_input("학생 이름")
+            new_s_name = st.text_input("학생 이름 입력")
             if st.button("학생 등록"):
                 if new_s_name.strip():
                     if add_student(new_s_name.strip()):
                         st.success("등록 완료!")
                         st.rerun()
                     else:
-                        st.warning("이미 존재합니다.")
+                        st.warning("이미 존재하는 이름입니다.")
                 else:
                     st.error("이름을 입력하세요.")
 
     with col_s3:
         if selected_student:
             with st.expander("🗑️ 학생 삭제"):
-                st.write(f"**{selected_student}** 삭제?")
+                st.write(f"**{selected_student}** 학생 삭제")
                 if st.button("정말 삭제", type="primary"):
                     delete_student(selected_student)
                     st.success("삭제되었습니다!")
                     st.rerun()
 
-    # 선생님 전용 고유 링크 복사 상자
+    # 고유 링크 복사 상자
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
             st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주세요.")
-            
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -334,20 +306,3 @@ else:
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
-                st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
-
-    st.divider()
-
-    # 선생님 모드일 때만 보이는 학생 학습 현황 및 수정 기능
-    if selected_student:
-        milestones = get_milestones()
-        hw_dates = get_homework_dates()
-        
-        m_progress = get_milestone_progress(selected_student)
-        h_progress = get_homework_progress(selected_student)
-
-        all_hws_flat = get_all_homework()
-        total_tasks = len(milestones) + len(all_hws_flat)
-        completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
-        completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
-        total_completed = completed_m
