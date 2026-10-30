@@ -17,7 +17,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (학생별 개별 과제 테이블 student_homework 추가)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -67,7 +67,6 @@ def init_db():
         )
     ''')
     
-    # 전체 공통 과제 테이블 (기존 호환용)
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +75,6 @@ def init_db():
         )
     ''')
     
-    # [신규] 학생별 개별 과제 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,8 +100,6 @@ def init_db():
             PRIMARY KEY (student_name, homework_id)
         )
     ''')
-    
-    # [신규] 학생별 개별 과제 진행 상태 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_homework_progress (
             student_name TEXT,
@@ -367,7 +363,6 @@ def delete_student_milestone(m_id):
     conn.commit()
     conn.close()
 
-# 학생별 개별 과제 함수들
 def get_student_homework_dates(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -988,10 +983,10 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합
+    # [탭 4] 학생 오답노트 취합 (A1353_(001,005,006) 형태의 묶음 복사 기능 추가)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
-        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고 관리할 수 있습니다.")
+        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고, 카페 업로드용 묶음 형태로 복사할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1006,22 +1001,45 @@ else:
             if wrong_rows:
                 for u_code, nums_txt in wrong_rows:
                     with st.container(border=True):
-                        st.markdown(f"##### 📖 단원코드: `{u_code}`")
                         parsed_s = parse_numbers(nums_txt)
-                        formatted_s = format_numbers_list(parsed_s)
-                        
-                        for num_int in sorted(list(parsed_s)):
-                            full_code = f"{u_code}{num_int:03d}"
-                            search_url = get_cafe_search_url(u_code, num_int)
+                        if parsed_s:
+                            formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
+                            # A1353_(001,005,006) 형태의 묶음 문자열 생성
+                            bundled_str = f"{u_code}_({','.join(formatted_nums)})"
                             
-                            c1, c2 = st.columns([3, 1])
-                            with c1:
-                                st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
-                            with c2:
-                                st.markdown(
-                                    f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
-                                    unsafe_allow_html=True
-                                )
+                            col_w1, col_w2 = st.columns([3, 1])
+                            with col_w1:
+                                st.markdown(f"##### 📖 단원코드: `{u_code}`")
+                                st.code(bundled_str, language="text")
+                            with col_w2:
+                                st.write("")
+                                st.write("")
+                                # 묶음 복사 버튼 JS
+                                bundle_copy_js = f"""
+                                <script>
+                                function copyBundle_{u_code}() {{
+                                    navigator.clipboard.writeText("{bundled_str}");
+                                    alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
+                                }}
+                                </script>
+                                <button onclick="copyBundle_{u_code}()" style="background-color:#03C75A; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 코드 복사</button>
+                                """
+                                st.markdown(bundle_copy_js, unsafe_allow_html=True)
+                            
+                            st.markdown("---")
+                            st.caption("개별 문항 상세 및 해설 링크")
+                            for num_int in sorted(list(parsed_s)):
+                                full_code = f"{u_code}{num_int:03d}"
+                                search_url = get_cafe_search_url(u_code, num_int)
+                                
+                                c1, c2 = st.columns([3, 1])
+                                with c1:
+                                    st.write(f"▫️ **{num_int}번** (`{full_code}`)")
+                                with c2:
+                                    st.markdown(
+                                        f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
+                                        unsafe_allow_html=True
+                                    )
             else:
                 st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
         else:
