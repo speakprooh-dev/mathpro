@@ -301,7 +301,6 @@ def bulk_insert_types_for_chapter(chapter_id, text_data):
 def get_student_milestones(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    # milestones에 해당하는 video_url도 함께 가져오기 위해 chapter_types와 조인하거나 매칭
     c.execute("""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
                (SELECT t.video_url FROM chapter_types t WHERE t.name = m.type_name LIMIT 1) as video_url
@@ -539,7 +538,6 @@ if url_student and url_student in student_list:
                         for m_id, t_name, v_url in items:
                             default_val = m_progress.get(m_id, False)
                             
-                            # 체크박스와 해설 보기 버튼 레이아웃 분리
                             cols = st.columns([4, 1])
                             with cols[0]:
                                 m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
@@ -661,10 +659,53 @@ else:
 
     st.divider()
 
-    st.markdown("### ⚙️ [선생님 전용] 커리큘럼 및 과제 통합 관리 설정")
-    t_cfg1, t_cfg2, t_cfg3 = st.tabs(["📚 1. 커리큘럼 관리 및 진도", "📅 2. 날짜별 과제 관리", "🔍 3. 학생 오답노트 코드 취합"])
+    # 선생님 전용 메인 탭 구조 개편: 선택한 학생 관리 탭을 최우선으로 배치
+    st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
+    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong = st.tabs([
+        f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
+        "📚 2. 커리큘럼 및 진도 배정", 
+        "📅 3. 날짜별 과제 부여", 
+        "🔍 4. 학생 오답노트 취합"
+    ])
 
-    with t_cfg1:
+    # [탭 1] 선택한 학생 개별 관리 탭
+    with t_cfg_student:
+        if selected_student:
+            st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
+            
+            # 요약 지표
+            s_milestones = get_student_milestones(selected_student)
+            s_m_progress = get_milestone_progress(selected_student)
+            s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
+            s_total_m = len(s_milestones)
+            s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
+            
+            st.metric(label=f"{selected_student} 마일스톤 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+            
+            st.markdown("##### 📘 현재 부여된 마일스톤 및 개별 관리")
+            if s_milestones:
+                for m_id, sub, ch, t_name, v_url in s_milestones:
+                    is_done = s_m_progress.get(m_id, False)
+                    col_m1, col_m2, col_m3 = st.columns([3, 1, 1])
+                    with col_m1:
+                        st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
+                    with col_m2:
+                        status_txt = "✅ 완료" if is_done else "⏳ 진행중"
+                        st.write(f"상태: {status_txt}")
+                    with col_m3:
+                        with st.popover("마일스톤 삭제"):
+                            st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
+                            if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
+                                delete_student_milestone(m_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+            else:
+                st.info("이 학생에게 부여된 마일스톤이 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
+        else:
+            st.warning("상단에서 관리할 학생을 먼저 선택하거나 등록해 주세요.")
+
+    # [탭 2] 커리큘럼 관리 및 진도 배정
+    with t_cfg_curriculum:
         subjects_data = get_subjects()
         subject_names = [s[1] for s in subjects_data]
 
@@ -795,7 +836,6 @@ else:
                                     with st.expander(f"속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
                                         for t_id, t_name, t_url in types_list:
                                             st.markdown(f"▪️ **{t_name}**")
-                                            # 각 유형별 해설 영상 링크 입력 및 수정 폼
                                             with st.form(f"url_form_{t_id}"):
                                                 u_col1, u_col2 = st.columns([3, 1])
                                                 with u_col1:
@@ -806,7 +846,6 @@ else:
                                                         st.success("저장됨!")
                                                         st.rerun()
                                             
-                                            # 삭제 버튼용 컬럼
                                             if st.button("유형 삭제", key=f"del_t_btn_{t_id}"):
                                                 delete_chapter_type(t_id)
                                                 st.rerun()
@@ -852,7 +891,8 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    with t_cfg2:
+    # [탭 3] 날짜별 과제 부여 및 관리
+    with t_cfg_hw:
         st.markdown("#### 📅 날짜별 과제 부여 및 관리")
         with st.form("add_hw_form"):
             hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
@@ -885,7 +925,8 @@ else:
         else:
             st.info("등록된 과제가 없습니다.")
 
-    with t_cfg3:
+    # [탭 4] 학생 오답노트 취합
+    with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
         st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고 관리할 수 있습니다.")
         
