@@ -441,6 +441,7 @@ if url_student and url_student in student_list:
 
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
+            st.info("💡 **안내:** 완료한 학습 유형의 체크박스에 체크를 하고, 하단의 **[내 체크상태 저장하기]** 버튼을 눌러주세요!")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
@@ -456,20 +457,19 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            # 이모티콘 제거하고 깔끔한 체크박스 라벨로 변경
                             m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
+            st.info("💡 **안내:** 완료한 숙제 항목에 체크를 하고, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if hw_dates:
                 selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    # 과제 체크박스도 이모티콘 제거
                     h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
