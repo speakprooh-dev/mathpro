@@ -351,6 +351,25 @@ def add_homework(hw_date, title):
     conn.commit()
     conn.close()
 
+def bulk_insert_homework(hw_date, text_data):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    
+    lines = text_data.strip().split('\n')
+    added_count = 0
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        title = line_str.lstrip('-•* ').strip()
+        if title:
+            c.execute("INSERT INTO homework (hw_date, title) VALUES (?, ?)", (hw_date, title))
+            added_count += 1
+            
+    conn.commit()
+    conn.close()
+    return added_count
+
 def delete_homework(hw_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -743,24 +762,43 @@ else:
 
     with t_cfg2:
         st.markdown("#### 📅 새로운 날짜별 과제 등록하기")
-        with st.form("hw_form"):
-            col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
-            with col_h1:
-                reg_date = st.date_input("과제 날짜 선택", value=date.today())
-            with col_h2:
-                reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
-            with col_h3:
-                st.write("")
-                st.write("")
-                add_hw_btn = st.form_submit_button("과제 추가하기")
+        
+        # 개별 등록과 대량 일괄 등록을 탭으로 분리하여 깔끔하게 구성
+        hw_mode = st.radio("과제 등록 방식 선택", ["개별 과제 등록", "📥 과제 일괄 등록 (복사 & 붙여넣기)"], horizontal=True)
+        
+        if hw_mode == "개별 과제 등록":
+            with st.form("hw_form"):
+                col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
+                with col_h1:
+                    reg_date = st.date_input("과제 날짜 선택", value=date.today())
+                with col_h2:
+                    reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
+                with col_h3:
+                    st.write("")
+                    st.write("")
+                    add_hw_btn = st.form_submit_button("과제 추가하기")
 
-        if add_hw_btn:
-            if reg_title.strip():
-                add_homework(str(reg_date), reg_title.strip())
-                st.success(f"[{reg_date}] 과제가 성공적으로 등록되었습니다!")
-                st.rerun()
-            else:
-                st.error("과제 내용을 입력해주세요.")
+            if add_hw_btn:
+                if reg_title.strip():
+                    add_homework(str(reg_date), reg_title.strip())
+                    st.success(f"[{reg_date}] 과제가 성공적으로 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("과제 내용을 입력해주세요.")
+        else:
+            with st.form("bulk_hw_form"):
+                b_date = st.date_input("일괄 적용할 과제 날짜", value=date.today(), key="bulk_hw_date")
+                st.caption("줄바꿈으로 구분하여 여러 과제 내용을 붙여넣으세요.")
+                bulk_hw_text = st.text_area("과제 목록 텍스트", placeholder="- 쎈 수학(상) p.45~48\n- 오답노트 정리\n- 프린트물 풀이")
+                bulk_hw_btn = st.form_submit_button("선택한 날짜에 과제 일괄 등록 실행")
+
+            if bulk_hw_btn:
+                if bulk_hw_text.strip():
+                    cnt = bulk_insert_homework(str(b_date), bulk_hw_text)
+                    st.success(f"[{b_date}] 날짜로 총 {cnt}개의 과제가 성공적으로 일괄 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("내용을 입력해주세요.")
 
         st.markdown("---")
         st.markdown("#### 📋 등록된 날짜별 과제 목록 (삭제 관리)")
