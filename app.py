@@ -983,10 +983,10 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합 (A1353_(001,005,006) 형태의 묶음 복사 기능 추가)
+    # [탭 4] 학생 오답노트 취합 (묶음 복사 + 선생님 직접 편집 기능 추가)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
-        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고, 카페 업로드용 묶음 형태로 복사할 수 있습니다.")
+        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 확인하고, 묶음 형태로 복사하거나 직접 수정할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1004,17 +1004,25 @@ else:
                         parsed_s = parse_numbers(nums_txt)
                         if parsed_s:
                             formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
-                            # A1353_(001,005,006) 형태의 묶음 문자열 생성
                             bundled_str = f"{u_code}_({','.join(formatted_nums)})"
                             
+                            st.markdown(f"##### 📖 단원코드: `{u_code}`")
+                            
+                            # 선생님 직접 수정 기능 팝오버
+                            with st.popover("⚙️ 오답 번호 편집하기"):
+                                with st.form(f"edit_wrong_form_{u_code}"):
+                                    st.caption(f"'{chk_student}' 학생의 '{u_code}' 단원 오답 번호를 직접 수정합니다.")
+                                    new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
+                                    if st.form_submit_button("저장하기", type="primary"):
+                                        save_student_wrong_entry(chk_student, u_code, new_nums_input)
+                                        st.success("수정되었습니다!")
+                                        st.rerun()
+
                             col_w1, col_w2 = st.columns([3, 1])
                             with col_w1:
-                                st.markdown(f"##### 📖 단원코드: `{u_code}`")
                                 st.code(bundled_str, language="text")
                             with col_w2:
                                 st.write("")
-                                st.write("")
-                                # 묶음 복사 버튼 JS
                                 bundle_copy_js = f"""
                                 <script>
                                 function copyBundle_{u_code}() {{
@@ -1022,7 +1030,7 @@ else:
                                     alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
                                 }}
                                 </script>
-                                <button onclick="copyBundle_{u_code}()" style="background-color:#03C75A; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 코드 복사</button>
+                                <button onclick="copyBundle_{u_code}()" style="background-color:#03C75A; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
                                 """
                                 st.markdown(bundle_copy_js, unsafe_allow_html=True)
                             
