@@ -534,10 +534,12 @@ else:
         if selected_student:
             with st.expander("🗑️ 학생 삭제"):
                 st.write(f"**{selected_student}** 학생 삭제")
-                if st.button("정말 삭제", type="primary"):
-                    delete_student(selected_student)
-                    st.success("삭제되었습니다!")
-                    st.rerun()
+                with st.popover("학생 삭제 실행"):
+                    st.warning(f"정말 **{selected_student}** 학생을 삭제하시겠습니까?")
+                    if st.button("네, 삭제합니다", type="primary", key="pop_del_student"):
+                        delete_student(selected_student)
+                        st.success("삭제되었습니다!")
+                        st.rerun()
 
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
@@ -602,10 +604,13 @@ else:
                                         else:
                                             st.warning("중복된 과목명입니다.")
                     with col_h2:
-                        if st.button("🗑️ 과목 삭제", key=f"del_sub_{sub_id}"):
-                            delete_subject(sub_id)
-                            st.warning("과목이 삭제되었습니다.")
-                            st.rerun()
+                        # 🛡️ 실수 방지 과목 삭제 팝업
+                        with st.popover("🗑️ 과목 삭제"):
+                            st.warning(f"'{sub_name}' 과목을 삭제하시겠습니까?")
+                            if st.button("삭제 확인", key=f"del_sub_confirm_{sub_id}", type="primary"):
+                                delete_subject(sub_id)
+                                st.success("삭제되었습니다.")
+                                st.rerun()
 
                     st.markdown("---")
 
@@ -645,10 +650,13 @@ else:
                                                 else:
                                                     st.error("단원명을 입력하세요.")
                                 with c_box3:
-                                    if st.button("🗑️ 단원 삭제", key=f"del_ch_{ch_id}"):
-                                        delete_chapter(ch_id)
-                                        st.warning("단원이 삭제되었습니다.")
-                                        st.rerun()
+                                    # 🛡️ 실수 방지 단원 삭제 팝업
+                                    with st.popover("🗑️ 단원 삭제"):
+                                        st.warning(f"'{ch_name}' 단원을 삭제하시겠습니까?")
+                                        if st.button("삭제 확인", key=f"del_ch_confirm_{ch_id}", type="primary"):
+                                            delete_chapter(ch_id)
+                                            st.success("삭제되었습니다.")
+                                            st.rerun()
 
                                 with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
                                     st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
@@ -690,9 +698,12 @@ else:
                                             with tc1:
                                                 st.write(f"▪️ {t_name}")
                                             with tc2:
-                                                if st.button("유형 삭제", key=f"del_t_{t_id}"):
-                                                    delete_chapter_type(t_id)
-                                                    st.rerun()
+                                                # 🛡️ 실수 방지 유형 삭제 팝업
+                                                with st.popover("유형 삭제"):
+                                                    st.warning("이 유형을 삭제하시겠습니까?")
+                                                    if st.button("확인", key=f"del_t_confirm_{t_id}", type="primary"):
+                                                        delete_chapter_type(t_id)
+                                                        st.rerun()
                     else:
                         st.caption("등록된 단원이 없습니다.")
         else:
@@ -751,10 +762,13 @@ else:
                             with col_m1:
                                 st.write(f"✔️ {t_name}")
                             with col_m2:
-                                if st.button("부여 취소", key=f"del_ms_{m_id}"):
-                                    delete_student_milestone(m_id)
-                                    st.warning("제외되었습니다.")
-                                    st.rerun()
+                                # 🛡️ 실수 방지 학생 진도 배정 취소 팝업
+                                with st.popover("부여 취소"):
+                                    st.warning("이 항목을 제외하시겠습니까?")
+                                    if st.button("확인", key=f"del_ms_confirm_{m_id}", type="primary"):
+                                        delete_student_milestone(m_id)
+                                        st.warning("제외되었습니다.")
+                                        st.rerun()
             else:
                 st.info("이 학생에게 부여된 학습 항목이 아직 없습니다.")
         else:
@@ -811,9 +825,12 @@ else:
                 with c2:
                     st.write(title)
                 with c3:
-                    if st.button("삭제", key=f"del_hw_{h_id}"):
-                        delete_homework(h_id)
-                        st.warning("과제가 삭제되었습니다.")
-                        st.rerun()
+                    # 🛡️ 실수 방지 과제 삭제 팝업
+                    with st.popover("삭제"):
+                        st.warning("이 과제를 삭제하시겠습니까?")
+                        if st.button("삭제 확인", key=f"del_hw_confirm_{h_id}", type="primary"):
+                            delete_homework(h_id)
+                            st.warning("과제가 삭제되었습니다.")
+                            st.rerun()
         else:
             st.info("등록된 과제가 없습니다.")
