@@ -11,18 +11,34 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 초기화 (커리큘럼 풀 테이블 추가)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
+    
+    # 미리 등록해두는 전체 커리큘럼 풀 (과목, 단원, 유형)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS curriculum_pool (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            chapter TEXT NOT NULL,
+            topic TEXT NOT NULL
+        )
+    ''')
+    
+    # 학생별로 부여된 맞춤 마일스톤
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL
+            student_name TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            chapter TEXT NOT NULL,
+            topic TEXT NOT NULL
         )
     ''')
+    
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,6 +46,7 @@ def init_db():
             title TEXT NOT NULL
         )
     ''')
+    
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestone_progress (
             student_name TEXT,
@@ -47,17 +64,19 @@ def init_db():
         )
     ''')
     
-    # 초기 샘플 데이터
-    c.execute("SELECT COUNT(*) FROM milestones")
+    # 초기 커리큘럼 풀 샘플 데이터
+    c.execute("SELECT COUNT(*) FROM curriculum_pool")
     if c.fetchone()[0] == 0:
-        default_milestones = [
-            "01. 다항식의 연산 & 인수분해",
-            "02. 복소수와 이차방정식",
-            "03. 이차함수의 그래프와 활용",
-            "04. 여러 가지 방정식과 부등식"
+        default_pool = [
+            ("수학(상)", "01. 다항식", "다항식의 연산과 나머지정리"),
+            ("수학(상)", "01. 다항식", "인수분해의 활용"),
+            ("수학(상)", "02. 방정식과 부등식", "복소수와 이차방정식"),
+            ("수학(상)", "02. 방정식과 부등식", "이차함수의 그래프와 최대·최소"),
+            ("수학(상)", "03. 도형의 방정식", "평면좌표와 직선의 방정식"),
+            ("수학(상)", "03. 도형의 방정식", "원의 방정식과 도형의 이동")
         ]
-        for m in default_milestones:
-            c.execute("INSERT INTO milestones (title) VALUES (?)", (m,))
+        for sub, ch, top in default_pool:
+            c.execute("INSERT INTO curriculum_pool (subject, chapter, topic) VALUES (?, ?, ?)", (sub, ch, top))
             
     c.execute("SELECT COUNT(*) FROM homework")
     if c.fetchone()[0] == 0:
@@ -99,18 +118,58 @@ def delete_student(name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     c.execute("DELETE FROM students WHERE name = ?", (name,))
+    c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
     c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
-def get_milestones():
+# 커리큘럼 풀 관리
+def get_curriculum_pool():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, title FROM milestones")
+    c.execute("SELECT id, subject, chapter, topic FROM curriculum_pool ORDER BY subject, chapter")
     rows = c.fetchall()
     conn.close()
     return rows
+
+def add_curriculum_pool(subject, chapter, topic):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO curriculum_pool (subject, chapter, topic) VALUES (?, ?, ?)", (subject, chapter, topic))
+    conn.commit()
+    conn.close()
+
+def delete_curriculum_pool(pool_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM curriculum_pool WHERE id = ?", (pool_id,))
+    conn.commit()
+    conn.close()
+
+# 학생별 맞춤 마일스톤 관리
+def get_student_milestones(student_name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, subject, chapter, topic FROM milestones WHERE student_name = ?", (student_name,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_student_milestone(student_name, subject, chapter, topic):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO milestones (student_name, subject, chapter, topic) VALUES (?, ?, ?, ?)", (student_name, subject, chapter, topic))
+    conn.commit()
+    conn.close()
+
+def delete_student_milestone(m_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
+    c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
+    conn.commit()
+    conn.close()
 
 def get_homework_dates():
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -191,24 +250,22 @@ st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 st.divider()
 
 student_list = get_students()
-
-# URL 파라미터 안전하게 가져오기
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 1. [학생 전용 모드] URL에 정확한 학생 이름이 들어온 경우
+# 1. [학생 전용 모드]
 if url_student and url_student in student_list:
     selected_student = url_student
     st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
     
-    milestones = get_milestones()
+    milestones = get_student_milestones(selected_student)
     hw_dates = get_homework_dates()
     m_progress = get_milestone_progress(selected_student)
     h_progress = get_homework_progress(selected_student)
 
     all_hws_flat = get_all_homework()
     total_tasks = len(milestones) + len(all_hws_flat)
-    completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
+    completed_m = sum(1 for m_id, _, _, _, _ in milestones if m_progress.get(m_id, False))
     completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
     total_completed = completed_m + completed_h
     progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
@@ -225,13 +282,14 @@ if url_student and url_student in student_list:
         h_checked_results = {}
 
         with tab1:
-            st.markdown("### 📘 수학(상) 핵심 개념 마일스톤")
+            st.markdown("### 📘 수학 핵심 개념 마일스톤")
             if milestones:
-                for m_id, title in milestones:
+                for m_id, sub, ch, top in milestones:
+                    label = f"[{sub}] {ch} - {top}"
                     default_val = m_progress.get(m_id, False)
-                    m_checked_results[m_id] = st.checkbox(title, value=default_val, key=f"s_milestone_{m_id}")
+                    m_checked_results[m_id] = st.checkbox(label, value=default_val, key=f"s_milestone_{m_id}")
             else:
-                st.info("등록된 마일스톤 항목이 없습니다.")
+                st.info("아직 부여된 마일스톤 항목이 없습니다.")
 
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
@@ -257,7 +315,7 @@ if url_student and url_student in student_list:
             st.success("학습 상태가 저장되었습니다!")
             st.rerun()
 
-# 2. [선생님 전용 관리 모드] 주소 뒤에 student 파라미터가 없을 때
+# 2. [선생님 전용 관리 모드]
 else:
     st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
@@ -310,19 +368,82 @@ else:
 
     st.divider()
 
-    # 선생님 전용 관리 설정 영역 (누락되었던 핵심 부분!)
-    st.markdown("### ⚙️ [선생님 전용] 과제 및 마일스톤 웹 관리 설정")
+    # 선생님 전용 관리 설정 영역
+    st.markdown("### ⚙️ [선생님 전용] 커리큘럼 및 과제 통합 관리 설정")
     
-    with st.expander("📅 새로운 날짜별 과제 등록 및 삭제 관리", expanded=True):
-        col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
-        with col_h1:
-            reg_date = st.date_input("과제 날짜 선택", value=date.today())
-        with col_h2:
-            reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
-        with col_h3:
-            st.write("")
-            st.write("")
-            add_hw_btn = st.button("과제 추가하기")
+    # 탭으로 과목/단원 관리와 과제 관리를 분리
+    t_cfg1, t_cfg2 = st.tabs(["📚 1. 마스터 커리큘럼 및 학생별 마일스톤 부여", "📅 2. 날짜별 과제 관리"])
+
+    with t_cfg1:
+        st.markdown("#### 🛠️ 전체 커리큘럼 라이브러리(과목/단원/유형) 관리")
+        with st.form("pool_form"):
+            col_p1, col_p2, col_p3, col_p4 = st.columns([1.5, 2, 2, 1])
+            with col_p1:
+                p_sub = st.selectbox("과목", ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"])
+            with col_p2:
+                p_ch = st.text_input("단원명 (예: 01. 다항식)")
+            with col_p3:
+                p_top = st.text_input("유형/소단원 (예: 나머지정리의 활용)")
+            with col_p4:
+                st.write("")
+                st.write("")
+                add_pool_btn = st.form_submit_button("라이브러리에 추가")
+        
+        if add_pool_btn:
+            if p_ch.strip() and p_top.strip():
+                add_curriculum_pool(p_sub, p_ch.strip(), p_top.strip())
+                st.success("커리큘럼 라이브러리에 등록되었습니다!")
+                st.rerun()
+            else:
+                st.error("단원명과 유형을 모두 입력해주세요.")
+
+        st.markdown("---")
+        st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 마일스톤 부여 및 관리" if selected_student else "🎯 학생을 먼저 선택해주세요.")
+        
+        if selected_student:
+            pool_items = get_curriculum_pool()
+            if pool_items:
+                st.markdown("원하는 항목을 선택하여 해당 학생의 로드맵에 추가하세요:")
+                for p_id, p_sub, p_ch, p_top in pool_items:
+                    col_i1, col_i2 = st.columns([4, 1])
+                    with col_i1:
+                        st.write(f"▪️ **[{p_sub}]** {p_ch} ➔ {p_top}")
+                    with col_i2:
+                        if st.button("학생에게 추가", key=f"assign_{p_id}"):
+                            add_student_milestone(selected_student, p_sub, p_ch, p_top)
+                            st.success(f"'{selected_student}' 학생에게 추가되었습니다!")
+                            st.rerun()
+            else:
+                st.info("등록된 커리큘럼 라이브러리가 없습니다. 위에서 먼저 등록해 주세요.")
+
+            st.markdown("---")
+            st.markdown(f"#### 📋 현재 [{selected_student}] 학생에게 부여된 마일스톤 목록 (삭제 관리)")
+            student_ms = get_student_milestones(selected_student)
+            if student_ms:
+                for m_id, sub, ch, top in student_ms:
+                    c1, c2 = st.columns([4, 1])
+                    with c1:
+                        st.write(f"✔️ **[{sub}]** {ch} - {top}")
+                    with c2:
+                        if st.button("부여 취소", key=f"del_ms_{m_id}"):
+                            delete_student_milestone(m_id)
+                            st.warning("제외되었습니다.")
+                            st.rerun()
+            else:
+                st.info("이 학생에게 부여된 마일스톤이 아직 없습니다.")
+
+    with t_cfg2:
+        st.markdown("#### 📅 새로운 날짜별 과제 등록하기")
+        with st.form("hw_form"):
+            col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
+            with col_h1:
+                reg_date = st.date_input("과제 날짜 선택", value=date.today())
+            with col_h2:
+                reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
+            with col_h3:
+                st.write("")
+                st.write("")
+                add_hw_btn = st.form_submit_button("과제 추가하기")
 
         if add_hw_btn:
             if reg_title.strip():
@@ -333,7 +454,7 @@ else:
                 st.error("과제 내용을 입력해주세요.")
 
         st.markdown("---")
-        st.markdown("#### 📋 등록된 날짜별 과제 목록")
+        st.markdown("#### 📋 등록된 날짜별 과제 목록 (삭제 관리)")
         current_hws = get_all_homework()
         if current_hws:
             for h_id, hw_date, title in current_hws:
