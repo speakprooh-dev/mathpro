@@ -593,7 +593,10 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
 
-            # --- [탭 3 내부 가장 아래] 현재 저장된 오답 목록 및 해설 찾기 버튼 배치 ---
+            # --- [저장하기 버튼을 오답 목록 위로 이동] ---
+            submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
+            st.markdown("---")
+
             saved_text = get_student_wrong_entry(selected_student, current_unit)
             saved_nums = parse_numbers(saved_text)
 
@@ -617,9 +620,6 @@ if url_student and url_student in student_list:
                         st.code(full_code, language="text")
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
-
-        st.divider()
-        submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
 
         if submit_clicked:
             save_student_progress(selected_student, m_checked_results, h_checked_results)
