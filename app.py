@@ -589,22 +589,22 @@ if url_student and url_student in student_list:
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
-                st.caption("💡 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 클립보드에 곧바로 복사됩니다! 이후 **[🎥 해설찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요.")
                 
+                # 상단 적절한 위치에 해설찾기 버튼 딱 하나 배치
+                cafe_main_url = get_cafe_search_url(current_unit, 1)
+                col_info, col_btn = st.columns([3, 1])
+                with col_info:
+                    st.caption("💡 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
+                with col_btn:
+                    st.markdown(
+                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설찾기</a>',
+                        unsafe_allow_html=True
+                    )
+                
+                # 번호 라벨 없이 공간 효율적인 가로 배치
                 for num_int in sorted(list(saved_nums)):
                     full_code = f"{current_unit}{num_int:03d}"
-                    cafe_url = get_cafe_search_url(current_unit, num_int)
-                    
-                    c1, c2, c3 = st.columns([1, 2, 1])
-                    with c1:
-                        st.markdown(f"**{num_int}번**")
-                    with c2:
-                        st.code(full_code, language="text")
-                    with c3:
-                        st.markdown(
-                            f'<a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:6px 12px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🎥 해설찾기</a>',
-                            unsafe_allow_html=True
-                        )
+                    st.code(full_code, language="text")
             else:
                 st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
