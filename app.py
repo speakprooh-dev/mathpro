@@ -4,16 +4,13 @@ from datetime import date
 import re
 import urllib.parse
 
-# 네이버 카페 메인 주소 설정
-NAVER_CAFE_URL = "https://cafe.naver.com/mathpro2020"
-
-# 네이버 카페 문항 검색 URL 생성 함수
+# 네이버 통합검색을 활용한 카페 문항 검색 URL 생성 함수
 def get_cafe_search_url(unit_code, num_int):
-    # 단원코드와 번호를 조합하여 검색어 생성 (예: A114 + 103 -> A114103)
     full_code = f"{unit_code}{num_int:03d}"
-    encoded_query = urllib.parse.quote(full_code)
-    # 네이버 카페 내 해당 문항 검색 URL
-    return f"{NAVER_CAFE_URL}?iframe_url=/ArticleSearchList.nhn%3Fsearch.query%3D{encoded_query}"
+    # mathpro2020 카페 내에서 해당 문항 코드로 바로 검색되도록 네이버 통합검색 활용
+    query_str = f"mathpro2020 {full_code}"
+    encoded_query = urllib.parse.quote(query_str)
+    return f"https://search.naver.com/search.naver?where=article&query={encoded_query}"
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -597,7 +594,6 @@ if url_student and url_student in student_list:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
                 
-                # 각 문항별로 네이버 카페 검색 연동 버튼 생성
                 for num_int in sorted(list(saved_nums)):
                     full_code = f"{current_unit}{num_int:03d}"
                     search_url = get_cafe_search_url(current_unit, num_int)
