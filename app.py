@@ -546,19 +546,8 @@ if url_student and url_student in student_list:
                     exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
                     
                     with st.expander(exp_label, expanded=False):
-                        select_all_key = f"s_select_all_{sub}_{ch}"
-                        all_default = all(m_progress.get(m_id, False) for m_id, _, _ in items)
-                        # on_change를 이용해 체크하는 순간 즉시 새로고침(rerun)되도록 처리
-                        def on_student_select_all_change():
-                            is_on = st.session_state[select_all_key]
-                            for m_id, _, _ in items:
-                                st.session_state[f"s_milestone_{m_id}"] = is_on
-                                
-                        select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=all_default, key=select_all_key, on_change=on_student_select_all_change)
-                        st.markdown("---")
-
                         for m_id, t_name, v_url in items:
-                            default_val = True if select_all_val else m_progress.get(m_id, False)
+                            default_val = m_progress.get(m_id, False)
                             
                             cols = st.columns([4, 1])
                             with cols[0]:
@@ -723,7 +712,7 @@ else:
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
             st.markdown("##### 📘 단원별 마일스톤 현황 및 직접 진도 체크")
-            st.info("💡 선생님 화면에서도 학생의 진도 완료 여부를 체크박스로 변경한 뒤, 하단의 **[선생님 진도 상태 저장하기]** 버튼을 눌러 저장할 수 있습니다!")
+            st.info("💡 선생님 화면에서는 각 단원별로 **[일괄 체크 (전체 선택/해제)]** 버튼을 누르거나 개별 체크 후 하단의 **[선생님 진도 상태 저장하기]** 버튼을 눌러 저장할 수 있습니다!")
 
             if s_milestones:
                 with st.form("teacher_milestone_form"):
@@ -740,29 +729,39 @@ else:
                         exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
                         
                         with st.expander(exp_title, expanded=False):
-                            t_select_all_key = f"t_select_all_{sub}_{ch}"
-                            t_all_default = all(s_m_progress.get(m_id, False) for m_id, _, _ in items)
+                            # 단원별 일괄 선택 버튼 추가 (체크박스 대신 라디오나 버튼 활용)
+                            col_all_1, col_all_2 = st.columns(2)
+                            with col_all_1:
+                                batch_on = st.form_submit_button(f"📌 [{ch}] 전체 선택", key=f"batch_on_{sub}_{ch}")
+                            with col_all_2:
+                                batch_off = st.form_submit_button(f"🔄 [{ch}] 전체 해제", key=f"batch_off_{sub}_{ch}")
                             
-                            def on_teacher_select_all_change():
-                                is_on = st.session_state[t_select_all_key]
-                                for m_id, _, _ in items:
-                                    st.session_state[f"t_milestone_{m_id}"] = is_on
-
-                            t_select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=t_all_default, key=t_select_all_key, on_change=on_teacher_select_all_change)
                             st.markdown("---")
 
                             for m_id, t_name, v_url in items:
-                                is_done = True if t_select_all_val else s_m_progress.get(m_id, False)
+                                is_done = s_m_progress.get(m_id, False)
+                                # 버튼이 눌렸을 때 상태 강제 지정
+                                if batch_on:
+                                    is_done = True
+                                elif batch_off:
+                                    is_done = False
+
                                 teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
                                 st.divider()
 
                     st.divider()
                     teacher_save_clicked = st.form_submit_button("선생님 진도 상태 저장하기", type="primary")
 
-                    if teacher_save_clicked:
+                    if teacher_save_clicked or batch_on or batch_off:
                         conn = sqlite3.connect("mathpro_roadmap.db")
                         c = conn.cursor()
                         for m_id, val in teacher_m_checked.items():
+                            # batch_on/off 상태도 반영
+                            if batch_on:
+                                val = True
+                            elif batch_off:
+                                val = False
+                            
                             c.execute('''
                                 INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
                                 VALUES (?, ?, ?)
