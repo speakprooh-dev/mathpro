@@ -516,21 +516,22 @@ if url_student and url_student in student_list:
     
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
-        st.write(f"**🎯 진도 마일스톤 달성도: {m_percent}%** ({completed_m}/{total_m} 완료)")
+        st.write(f"**🎯 진도 달성도: {m_percent}%** ({completed_m}/{total_m} 완료)")
         st.progress(m_percent / 100 if total_m > 0 else 0)
     with col_stat2:
-        st.write(f"**📚 과제 달성도: {h_percent}%** ({completed_h}/{total_h} 완료)")
+        st.write(f"**📚 숙제 달성도: {h_percent}%** ({completed_h}/{total_h} 완료)")
         st.progress(h_percent / 100 if total_h > 0 else 0)
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 등록함"])
+    # 자연스러운 메뉴 이름으로 변경
+    tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 학습 진도", "📚 2. 날짜별 숙제", "💬 3. 오답 및 질문 관리"])
 
     m_checked_results = {}
     h_checked_results = {}
 
     with tab1:
-        st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
+        st.markdown("### 📘 나의 개념 학습 목록")
         st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
         if milestones:
             grouped_s_milestones = {}
@@ -560,29 +561,29 @@ if url_student and url_student in student_list:
                             else:
                                 st.caption("영상 없음")
         else:
-            st.info("아직 부여된 학습 마일스톤이 없습니다.")
+            st.info("아직 배정된 개념 학습 목록이 없습니다.")
             
         st.markdown("---")
         save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
-        st.markdown("### 📝 날짜별 과제함")
+        st.markdown("### 📝 날짜별 숙제 목록")
         st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
         if hw_dates:
-            selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+            selected_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
             target_hws = get_student_homework_by_date(selected_student, selected_date)
             for h_id, title in target_hws:
                 default_val = h_progress.get(h_id, False)
                 h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
         else:
-            st.info("등록된 날짜별 과제가 없습니다.")
+            st.info("등록된 날짜별 숙제가 없습니다.")
             
         st.markdown("---")
         save_btn_tab2 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t2", use_container_width=True)
 
     with tab3:
-        st.markdown("### 💬 오답 및 질문 번호 관리함")
+        st.markdown("### 💬 오답 및 질문 번호 관리")
         st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
         
         entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
@@ -597,11 +598,11 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
 
-        # --- [저장 버튼을 입력란 바로 아래, 오답 목록 위로 배치] ---
+        # 저장 버튼을 입력란 바로 아래, 오답 목록 위에 배치
         save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
         st.markdown("---")
 
-        # 현재 저장된 오답 목록 출력 (스크롤 컨테이너 적용하여 리스트가 길어져도 버튼이 밀리지 않음)
+        # 현재 저장된 오답 목록 출력 (스크롤 컨테이너 적용)
         saved_text = get_student_wrong_entry(selected_student, current_unit)
         saved_nums = parse_numbers(saved_text)
 
@@ -617,7 +618,7 @@ if url_student and url_student in student_list:
                     unsafe_allow_html=True
                 )
             
-            # 오답 목록이 길어지면 내부 스크롤이 생기도록 컨테이너(높이 300px) 지정
+            # 오답 목록이 길어지면 내부 스크롤이 생기도록 컨테이너 적용
             with st.container(height=300):
                 sorted_nums_list = sorted(list(saved_nums))
                 cols_grid = st.columns(3)
@@ -736,10 +737,10 @@ else:
             s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
-            st.metric(label=f"{selected_student} 마일스톤 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+            st.metric(label=f"{selected_student} 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
-            st.markdown("##### 📘 단원별 마일스톤 현황 및 직접 진도 체크")
+            st.markdown("##### 📘 단원별 진도 현황 및 직접 체크")
             st.info("💡 각 단원별 **[전체 선택]** 또는 **[전체 해제]** 버튼을 누르면 즉시 반영되며, 수정 후 하단의 **[선생님 진도 상태 저장하기]** 버튼을 꼭 눌러주세요!")
 
             if s_milestones:
@@ -791,7 +792,7 @@ else:
                     st.rerun()
 
                 # 개별 항목 삭제 관리
-                st.markdown("##### 🗑️ 개별 마일스톤 항목 삭제 관리")
+                st.markdown("##### 🗑️ 개별 진도 항목 삭제 관리")
                 with st.expander("항목별 삭제 열기"):
                     for m_id, sub, ch, t_name, v_url in s_milestones:
                         col_del1, col_del2 = st.columns([4, 1])
@@ -805,7 +806,7 @@ else:
                                     st.success("삭제되었습니다!")
                                     st.rerun()
             else:
-                st.info("이 학생에게 부여된 마일스톤이 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
+                st.info("이 학생에게 배정된 진도가 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
             st.warning("상단에서 관리할 학생을 먼저 선택하거나 등록해 주세요.")
 
@@ -989,7 +990,7 @@ else:
                     if assign_submitted:
                         if selected_ch_ids:
                             cnt_added = assign_chapters_to_student(selected_student, selected_ch_ids)
-                            st.success(f"총 {cnt_added}개의 마일스톤 유형이 {selected_student} 학생에게 성공적으로 배정되었습니다!")
+                            st.success(f"총 {cnt_added}개의 진도 항목이 {selected_student} 학생에게 성공적으로 배정되었습니다!")
                             st.rerun()
                         else:
                             st.warning("배정할 단원을 하나 이상 체크해주세요.")
