@@ -306,3 +306,47 @@ else:
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
+                st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
+
+    st.divider()
+
+    # 선생님 전용 관리 설정 영역 (누락되었던 핵심 부분!)
+    st.markdown("### ⚙️ [선생님 전용] 과제 및 마일스톤 웹 관리 설정")
+    
+    with st.expander("📅 새로운 날짜별 과제 등록 및 삭제 관리", expanded=True):
+        col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
+        with col_h1:
+            reg_date = st.date_input("과제 날짜 선택", value=date.today())
+        with col_h2:
+            reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
+        with col_h3:
+            st.write("")
+            st.write("")
+            add_hw_btn = st.button("과제 추가하기")
+
+        if add_hw_btn:
+            if reg_title.strip():
+                add_homework(str(reg_date), reg_title.strip())
+                st.success(f"[{reg_date}] 과제가 성공적으로 등록되었습니다!")
+                st.rerun()
+            else:
+                st.error("과제 내용을 입력해주세요.")
+
+        st.markdown("---")
+        st.markdown("#### 📋 등록된 날짜별 과제 목록")
+        current_hws = get_all_homework()
+        if current_hws:
+            for h_id, hw_date, title in current_hws:
+                weekday_str = get_weekday_kr(hw_date)
+                c1, c2, c3 = st.columns([2, 3, 1])
+                with c1:
+                    st.write(f"**[{hw_date} ({weekday_str})]**")
+                with c2:
+                    st.write(title)
+                with c3:
+                    if st.button("삭제", key=f"del_hw_{h_id}"):
+                        delete_homework(h_id)
+                        st.warning("과제가 삭제되었습니다.")
+                        st.rerun()
+        else:
+            st.write("등록된 과제가 없습니다.")
