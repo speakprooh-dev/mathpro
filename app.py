@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 from datetime import date
+import re
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -80,14 +81,13 @@ def init_db():
         )
     ''')
     
-    # 학생 오답/질문 체크 저장 테이블 (단원코드 + 문제번호들)
+    # 학생 오답/질문 대량 입력 저장 테이블 (단원코드 + 번호 텍스트)
     c.execute('''
-        CREATE TABLE IF NOT EXISTS student_wrong_questions (
+        CREATE TABLE IF NOT EXISTS student_wrong_entries (
             student_name TEXT,
             unit_code TEXT,
-            question_num TEXT,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, unit_code, question_num)
+            numbers_text TEXT,
+            PRIMARY KEY (student_name, unit_code)
         )
     ''')
     
@@ -158,7 +158,7 @@ def delete_student(name):
     c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
     c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM student_wrong_questions WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
@@ -424,25 +424,35 @@ def save_progress(student_name, m_checked, h_checked):
     conn.commit()
     conn.close()
 
-def get_student_wrong_questions(student_name, unit_code):
+def get_student_wrong_entry(student_name, unit_code):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT question_num, is_checked FROM student_wrong_questions WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
-    rows = c.fetchall()
+    c.execute("SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
+    row = c.fetchone()
     conn.close()
-    return {r[0]: bool(r[1]) for r in rows}
+    return row[0] if row else ""
 
-def save_student_wrong_questions(student_name, unit_code, checked_dict):
+def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    for q_num, val in checked_dict.items():
-        c.execute('''
-            INSERT INTO student_wrong_questions (student_name, unit_code, question_num, is_checked)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(student_name, unit_code, question_num) DO UPDATE SET is_checked = ?
-        ''', (student_name, unit_code, q_num, int(val), int(val)))
+    c.execute('''
+        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
+        VALUES (?, ?, ?)
+        ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?
+    ''', (student_name, unit_code, numbers_text, numbers_text))
     conn.commit()
     conn.close()
+
+def parse_and_format_numbers(numbers_text):
+    if not numbers_text:
+        return []
+    # 숫자만 추출
+    nums = re.findall(r'\d+', numbers_text)
+    # 정수형으로 변환 후 중복 제거 및 정렬
+    unique_nums = sorted(list(set(int(n) for n in nums)))
+    # 3자리 포맷 (001, 005 등)
+    formatted = [f"{n:03d}" for n in unique_nums]
+    return formatted
 
 # --- 웹 UI 구성 ---
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
@@ -484,7 +494,7 @@ if url_student and url_student in student_list:
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 체크함"])
+    tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 등록함"])
 
     with st.form("student_roadmap_form"):
         m_checked_results = {}
@@ -492,7 +502,7 @@ if url_student and url_student in student_list:
 
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
-            st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
+            st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
@@ -514,7 +524,7 @@ if url_student and url_student in student_list:
 
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
-            st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
+            st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if hw_dates:
                 selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
@@ -526,34 +536,28 @@ if url_student and url_student in student_list:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
         with tab3:
-            st.markdown("### 💬 오답 및 질문 체크함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 입력하고, 틀렸거나 질문할 문제 번호들을 체크하세요!")
+            st.markdown("### 💬 오답 및 질문 번호 대량 입력함")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 틀린 문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!")
             
-            entered_unit_code = st.text_input("단원코드 입력 (예: A1351)", value="A1351").strip().upper()
+            entered_unit_code = st.text_input("단원코드 입력", value="A1351").strip().upper()
+            saved_text = get_student_wrong_entry(selected_student, entered_unit_code if entered_unit_code else "A1351")
             
-            wq_checked_results = {}
-            if entered_unit_code:
-                st.markdown(f"##### 📌 [{entered_unit_code}] 단원 문제 번호 선택 (틀린 문제 체크)")
-                existing_wq = get_student_wrong_questions(selected_student, entered_unit_code)
-                
-                # 1부터 30번까지의 번호 그리드 체크박스 제공 (필요시 확장 가능)
-                cols_per_row = 5
-                nums = [f"{i:03d}" for i in range(1, 31)]
-                
-                for i in range(0, len(nums), cols_per_row):
-                    row_nums = nums[i:i+cols_per_row]
-                    cols = st.columns(cols_per_row)
-                    for idx, q_num in enumerate(row_nums):
-                        with cols[idx]:
-                            def_val = existing_wq.get(q_num, False)
-                            wq_checked_results[q_num] = st.checkbox(f"{q_num}번", value=def_val, key=f"wq_{entered_unit_code}_{q_num}")
+            entered_nums_text = st.text_area("틀린 문제 번호 입력 (예: 1, 5, 12, 23)", value=saved_text, placeholder="예: 1, 5, 12, 25")
+            
+            # 입력 즉시 파싱하여 확인용 프리뷰 제공
+            if entered_nums_text:
+                parsed_list = parse_and_format_numbers(entered_nums_text)
+                if parsed_list:
+                    st.markdown("##### 👀 내가 입력한 오답 번호 확인")
+                    preview_str = ", ".join([f"{n}번" for n in parsed_list])
+                    st.success(f"총 {len(parsed_list)}문제 등록됨: [{preview_str}]")
 
         st.divider()
-        submit_clicked = st.form_submit_button("내 체크상태 저장하기", type="primary")
+        submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
         if submit_clicked:
             save_progress(selected_student, m_checked_results, h_checked_results)
-            if 'entered_unit_code' in locals() and entered_unit_code and 'wq_checked_results' in locals():
-                save_student_wrong_questions(selected_student, entered_unit_code, wq_checked_results)
+            if 'entered_unit_code' in locals() and entered_unit_code:
+                save_student_wrong_entry(selected_student, entered_unit_code, entered_nums_text)
             st.success("학습 상태가 저장되었습니다!")
             st.rerun()
 
@@ -883,32 +887,32 @@ else:
             st.info("등록된 과제가 없습니다.")
 
     with t_cfg3:
-        st.markdown("#### 🔍 학생별 오답노트 PDF 연동 코드 자동 취합")
-        st.info("학생들이 체크한 오답 번호들을 **`단원코드_(번호,번호...)`** 형태로 자동 조합해 드립니다. 그대로 복사해서 선생님의 프로그램에 넣으세요!")
+        st.markdown("#### 🔍 학생별 오답노트 PDF 연동 코드 자동 조합")
+        st.info("학생들이 입력한 오답 번호들을 자동으로 파싱하여 **`단원코드_(번호,번호...)`** 형태로 조합해 드립니다. 그대로 복사해서 선생님의 프로그램에 활용하세요!")
         
         if selected_student:
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
-            c.execute("SELECT DISTINCT unit_code FROM student_wrong_questions WHERE student_name = ?", (selected_student,))
+            c.execute("SELECT DISTINCT unit_code FROM student_wrong_entries WHERE student_name = ?", (selected_student,))
             units = [r[0] for r in c.fetchall()]
             conn.close()
             
             if units:
                 selected_unit = st.selectbox("확인할 단원코드 선택", units)
                 if selected_unit:
-                    wq_dict = get_student_wrong_questions(selected_student, selected_unit)
-                    checked_nums = [q for q, checked in wq_dict.items() if checked]
+                    raw_text = get_student_wrong_entry(selected_student, selected_unit)
+                    parsed_nums = parse_and_format_numbers(raw_text)
                     
-                    if checked_nums:
-                        checked_nums.sort()
-                        nums_str = ",".join(checked_nums)
+                    if parsed_nums:
+                        nums_str = ",".join(parsed_nums)
                         combined_code = f"{selected_unit}_({nums_str})"
                         
                         st.markdown("##### 📌 오답노트 생성용 포맷 텍스트")
                         st.code(combined_code, language="text")
-                        st.success(f"총 {len(checked_nums)}문제가 체크되었습니다. 위 코드를 복사해서 오답노트 프로그램에 활용하세요!")
+                        st.success(f"총 {len(parsed_nums)}문제가 등록되어 있습니다. 위 코드를 복사해서 오답노트 프로그램에 활용하세요!")
+                        st.caption(f"학생 원본 입력 내용: {raw_text}")
                     else:
-                        st.warning(f"'{selected_unit}' 단원에서 체크된 오답 문제가 없습니다.")
+                        st.warning(f"'{selected_unit}' 단원에 등록된 오답 번호가 없습니다.")
             else:
                 st.info(f"'{selected_student}' 학생이 아직 등록한 오답/질문 코드가 없습니다.")
         else:
