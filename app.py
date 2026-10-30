@@ -413,19 +413,16 @@ if url_student and url_student in student_list:
     h_progress = get_homework_progress(selected_student)
     all_hws_flat = get_all_homework()
 
-    # 진도 마일스톤 달성도 계산
     total_m = len(milestones)
     completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
     m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
 
-    # 과제 달성도 계산
     total_h = len(all_hws_flat)
     completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
     st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
     
-    # 진도와 과제 달성도를 각각 독립된 프로그레스 바 영역으로 출력
     col_stat1, col_stat2 = st.columns(2)
     with col_stat1:
         st.write(f"**🎯 진도 마일스톤 달성도: {m_percent}%** ({completed_m}/{total_m} 완료)")
@@ -459,7 +456,16 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            m_checked_results[m_id] = st.checkbox(t_name, value=default_val, key=f"s_milestone_{m_id}")
+                            # 체크박스 대신 명확한 완료 여부 선택 버튼(Selectbox 또는 Toggle 느낌)으로 가독성 향상
+                            status_label = "✅ 완료" if default_val else "⬜ 미완료"
+                            choice = st.radio(
+                                f"{t_name}", 
+                                ["⬜ 미완료", "✅ 완료"], 
+                                index=1 if default_val else 0, 
+                                horizontal=True, 
+                                key=f"s_milestone_{m_id}"
+                            )
+                            m_checked_results[m_id] = (choice == "✅ 완료")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
@@ -471,7 +477,15 @@ if url_student and url_student in student_list:
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"s_hw_{h_id}")
+                    # 과제 항목도 직관적인 완료 선택 버튼으로 변경
+                    choice_hw = st.radio(
+                        f"{title}", 
+                        ["⬜ 미완료", "✅ 완료"], 
+                        index=1 if default_val else 0, 
+                        horizontal=True, 
+                        key=f"s_hw_{h_id}"
+                    )
+                    h_checked_results[h_id] = (choice_hw == "✅ 완료")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
@@ -548,7 +562,6 @@ else:
 
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
 
-        # 새 과목 추가 영역
         with st.form("unified_sub_form"):
             col_u1, col_u2 = st.columns([3, 1])
             with col_u1:
@@ -569,7 +582,6 @@ else:
 
         st.markdown("---")
 
-        # 과목별 접이식(Expander) 계층형 관리 화면
         if subjects_data:
             for sub_id, sub_name in subjects_data:
                 with st.expander(f"📚 [과목] {sub_name}", expanded=False):
@@ -684,7 +696,6 @@ else:
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정 영역
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
             st.info("과목별 폴더를 열어 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 배정됩니다!")
