@@ -546,14 +546,18 @@ if url_student and url_student in student_list:
                     exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
                     
                     with st.expander(exp_label, expanded=False):
-                        # 단원별 전체 선택/해제용 마스터 체크박스
                         select_all_key = f"s_select_all_{sub}_{ch}"
                         all_default = all(m_progress.get(m_id, False) for m_id, _, _ in items)
-                        select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=all_default, key=select_all_key)
+                        # on_change를 이용해 체크하는 순간 즉시 새로고침(rerun)되도록 처리
+                        def on_student_select_all_change():
+                            is_on = st.session_state[select_all_key]
+                            for m_id, _, _ in items:
+                                st.session_state[f"s_milestone_{m_id}"] = is_on
+                                
+                        select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=all_default, key=select_all_key, on_change=on_student_select_all_change)
                         st.markdown("---")
 
                         for m_id, t_name, v_url in items:
-                            # 전체 선택 체크박스가 켜져있으면 기본값을 True로 유도
                             default_val = True if select_all_val else m_progress.get(m_id, False)
                             
                             cols = st.columns([4, 1])
@@ -736,10 +740,15 @@ else:
                         exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
                         
                         with st.expander(exp_title, expanded=False):
-                            # 선생님 화면 단원별 전체 선택/해제용 마스터 체크박스
                             t_select_all_key = f"t_select_all_{sub}_{ch}"
                             t_all_default = all(s_m_progress.get(m_id, False) for m_id, _, _ in items)
-                            t_select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=t_all_default, key=t_select_all_key)
+                            
+                            def on_teacher_select_all_change():
+                                is_on = st.session_state[t_select_all_key]
+                                for m_id, _, _ in items:
+                                    st.session_state[f"t_milestone_{m_id}"] = is_on
+
+                            t_select_all_val = st.checkbox("☑️ 이 단원 전체 선택 / 해제", value=t_all_default, key=t_select_all_key, on_change=on_teacher_select_all_change)
                             st.markdown("---")
 
                             for m_id, t_name, v_url in items:
