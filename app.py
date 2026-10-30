@@ -456,16 +456,8 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            # 체크박스 대신 명확한 완료 여부 선택 버튼(Selectbox 또는 Toggle 느낌)으로 가독성 향상
-                            status_label = "✅ 완료" if default_val else "⬜ 미완료"
-                            choice = st.radio(
-                                f"{t_name}", 
-                                ["⬜ 미완료", "✅ 완료"], 
-                                index=1 if default_val else 0, 
-                                horizontal=True, 
-                                key=f"s_milestone_{m_id}"
-                            )
-                            m_checked_results[m_id] = (choice == "✅ 완료")
+                            # 이모티콘 제거하고 깔끔한 체크박스 라벨로 변경
+                            m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
@@ -477,15 +469,8 @@ if url_student and url_student in student_list:
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    # 과제 항목도 직관적인 완료 선택 버튼으로 변경
-                    choice_hw = st.radio(
-                        f"{title}", 
-                        ["⬜ 미완료", "✅ 완료"], 
-                        index=1 if default_val else 0, 
-                        horizontal=True, 
-                        key=f"s_hw_{h_id}"
-                    )
-                    h_checked_results[h_id] = (choice_hw == "✅ 완료")
+                    # 과제 체크박스도 이모티콘 제거
+                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
