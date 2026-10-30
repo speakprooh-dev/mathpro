@@ -805,4 +805,17 @@ else:
         st.markdown("#### 📋 등록된 날짜별 과제 목록 (삭제 관리)")
         current_hws = get_all_homework()
         if current_hws:
-            for h_id, hw_date, title in current_h
+            for h_id, hw_date, title in current_hws:
+                weekday_str = get_weekday_kr(hw_date)
+                c1, c2, c3 = st.columns([2, 3, 1])
+                with c1:
+                    st.write(f"**[{hw_date} ({weekday_str})]**")
+                with c2:
+                    st.write(title)
+                with c3:
+                    if st.button("삭제", key=f"del_hw_{h_id}"):
+                        delete_homework(h_id)
+                        st.warning("과제가 삭제되었습니다.")
+                        st.rerun()
+        else:
+            st.info("등록된 과제가 없습니다.")
