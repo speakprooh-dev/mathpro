@@ -11,7 +11,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (과목, 단원, 단원별 유형 구조)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -35,7 +35,7 @@ def init_db():
         )
     ''')
     
-    # 단원에 속한 세부 유형 테이블
+    # 세부 유형 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS chapter_types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +44,7 @@ def init_db():
         )
     ''')
     
-    # 학생별 부여된 마일스톤 (과목, 단원, 유형별 세부 항목)
+    # 학생별 마일스톤
     c.execute("DROP TABLE IF EXISTS milestones")
     c.execute('''
         CREATE TABLE milestones (
@@ -91,7 +91,7 @@ def init_db():
             except sqlite3.IntegrityError:
                 pass
                 
-    # 초기 샘플 단원 및 유형 데이터
+    # 초기 샘플 데이터
     c.execute("SELECT COUNT(*) FROM chapters")
     if c.fetchone()[0] == 0:
         default_data = [
@@ -151,7 +151,6 @@ def delete_student(name):
     conn.commit()
     conn.close()
 
-# 과목 관리
 def get_subjects():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -193,7 +192,6 @@ def delete_subject(sub_id):
     conn.commit()
     conn.close()
 
-# 단원 및 유형 관리
 def get_chapters():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -241,6 +239,13 @@ def add_chapter_type(chapter_id, name):
     conn.commit()
     conn.close()
 
+def update_chapter_type(type_id, name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("UPDATE chapter_types SET name = ? WHERE id = ?", (name, type_id))
+    conn.commit()
+    conn.close()
+
 def delete_chapter_type(type_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -248,7 +253,6 @@ def delete_chapter_type(type_id):
     conn.commit()
     conn.close()
 
-# 학생별 마일스톤 관리
 def get_student_milestones(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -260,7 +264,6 @@ def get_student_milestones(student_name):
 def assign_chapter_to_student(student_name, chapter_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    # 단원 정보 가져오기
     c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
     ch_row = c.fetchone()
     if not ch_row:
@@ -268,15 +271,13 @@ def assign_chapter_to_student(student_name, chapter_id):
         return
     sub, ch_name = ch_row
     
-    # 해당 단원에 속한 유형들 가져오기
     c.execute("SELECT name FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     type_rows = c.fetchall()
     
     types_to_add = [r[0] for r in type_rows]
     if not types_to_add:
-        types_to_add = ["단원 전체 기본 학습"] # 유형이 없을 경우 기본 항목 추가
+        types_to_add = ["단원 전체 기본 학습"]
         
-    # 이미 학생에게 들어있는지 확인 후 추가 (중복 방지)
     c.execute("SELECT chapter, type_name FROM milestones WHERE student_name = ?", (student_name,))
     existing = {(r[0], r[1]) for r in c.fetchall()}
     
@@ -493,146 +494,152 @@ else:
     st.divider()
 
     st.markdown("### ⚙️ [선생님 전용] 커리큘럼 및 과제 통합 관리 설정")
-    t_cfg1, t_cfg2 = t_cfg1, t_cfg2 = st.tabs(["📚 1. 과목/단원/유형 라이브러리 및 진도 배정", "📅 2. 날짜별 과제 관리"])
+    t_cfg1, t_cfg2 = st.tabs(["📚 1. 커리큘럼 통합 관리 및 진도 배정", "📅 2. 날짜별 과제 관리"])
 
     with t_cfg1:
         subjects_data = get_subjects()
         subject_names = [s[1] for s in subjects_data]
 
-        # 1. 과목 관리
-        with st.expander("🏷️ 과목명 추가 / 수정 / 삭제 관리", expanded=False):
-            with st.form("add_sub_form"):
-                col_sub1, col_sub2 = st.columns([3, 1])
-                with col_sub1:
-                    new_sub_name = st.text_input("새로운 과목명 입력 (예: 수능 특강)")
-                with col_sub2:
-                    st.write("")
-                    st.write("")
-                    add_sub_btn = st.form_submit_button("과목 추가")
-            if add_sub_btn:
-                if new_sub_name.strip():
-                    if add_subject(new_sub_name.strip()):
-                        st.success(f"'{new_sub_name.strip()}' 과목이 추가되었습니다!")
-                        st.rerun()
-                    else:
-                        st.warning("이미 존재하는 과목명입니다.")
-                else:
-                    st.error("과목명을 입력하세요.")
+        st.markdown("#### 📂 과목 / 단원 / 세부 유형 통합 마스터 관리")
+        st.info("하나의 창에서 과목을 관리하고, 각 과목별 단원과 하위 세부 유형들을 일목요연하게 추가·수정·삭제할 수 있습니다.")
 
-            st.markdown("---")
-            if subjects_data:
-                for sub_id, sub_name in subjects_data:
-                    c_s1, c_s2, c_s3 = st.columns([3, 1, 1])
-                    with c_s1:
-                        st.write(f"▫️ **{sub_name}**")
-                    with c_s2:
-                        with st.popover("✏️ 수정"):
-                            with st.form(f"edit_sub_form_{sub_id}"):
-                                edit_name = st.text_input("과목명 수정", value=sub_name, key=f"edit_sub_name_{sub_id}")
+        # 1. 과목 추가 영역
+        with st.form("unified_sub_form"):
+            col_u1, col_u2 = st.columns([3, 1])
+            with col_u1:
+                new_sub_input = st.text_input("새 과목 추가 (예: 수능 특강)")
+            with col_u2:
+                st.write("")
+                st.write("")
+                add_sub_submit = st.form_submit_button("과목 등록")
+        if add_sub_submit:
+            if new_sub_input.strip():
+                if add_subject(new_sub_input.strip()):
+                    st.success(f"'{new_sub_input.strip()}' 과목이 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.warning("이미 존재하는 과목명입니다.")
+            else:
+                st.error("과목명을 입력하세요.")
+
+        st.markdown("---")
+
+        # 2. 과목별 계층형 통합 관리 화면
+        if subjects_data:
+            for sub_id, sub_name in subjects_data:
+                with st.container(border=True):
+                    # 과목 헤더 및 수정/삭제
+                    col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
+                    with col_h1:
+                        st.markdown(f"### 🏷️ 과목: {sub_name}")
+                    with col_h2:
+                        with st.popover("✏️ 과목명 수정"):
+                            with st.form(f"edit_sub_{sub_id}"):
+                                ed_sub = st.text_input("과목명 변경", value=sub_name, key=f"ed_sub_in_{sub_id}")
                                 if st.form_submit_button("저장"):
-                                    if edit_name.strip():
-                                        if update_subject(sub_id, sub_name, edit_name.strip()):
-                                            st.success("수정되었습니다!")
+                                    if ed_sub.strip():
+                                        if update_subject(sub_id, sub_name, ed_sub.strip()):
+                                            st.success("변경되었습니다!")
                                             st.rerun()
                                         else:
-                                            st.warning("이미 존재하는 과목명입니다.")
-                                    else:
-                                        st.error("과목명을 입력하세요.")
-                    with c_s3:
-                        if st.button("🗑️ 삭제", key=f"del_sub_{sub_id}"):
+                                            st.warning("중복된 과목명입니다.")
+                    with col_h3:
+                        if st.button("🗑️ 과목 삭제", key=f"del_sub_{sub_id}"):
                             delete_subject(sub_id)
                             st.warning("과목이 삭제되었습니다.")
                             st.rerun()
-            else:
-                st.info("등록된 과목이 없습니다.")
 
-        st.divider()
-
-        # 2. 단원 추가 및 단원별 유형 관리
-        st.markdown("#### 🛠️ 단원 및 세부 유형 라이브러리 관리")
-        if subject_names:
-            with st.form("chapter_form"):
-                col_c1, col_c2, col_c3 = st.columns([2, 3, 1])
-                with col_c1:
-                    c_sub = st.selectbox("과목 선택", subject_names)
-                with col_c2:
-                    c_name = st.text_input("단원명 (예: 01. 다항식의 연산)")
-                with col_c3:
-                    st.write("")
-                    st.write("")
-                    add_ch_btn = st.form_submit_button("단원 추가")
-            
-            if add_ch_btn:
-                if c_name.strip():
-                    add_chapter(c_sub, c_name.strip())
-                    st.success("단원이 추가되었습니다!")
-                    st.rerun()
-                else:
-                    st.error("단원명을 입력하세요.")
-        else:
-            st.warning("먼저 위에서 과목을 추가해 주세요!")
-
-        st.markdown("---")
-        st.markdown("#### 📂 등록된 단원 목록 및 유형(세부항목) 관리")
-        chapters_data = get_chapters()
-        if chapters_data:
-            for ch_id, ch_sub, ch_name in chapters_data:
-                with st.expander(f"[{ch_sub}] {ch_name} (클릭하여 유형 관리)"):
-                    # 유형 추가 폼
-                    with st.form(f"add_type_form_{ch_id}"):
-                        col_t1, col_t2 = st.columns([3, 1])
-                        with col_t1:
-                            new_type_name = st.text_input("추가할 세부 유형 이름 (예: 다항식의 덧셈과 뺄셈)", key=f"t_input_{ch_id}")
-                        with col_t2:
+                    # 해당 과목에 속한 단원 추가 폼
+                    with st.form(f"add_ch_form_{sub_id}"):
+                        col_ac1, col_ac2 = st.columns([3, 1])
+                        with col_ac1:
+                            new_ch_name = st.text_input(f"[{sub_name}] 새 단원명 입력 (예: 01. 다항식의 연산)", key=f"ch_input_{sub_id}")
+                        with col_ac2:
                             st.write("")
                             st.write("")
-                            add_t_btn = st.form_submit_button("유형 추가")
-                    if add_t_btn:
-                        if new_type_name.strip():
-                            add_chapter_type(ch_id, new_type_name.strip())
-                            st.success("유형이 추가되었습니다!")
+                            add_ch_submit = st.form_submit_button("단원 추가")
+                    if add_ch_submit:
+                        if new_ch_name.strip():
+                            add_chapter(sub_name, new_ch_name.strip())
+                            st.success("단원이 추가되었습니다!")
                             st.rerun()
                         else:
-                            st.error("유형 이름을 입력하세요.")
+                            st.error("단원명을 입력하세요.")
 
-                    st.markdown("##### 📌 등록된 세부 유형 목록")
-                    types_list = get_chapter_types(ch_id)
-                    if types_list:
-                        for t_id, t_name in types_list:
-                            col_ti1, col_ti2 = st.columns([4, 1])
-                            with col_ti1:
-                                st.write(f"▪️ {t_name}")
-                            with col_ti2:
-                                if st.button("삭제", key=f"del_type_{t_id}"):
-                                    delete_chapter_type(t_id)
-                                    st.warning("유형이 삭제되었습니다.")
-                                    st.rerun()
+                    # 해당 과목의 단원 및 유형 목록 출력
+                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
+                    if chapters_data:
+                        st.markdown("##### 📌 등록된 단원 및 세부 유형")
+                        for ch_id, ch_sub, ch_name in chapters_data:
+                            with st.container():
+                                c_box1, c_box2, c_box3 = st.columns([3, 1, 1])
+                                with c_box1:
+                                    st.write(f"▫️ **{ch_name}**")
+                                with c_box2:
+                                    with st.popover("✏️ 단원 수정"):
+                                        with st.form(f"edit_ch_{ch_id}"):
+                                            ed_ch_name = st.text_input("단원명 수정", value=ch_name, key=f"ed_ch_in_{ch_id}")
+                                            if st.form_submit_button("저장"):
+                                                if ed_ch_name.strip():
+                                                    update_chapter(ch_id, sub_name, ed_ch_name.strip())
+                                                    st.success("수정되었습니다!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("단원명을 입력하세요.")
+                                with c_box3:
+                                    if st.button("🗑️ 단원 삭제", key=f"del_ch_{ch_id}"):
+                                        delete_chapter(ch_id)
+                                        st.warning("단원이 삭제되었습니다.")
+                                        st.rerun()
+
+                                # 하위 세부 유형 관리
+                                types_list = get_chapter_types(ch_id)
+                                type_cols = st.columns([3, 1])
+                                with type_cols[0]:
+                                    with st.form(f"add_t_{ch_id}"):
+                                        t_in = st.text_input("세부 유형 추가 (예: 나머지정리 활용)", key=f"t_in_{ch_id}", label_visibility="collapsed", placeholder="세부 유형 입력")
+                                        if st.form_submit_button("유형 추가"):
+                                            if t_in.strip():
+                                                add_chapter_type(ch_id, t_in.strip())
+                                                st.rerun()
+                                                
+                                if types_list:
+                                    t_str_list = []
+                                    for t_id, t_name in types_list:
+                                        # 유형 개별 삭제를 위한 작은 표시
+                                        t_str_list.append(f"{t_name} (❌)")
+                                    st.caption("속한 유형: " + " | ".join(t_str_list))
+                                    
+                                    # 유형 삭제용 선택창
+                                    with st.expander(f"'{ch_name}' 세부 유형 개별 삭제 관리"):
+                                        for t_id, t_name in types_list:
+                                            tc1, tc2 = st.columns([4, 1])
+                                            with tc1:
+                                                st.write(f"▪️ {t_name}")
+                                            with tc2:
+                                                if st.button("유형 삭제", key=f"del_t_{t_id}"):
+                                                    delete_chapter_type(t_id)
+                                                    st.rerun()
+                            st.divider()
                     else:
-                        st.info("등록된 세부 유형이 없습니다.")
-                    
-                    st.markdown("---")
-                    col_b1, col_b2 = st.columns([1, 1])
-                    with col_b1:
-                        if st.button("🗑️ 단원 전체 삭제", key=f"del_ch_{ch_id}"):
-                            delete_chapter(ch_id)
-                            st.warning("단원과 하위 유형이 모두 삭제되었습니다.")
-                            st.rerun()
+                        st.caption("등록된 단원이 없습니다.")
         else:
-            st.info("등록된 단원이 없습니다.")
+            st.info("등록된 과목이 없습니다. 위에서 과목을 추가해 주세요.")
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정
+        # 3. 학생별 진도 일괄 배정 영역
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
-            st.info("아래 단원 목록에서 **공부할 단원들을 체크한 뒤** 하단의 **[선택한 단원들 일괄 부여하기]** 버튼을 누르세요! (단원에 속한 모든 유형이 함께 부여됩니다.)")
+            st.info("위 마스터 라이브러리에 등록된 단원 중 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 싹 배정됩니다!")
             
-            if chapters_data:
+            all_chapters = get_chapters()
+            if all_chapters:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
                 
                 with st.form("batch_assign_form"):
                     selected_ch_ids = []
-                    for ch_id, ch_sub, ch_name in chapters_data:
+                    for ch_id, ch_sub, ch_name in all_chapters:
                         is_already = ch_name in assigned_chapters
                         label = f"[{ch_sub}] {ch_name}" + (" (이미 부여됨)" if is_already else "")
                         if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
@@ -645,12 +652,12 @@ else:
                     if selected_ch_ids:
                         for ch_id in selected_ch_ids:
                             assign_chapter_to_student(selected_student, ch_id)
-                        st.success(f"'{selected_student}' 학생에게 선택한 단원들과 하위 유형들이 성공적으로 배정되었습니다!")
+                        st.success(f"'{selected_student}' 학생에게 선택한 단원들이 성공적으로 배정되었습니다!")
                         st.rerun()
                     else:
                         st.warning("선택된 단원이 없습니다.")
             else:
-                st.info("등록된 단원이 없습니다.")
+                st.info("배정할 단원이 없습니다.")
 
             st.markdown("---")
             st.markdown(f"#### 📋 현재 [{selected_student}] 학생에게 부여된 학습 항목 목록")
