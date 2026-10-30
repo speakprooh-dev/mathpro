@@ -81,7 +81,7 @@ def init_db():
         )
     ''')
     
-    # 학생 오답/질문 대량 입력 저장 테이블 (단원코드 + 번호 텍스트)
+    # 학생 오답/질문 저장 테이블 (단원코드 + 저장된 번호 집합 문자열)
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_wrong_entries (
             student_name TEXT,
@@ -443,13 +443,17 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn.commit()
     conn.close()
 
-def parse_and_format_numbers(numbers_text):
-    if not numbers_text:
+def parse_numbers(text):
+    if not text:
+        return set()
+    nums = re.findall(r'\d+', text)
+    return set(int(n) for n in nums)
+
+def format_numbers_list(num_set):
+    if not num_set:
         return []
-    nums = re.findall(r'\d+', numbers_text)
-    unique_nums = sorted(list(set(int(n) for n in nums)))
-    formatted = [f"{n:03d}" for n in unique_nums]
-    return formatted
+    sorted_nums = sorted(list(num_set))
+    return [f"{n:03d}" for n in sorted_nums]
 
 # --- 웹 UI 구성 ---
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
@@ -533,28 +537,47 @@ if url_student and url_student in student_list:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
         with tab3:
-            st.markdown("### 💬 오답 및 질문 번호 대량 입력함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 질문&오답문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!\n\n*(번호를 **수정**하려면 새로고침 후 다시 입력하고, **삭제**하려면 내용을 지운 뒤 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
+            st.markdown("### 💬 오답 및 질문 번호 관리함")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
             
             entered_unit_code = st.text_input("단원코드 입력", value="A1351").strip().upper()
-            saved_text = get_student_wrong_entry(selected_student, entered_unit_code if entered_unit_code else "A1351")
             
-            entered_nums_text = st.text_area("틀린 문제 번호 입력 (예: 1, 5, 12, 23)", value=saved_text, placeholder="예: 1, 5, 12, 25")
+            # 기존 저장된 번호 불러오기
+            current_unit = entered_unit_code if entered_unit_code else "A1351"
+            saved_text = get_student_wrong_entry(selected_student, current_unit)
+            saved_nums = parse_numbers(saved_text)
             
-            if entered_nums_text:
-                parsed_list = parse_and_format_numbers(entered_nums_text)
-                if parsed_list:
-                    st.markdown("##### 👀 내가 입력한 오답 번호 확인")
-                    preview_str = ", ".join([f"{n}번" for n in parsed_list])
-                    st.success(f"총 {len(parsed_list)}문제 등록됨: [{preview_str}]")
+            # 현재 저장된 목록 보여주기
+            if saved_nums:
+                formatted_saved = format_numbers_list(saved_nums)
+                preview_str = ", ".join([f"{n}번" for n in formatted_saved])
+                st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제):** [{preview_str}]")
+            else:
+                st.info("📋 현재 저장된 오답 번호가 없습니다.")
+
+            st.markdown("---")
+            col_add, col_del = st.columns(2)
+            with col_add:
+                add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 23)", placeholder="예: 5, 12")
+            with col_del:
+                del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
         st.divider()
         submit_clicked = st.form_submit_button("내 학습 상태 저장하기", type="primary")
         if submit_clicked:
             save_progress(selected_student, m_checked_results, h_checked_results)
-            if 'entered_unit_code' in locals() and entered_unit_code:
-                save_student_wrong_entry(selected_student, entered_unit_code, entered_nums_text)
-            st.success("학습 상태가 저장되었습니다!")
+            if entered_unit_code:
+                # 기존 번호 집합에 추가할 번호 합치기 및 삭제할 번호 빼기 연산
+                nums_to_add = parse_numbers(add_input_text)
+                nums_to_del = parse_numbers(del_input_text)
+                
+                final_nums = (saved_nums | nums_to_add) - nums_to_del
+                
+                # 정수형태로 콤마 구분 문자열로 저장
+                new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
+                save_student_wrong_entry(selected_student, entered_unit_code, new_saved_text)
+                
+            st.success("학습 상태가 안전하게 저장되었습니다!")
             st.rerun()
 
 # 2. [선생님 전용 관리 모드]
@@ -897,7 +920,7 @@ else:
                 selected_unit = st.selectbox("확인할 단원코드 선택", units)
                 if selected_unit:
                     raw_text = get_student_wrong_entry(selected_student, selected_unit)
-                    parsed_nums = parse_and_format_numbers(raw_text)
+                    parsed_nums = format_numbers_list(parse_numbers(raw_text))
                     
                     if parsed_nums:
                         nums_str = ",".join(parsed_nums)
@@ -906,7 +929,7 @@ else:
                         st.markdown("##### 📌 오답노트 생성용 포맷 텍스트")
                         st.code(combined_code, language="text")
                         st.success(f"총 {len(parsed_nums)}문제가 등록되어 있습니다. 위 코드를 복사해서 오답노트 프로그램에 활용하세요!")
-                        st.caption(f"학생 원본 입력 내용: {raw_text}")
+                        st.caption(f"학생 저장 목록 원본: {raw_text}")
                     else:
                         st.warning(f"'{selected_unit}' 단원에 등록된 오답 번호가 없습니다.")
             else:
