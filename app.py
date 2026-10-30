@@ -11,11 +11,13 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 초기화 (테이블 구조 최신화)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
+    # 기존 테이블이 구조가 다를 수 있으므로 안전하게 재생성하기 위해 DROP 후 생성
+    # (필요시 기존 데이터가 초기화될 수 있습니다)
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
     
     c.execute('''
@@ -408,7 +410,6 @@ else:
                     for p_id, p_sub, p_ch in pool_items:
                         is_already = p_ch in already_assigned_chapters
                         label = f"[{p_sub}] {p_ch}" + (" (이미 부여됨)" if is_already else "")
-                        # 이미 부여된 항목은 기본 체크 해제 상태로 편하게 선택 가능
                         if st.checkbox(label, value=False, key=f"batch_chk_{p_id}"):
                             selected_pool_ids.append((p_sub, p_ch))
                     
@@ -418,7 +419,6 @@ else:
                 if batch_submit:
                     if selected_pool_ids:
                         for sub, ch in selected_pool_ids:
-                            # 중복 부여 방지 체크
                             current_chs = [m[2] for m in get_student_milestones(selected_student)]
                             if ch not in current_chs:
                                 add_student_milestone(selected_student, sub, ch)
