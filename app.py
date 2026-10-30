@@ -434,7 +434,6 @@ if url_student and url_student in student_list:
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
             if milestones:
-                # 학생 화면에서도 단원별로 묶어서 접이식(Expander) 형태로 정리
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
                     key = (sub, ch)
@@ -443,7 +442,6 @@ if url_student and url_student in student_list:
                     grouped_s_milestones[key].append((m_id, t_name))
 
                 for (sub, ch), items in grouped_s_milestones.items():
-                    # 단원별로 완료된 개수 계산
                     done_cnt = sum(1 for m_id, _ in items if m_progress.get(m_id, False))
                     exp_label = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
                     
@@ -675,21 +673,29 @@ else:
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정 영역
+        # 3. 학생별 진도 일괄 배정 영역 (과목별 접이식 폴더로 개편)
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
-            st.info("마스터 라이브러리에 등록된 단원 중 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 싹 배정됩니다!")
+            st.info("과목별 폴더를 열어 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 배정됩니다!")
             
             all_chapters = get_chapters()
-            if all_chapters:
+            subjects_data = get_subjects()
+            
+            if all_chapters and subjects_data:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
                 
                 selected_ch_ids = []
-                for ch_id, ch_sub, ch_name in all_chapters:
-                    is_already = ch_name in assigned_chapters
-                    label = f"[{ch_sub}] {ch_name}" + (" (이미 부여된 단원)" if is_already else "")
-                    if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
-                        selected_ch_ids.append(ch_id)
+                
+                # 과목별로 단원들을 묶어서 접이식(Expander)으로 제공
+                for sub_id, sub_name in subjects_data:
+                    sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
+                    if sub_chapters:
+                        with st.expander(f"📚 [과목] {sub_name} (단원 {len(sub_chapters)}개)", expanded=False):
+                            for ch_id, ch_sub, ch_name in sub_chapters:
+                                is_already = ch_name in assigned_chapters
+                                label = f"{ch_name}" + (" (이미 부여된 단원)" if is_already else "")
+                                if st.checkbox(label, value=False, key=f"batch_chk_{ch_id}"):
+                                    selected_ch_ids.append(ch_id)
                 
                 st.write("")
                 if st.button("📥 선택한 단원들 일괄 부여하기", type="primary"):
