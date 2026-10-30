@@ -253,7 +253,7 @@ else:
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
             st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주면, **이름을 고를 필요 없이 곧바로 본인 화면**으로 접속됩니다.")
-            base_url = "https://mathpro-app-4byisa.streamlit.app" # 배포하신 주소 기반
+            base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app" # 배포하신 주소 기반
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
