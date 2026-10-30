@@ -381,6 +381,13 @@ def add_homework(hw_date, title):
     conn.commit()
     conn.close()
 
+def update_homework(hw_id, hw_date, title):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("UPDATE homework SET hw_date = ?, title = ? WHERE id = ?", (hw_date, title, hw_id))
+    conn.commit()
+    conn.close()
+
 def bulk_insert_homework(hw_date, text_data):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -659,7 +666,6 @@ else:
 
     st.divider()
 
-    # 선생님 전용 메인 탭 구조 개편: 선택한 학생 관리 탭을 최우선으로 배치
     st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
     t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong = st.tabs([
         f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
@@ -668,12 +674,10 @@ else:
         "🔍 4. 학생 오답노트 취합"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 탭
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
             
-            # 요약 지표
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
@@ -704,7 +708,6 @@ else:
         else:
             st.warning("상단에서 관리할 학생을 먼저 선택하거나 등록해 주세요.")
 
-    # [탭 2] 커리큘럼 관리 및 진도 배정
     with t_cfg_curriculum:
         subjects_data = get_subjects()
         subject_names = [s[1] for s in subjects_data]
@@ -891,7 +894,6 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 날짜별 과제 부여 및 관리
     with t_cfg_hw:
         st.markdown("#### 📅 날짜별 과제 부여 및 관리")
         with st.form("add_hw_form"):
@@ -908,16 +910,25 @@ else:
                     st.error("과제 내용을 입력해주세요.")
 
         st.markdown("---")
-        st.markdown("##### 📋 등록된 과제 목록 및 삭제")
+        st.markdown("##### 📋 등록된 과제 목록, 수정 및 삭제")
         all_hws = get_all_homework()
         if all_hws:
             for h_id, h_date, h_title in all_hws:
-                col_h1, col_h2, col_h3 = st.columns([2, 5, 1])
+                col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 1, 1])
                 with col_h1:
                     st.write(f"📅 **{h_date}**")
                 with col_h2:
                     st.write(f"📌 {h_title}")
                 with col_h3:
+                    with st.popover("수정"):
+                        with st.form(f"edit_hw_form_{h_id}"):
+                            ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_hw_d_{h_id}")
+                            ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_hw_t_{h_id}")
+                            if st.form_submit_button("변경사항 저장"):
+                                update_homework(h_id, str(ed_date), ed_title.strip())
+                                st.success("수정되었습니다!")
+                                st.rerun()
+                with col_h4:
                     if st.button("삭제", key=f"del_hw_{h_id}"):
                         delete_homework(h_id)
                         st.success("삭제되었습니다!")
@@ -925,7 +936,6 @@ else:
         else:
             st.info("등록된 과제가 없습니다.")
 
-    # [탭 4] 학생 오답노트 취합
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
         st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 한눈에 모아서 확인하고 관리할 수 있습니다.")
