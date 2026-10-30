@@ -534,7 +534,7 @@ if url_student and url_student in student_list:
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 번호 대량 입력함")
-            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 질문&오답문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!\n\n*(작성 후 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
+            st.info("💡 오늘 푼 교재의 **단원코드(예: A1351)**를 넣고, 질문&오답문제 번호들을 쉼표(,)나 띄어쓰기로 편하게 적어주세요!\n\n*(번호를 **수정**하려면 새로고침 후 다시 입력하고, **삭제**하려면 내용을 지운 뒤 하단의 **[내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!)*")
             
             entered_unit_code = st.text_input("단원코드 입력", value="A1351").strip().upper()
             saved_text = get_student_wrong_entry(selected_student, entered_unit_code if entered_unit_code else "A1351")
