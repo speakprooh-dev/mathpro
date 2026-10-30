@@ -211,11 +211,82 @@ student_list = get_students()
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
+# 만약 URL에 학생이 지정되어 있다면 -> [학생 전용 모드] (관리 설정 아예 숨김!)
 if url_student and url_student in student_list:
     selected_student = url_student
-    st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지로 접속중입니다.")
+    st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
+    
+    milestones = get_milestones()
+    hw_dates = get_homework_dates()
+    
+    m_progress = get_milestone_progress(selected_student)
+    h_progress = get_homework_progress(selected_student)
+
+    all_hws_flat = get_all_homework()
+    total_tasks = len(milestones) + len(all_hws_flat)
+    completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
+    completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
+    total_completed = completed_m + completed_h
+    
+    progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
+
+    st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
+    st.write(f"**전체 커리큘럼 및 과제 달성도: {progress_val}%** ({total_completed}/{total_tasks} 완료)")
+    st.progress(progress_val / 100 if total_tasks > 0 else 0)
+
+    st.divider()
+
+    tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 완성 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 코멘트 & 질문방"])
+
+    with st.form("student_roadmap_form"):
+        m_checked_results = {}
+        h_checked_results = {}
+
+        with tab1:
+            st.markdown("### 📘 수학(상) 핵심 개념 마일스톤")
+            if milestones:
+                for m_id, title in milestones:
+                    default_val = m_progress.get(m_id, False)
+                    m_checked_results[m_id] = st.checkbox(title, value=default_val, key=f"s_milestone_{m_id}")
+            else:
+                st.info("등록된 마일스톤 항목이 없습니다.")
+
+        with tab2:
+            st.markdown("### 📝 날짜별 과제함")
+            if hw_dates:
+                selected_date = st.selectbox(
+                    "확인할 과제 날짜를 선택하세요", 
+                    hw_dates,
+                    format_func=lambda x: f"{x} ({get_weekday_kr(x)})"
+                )
+                st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
+                target_hws = get_homework_by_date(selected_date)
+                for h_id, title in target_hws:
+                    default_val = h_progress.get(h_id, False)
+                    h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"s_hw_{h_id}")
+            else:
+                st.info("등록된 날짜별 과제가 없습니다.")
+
+        with tab3:
+            st.markdown("### 💬 선생님의 1:1 맞춤 코멘트")
+            st.info(f"**[{selected_student} 학생 맞춤 피드백]** 오늘도 꼼꼼하게 오답 정리하고 숙제 체크하기!")
+            st.markdown("### ✏️ 오늘의 학습 다짐 / 질문하기")
+            user_note_input = st.text_area("오늘 공부한 내용이나 궁금한 점을 적어보세요.")
+
+        st.divider()
+        submitted = st.form_submit_button("내 체크상태 저장하기", type="primary")
+        
+        if submitted:
+            save_progress(selected_student, m_checked_results, h_checked_results)
+            st.success("학습 상태가 저장되었습니다!")
+            st.rerun()
+
+# 만약 URL에 학생 이름이 없다면 -> [선생님 전용 관리 모드]
 else:
-    st.subheader("👥 학생 선택 및 관리 (선생님 모드)")
+    if url_student:
+        st.error(f"'{url_student}'는 등록되지 않았거나 잘못된 링크입니다. 선생님 메인 화면으로 이동합니다.")
+    
+    st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
 
     with col_s1:
@@ -247,12 +318,11 @@ else:
                     st.success("삭제되었습니다!")
                     st.rerun()
 
-    # 🔗 [자동 완성] 현재 접속 중인 주소를 기반으로 고유 링크 생성!
+    # 선생님 전용 고유 링크 복사 상자
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
-            st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주면, **이름을 고를 필요 없이 곧바로 본인 화면**으로 접속됩니다.")
+            st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주세요.")
             
-            # 스트림릿 클라우드의 공식 주소 추출 방식 적용 (에러 원천 차단)
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -266,112 +336,18 @@ else:
                 personal_link = f"{base_url}/?student={s}"
                 st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
 
-st.divider()
-
-# 2. 메인: 선택된 학생의 학습 화면
-if selected_student:
-    milestones = get_milestones()
-    hw_dates = get_homework_dates()
-    
-    m_progress = get_milestone_progress(selected_student)
-    h_progress = get_homework_progress(selected_student)
-
-    all_hws_flat = get_all_homework()
-    total_tasks = len(milestones) + len(all_hws_flat)
-    completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
-    completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
-    total_completed = completed_m + completed_h
-    
-    progress_val = int((total_completed / total_tasks) * 100) if total_tasks > 0 else 0
-
-    st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
-    st.write(f"**전체 커리큘럼 및 과제 달성도: {progress_val}%** ({total_completed}/{total_tasks} 완료)")
-    st.progress(progress_val / 100 if total_tasks > 0 else 0)
-
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 완성 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 코멘트 & 질문방"])
-
-    with st.form("roadmap_form"):
-        m_checked_results = {}
-        h_checked_results = {}
-
-        with tab1:
-            st.markdown("### 📘 수학(상) 핵심 개념 마일스톤")
-            if milestones:
-                for m_id, title in milestones:
-                    default_val = m_progress.get(m_id, False)
-                    m_checked_results[m_id] = st.checkbox(title, value=default_val, key=f"milestone_{m_id}")
-            else:
-                st.info("등록된 마일스톤 항목이 없습니다.")
-
-        with tab2:
-            st.markdown("### 📝 날짜별 과제함")
-            if hw_dates:
-                selected_date = st.selectbox(
-                    "확인할 과제 날짜를 선택하세요", 
-                    hw_dates,
-                    format_func=lambda x: f"{x} ({get_weekday_kr(x)})"
-                )
-                st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
-                target_hws = get_homework_by_date(selected_date)
-                for h_id, title in target_hws:
-                    default_val = h_progress.get(h_id, False)
-                    h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"hw_{h_id}")
-            else:
-                st.info("등록된 날짜별 과제가 없습니다.")
-
-        with tab3:
-            st.markdown("### 💬 선생님의 1:1 맞춤 코멘트")
-            st.info(f"**[{selected_student} 학생 맞춤 피드백]** 오늘도 꼼꼼하게 오답 정리하고 숙제 체크하기!")
-            st.markdown("### ✏️ 오늘의 학습 다짐 / 질문하기")
-            user_note_input = st.text_area("오늘 공부한 내용이나 궁금한 점을 적어보세요.")
-
-        st.divider()
-        submitted = st.form_submit_button("변경사항 저장하기", type="primary")
+    # 선생님 모드일 때만 보이는 학생 학습 현황 및 수정 기능
+    if selected_student:
+        milestones = get_milestones()
+        hw_dates = get_homework_dates()
         
-        if submitted:
-            save_progress(selected_student, m_checked_results, h_checked_results)
-            st.success(f"'{selected_student}' 학생의 진도와 과제 상태가 저장되었습니다!")
-            st.rerun()
+        m_progress = get_milestone_progress(selected_student)
+        h_progress = get_homework_progress(selected_student)
 
-# 3. 하단: 웹 설정
-st.divider()
-with st.expander("⚙️ 과제 및 마일스톤 웹 관리 설정"):
-    st.markdown("#### 📅 날짜별 과제 등록하기")
-    col_h1, col_h2, col_h3 = st.columns([1, 2, 1])
-    with col_h1:
-        reg_date = st.date_input("과제 날짜 선택", value=date.today())
-    with col_h2:
-        reg_title = st.text_input("과제 내용 입력 (예: 쎈 B단계 100~110번)")
-    with col_h3:
-        st.write("")
-        st.write("")
-        add_hw_btn = st.button("과제 추가하기")
-
-    if add_hw_btn:
-        if reg_title.strip():
-            add_homework(str(reg_date), reg_title.strip())
-            st.success(f"[{reg_date}] 과제가 성공적으로 등록되었습니다!")
-            st.rerun()
-        else:
-            st.error("과제 내용을 입력해주세요.")
-
-    st.markdown("---")
-    st.markdown("### 📋 등록된 날짜별 과제 목록 (삭제 관리)")
-    current_hws = get_all_homework()
-    if current_hws:
-        for h_id, hw_date, title in current_hws:
-            weekday_str = get_weekday_kr(hw_date)
-            c1, c2, c3 = st.columns([2, 3, 1])
-            with c1:
-                st.write(f"**[{hw_date} ({weekday_str})]**")
-            with c2:
-                st.write(title)
-            with c3:
-                if st.button("삭제", key=f"del_hw_{h_id}"):
-                    delete_homework(h_id)
-                    st.warning("과제가 삭제되었습니다.")
-                    st.rerun()
-    else:
-        st.write("등록된 과제가 없습니다.")
+        all_hws_flat = get_all_homework()
+        total_tasks = len(milestones) + len(all_hws_flat)
+        completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
+        completed_h = sum(1 for h_id, _, _ in all_hws_flat if h_progress.get(h_id, False))
+        total_completed = completed_m
