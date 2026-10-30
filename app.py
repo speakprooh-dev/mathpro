@@ -246,14 +246,15 @@ def delete_chapter_type(type_id):
     conn.commit()
     conn.close()
 
-# 대량 일괄 등록 함수 (유형 자동 번호 부여 기능 포함)
-def bulk_insert_curriculum(text_data):
+# 특정 단원에 유형들만 일괄 등록하는 함수 (자동 번호 매김)
+def bulk_insert_types_for_chapter(chapter_id, text_data):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
-    current_sub = None
-    current_ch_id = None
-    type_counter = 1  # 단원별 유형 번호 자동 카운터
+    # 기존에 등록된 유형 개수를 확인하여 번호 이어서 매기기
+    c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
+    count_row = c.fetchone()
+    type_counter = (count_row[0] if count_row else 0) + 1
     
     lines = text_data.strip().split('\n')
     for line in lines:
@@ -261,31 +262,16 @@ def bulk_insert_curriculum(text_data):
         if not line_str:
             continue
         
-        # [과목명] 형태인 경우
-        if line_str.startswith('[') and line_str.endswith(']'):
-            current_sub = line_str[1:-1].strip()
-            c.execute("INSERT OR IGNORE INTO subjects (name) VALUES (?)", (current_sub,))
-            current_ch_id = None
-        # 유형인 경우 (-, *, • 로 시작)
-        elif line_str.startswith('-') or line_str.startswith('•') or line_str.startswith('*'):
-            raw_type_name = line_str.lstrip('-•* ').strip()
-            if current_ch_id and raw_type_name:
-                # 사용자가 직접 '유형'이라는 말을 안 적었어도 자동으로 "유형 01. 이름" 형태로 변환
-                if not raw_type_name.startswith("유형"):
-                    type_name = f"유형 {type_counter:02d}. {raw_type_name}"
-                else:
-                    type_name = raw_type_name
-                
-                c.execute("INSERT INTO chapter_types (chapter_id, name) VALUES (?, ?)", (current_ch_id, type_name))
-                type_counter += 1
-        else:
-            # 단원명인 경우
-            if current_sub:
-                chapter_name = line_str
-                c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (current_sub, chapter_name))
-                current_ch_id = c.lastrowid
-                type_counter = 1  # 새 단원이 시작되면 유형 번호 01부터 다시 시작
-                
+        raw_type_name = line_str.lstrip('-•* ').strip()
+        if raw_type_name:
+            if not raw_type_name.startswith("유형"):
+                type_name = f"유형 {type_counter:02d}. {raw_type_name}"
+            else:
+                type_name = raw_type_name
+            
+            c.execute("INSERT INTO chapter_types (chapter_id, name) VALUES (?, ?)", (chapter_id, type_name))
+            type_counter += 1
+            
     conn.commit()
     conn.close()
 
@@ -537,28 +523,7 @@ else:
         subject_names = [s[1] for s in subjects_data]
 
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
-        
-        # 텍스트 대량 일괄 등록 Expander
-        with st.expander("📥 텍스트 복사 & 붙여넣기 (유형 자동 번호 매기기 대량 등록)", expanded=False):
-            st.markdown("메모장이나 문서에 아래 형식을 맞춰 적은 뒤 붙여넣고 버튼을 누르세요. 소단원(유형)들은 **자동으로 '유형 01', '유형 02' 번호가 붙습니다.**")
-            st.code("""[수학(상)]
-01. 다항식의 연산과 인수분해
-  - 다항식의 연산
-  - 나머지정리와 인수분해
-02. 복소수와 이차방정식
-  - 복소수의 연산""", language="text")
-            
-            with st.form("bulk_text_form"):
-                bulk_text_area = st.text_area("커리큘럼 텍스트 입력", height=150)
-                bulk_submit = st.form_submit_button("일괄 등록 실행")
-            
-            if bulk_submit:
-                if bulk_text_area.strip():
-                    bulk_insert_curriculum(bulk_text_area)
-                    st.success("커리큘럼이 성공적으로 일괄 등록되었습니다!")
-                    st.rerun()
-                else:
-                    st.error("등록할 텍스트를 입력해주세요.")
+        st.info("단원 제목은 직접 추가하고, 각 단원 하단에서 **유형 목록만 복사해서 대량으로 일괄 등록**할 수 있습니다.")
 
         # 1. 새 과목 추가 영역
         with st.form("unified_sub_form"):
@@ -605,6 +570,7 @@ else:
 
                     st.markdown("---")
 
+                    # 단원 추가 폼
                     with st.form(f"add_ch_form_{sub_id}"):
                         col_ac1, col_ac2 = st.columns([3, 1])
                         with col_ac1:
@@ -646,15 +612,40 @@ else:
                                         st.warning("단원이 삭제되었습니다.")
                                         st.rerun()
 
+                                # --- [새로운 기능] 단원별 유형 대량 복붙 등록 ---
+                                with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
+                                    st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
+                                    with st.form(f"bulk_t_form_{ch_id}"):
+                                        bulk_t_text = st.text_area("유형 목록 텍스트", key=f"bulk_t_area_{ch_id}", placeholder="- 다항식의 연산\n- 나머지정리")
+                                        if st.form_submit_button("유형 일괄 등록 실행"):
+                                            if bulk_t_text.strip():
+                                                bulk_insert_types_for_chapter(ch_id, bulk_t_text)
+                                                st.success("유형들이 성공적으로 일괄 등록되었습니다!")
+                                                st.rerun()
+                                            else:
+                                                st.error("내용을 입력해주세요.")
+                                # ------------------------------------------------
+
                                 types_list = get_chapter_types(ch_id)
                                 with st.form(f"add_t_{ch_id}"):
                                     tc1, tc2 = st.columns([3, 1])
                                     with tc1:
-                                        t_in = st.text_input("세부 유형 추가", key=f"t_in_{ch_id}", placeholder="예: 유형 03. 나머지정리 활용", label_visibility="collapsed")
+                                        t_in = st.text_input("개별 유형 추가", key=f"t_in_{ch_id}", placeholder="예: 나머지정리 활용", label_visibility="collapsed")
                                     with tc2:
                                         if st.form_submit_button("유형 추가"):
                                             if t_in.strip():
-                                                add_chapter_type(ch_id, t_in.strip())
+                                                # 개별 추가 시에도 자동 번호 부여 규칙 적용
+                                                c_conn = sqlite3.connect("mathpro_roadmap.db")
+                                                c_cur = c_conn.cursor()
+                                                c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
+                                                cnt = c_cur.fetchone()[0] + 1
+                                                c_conn.close()
+                                                
+                                                formatted_t = t_in.strip()
+                                                if not formatted_t.startswith("유형"):
+                                                    formatted_t = f"유형 {cnt:02d}. {formatted_t}"
+                                                    
+                                                add_chapter_type(ch_id, formatted_t)
                                                 st.rerun()
                                                 
                                 if types_list:
