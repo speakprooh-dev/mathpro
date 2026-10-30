@@ -285,6 +285,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
+    added_count = 0
     for chapter_id in chapter_ids:
         c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
         ch_row = c.fetchone()
@@ -296,8 +297,9 @@ def assign_chapters_to_student(student_name, chapter_ids):
         type_rows = c.fetchall()
         
         types_to_add = [r[0] for r in type_rows]
+        # 유형이 아예 등록되지 않은 단원이라면 단원 이름 자체를 마일스톤으로 부여
         if not types_to_add:
-            types_to_add = ["단원 전체 기본 학습"]
+            types_to_add = ["단원 기본 학습"]
             
         c.execute("SELECT chapter, type_name FROM milestones WHERE student_name = ?", (student_name,))
         existing = {(r[0], r[1]) for r in c.fetchall()}
@@ -306,9 +308,11 @@ def assign_chapters_to_student(student_name, chapter_ids):
             if (ch_name, t_name) not in existing:
                 c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", 
                           (student_name, sub, ch_name, t_name))
+                added_count += 1
                 
     conn.commit()
     conn.close()
+    return added_count
 
 def delete_student_milestone(m_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -659,7 +663,7 @@ else:
 
         st.markdown("---")
 
-        # 3. 학생별 진도 일괄 배정 영역 (폼 구조 해제하여 안정성 확보)
+        # 3. 학생별 진도 일괄 배정 영역
         if selected_student:
             st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
             st.info("마스터 라이브러리에 등록된 단원 중 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 싹 배정됩니다!")
@@ -668,7 +672,6 @@ else:
             if all_chapters:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
                 
-                # 폼 외부에서 체크박스들을 관리하여 즉시 반영되도록 수정
                 selected_ch_ids = []
                 for ch_id, ch_sub, ch_name in all_chapters:
                     is_already = ch_name in assigned_chapters
@@ -679,8 +682,8 @@ else:
                 st.write("")
                 if st.button("📥 선택한 단원들 일괄 부여하기", type="primary"):
                     if selected_ch_ids:
-                        assign_chapters_to_student(selected_student, selected_ch_ids)
-                        st.success(f"'{selected_student}' 학생에게 선택한 단원들이 성공적으로 배정되었습니다!")
+                        added_cnt = assign_chapters_to_student(selected_student, selected_ch_ids)
+                        st.success(f"'{selected_student}' 학생에게 총 {added_cnt}개의 학습 항목이 성공적으로 배정되었습니다!")
                         st.rerun()
                     else:
                         st.warning("선택된 단원이 없습니다.")
