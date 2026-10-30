@@ -16,18 +16,13 @@ def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
-    # 학생 목록 테이블
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
-    
-    # 개념 마일스톤 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL
         )
     ''')
-    
-    # 날짜별 과제 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,8 +30,6 @@ def init_db():
             title TEXT NOT NULL
         )
     ''')
-    
-    # 학생별 마일스톤 진도 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestone_progress (
             student_name TEXT,
@@ -45,8 +38,6 @@ def init_db():
             PRIMARY KEY (student_name, milestone_id)
         )
     ''')
-    
-    # 학생별 과제 완료 진도 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework_progress (
             student_name TEXT,
@@ -56,7 +47,7 @@ def init_db():
         )
     ''')
     
-    # 초기 샘플 데이터 세팅
+    # 초기 샘플 데이터
     c.execute("SELECT COUNT(*) FROM milestones")
     if c.fetchone()[0] == 0:
         default_milestones = [
@@ -136,7 +127,6 @@ def delete_milestone(m_id):
     conn.commit()
     conn.close()
 
-# 과제 관련 함수들
 def get_homework_dates():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -176,7 +166,6 @@ def delete_homework(hw_id):
     conn.commit()
     conn.close()
 
-# 진도 상태
 def get_milestone_progress(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -196,21 +185,18 @@ def get_homework_progress(student_name):
 def save_progress(student_name, m_checked, h_checked):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    
     for m_id, val in m_checked.items():
         c.execute('''
             INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
             VALUES (?, ?, ?)
             ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
         ''', (student_name, m_id, int(val), int(val)))
-        
     for h_id, val in h_checked.items():
         c.execute('''
             INSERT INTO homework_progress (student_name, homework_id, is_checked)
             VALUES (?, ?, ?)
             ON CONFLICT(student_name, homework_id) DO UPDATE SET is_checked = ?
         ''', (student_name, h_id, int(val), int(val)))
-        
     conn.commit()
     conn.close()
 
@@ -219,52 +205,69 @@ st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 st.divider()
 
-# 1. 상단: 학생 선택 및 관리
 student_list = get_students()
 
-st.subheader("👥 학생 선택 및 관리")
-col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+# URL 파라미터에서 학생 이름 읽어오기 (예: ?student=은성)
+query_params = st.query_params
+url_student = query_params.get("student", None)
 
-with col_s1:
-    if student_list:
-        selected_student = st.selectbox("학생을 선택하세요", student_list)
-    else:
-        selected_student = None
-        st.warning("등록된 학생이 없습니다. 신규 학생을 추가해 주세요!")
+# 만약 URL에 학생 이름이 지정되어 있다면 해당 학생으로 고정
+if url_student and url_student in student_list:
+    selected_student = url_student
+    st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지로 접속중입니다.")
+else:
+    # 🔗 선생님용 / 관리자용 화면 또는 학생 선택 화면
+    st.subheader("👥 학생 선택 및 관리 (선생님 모드)")
+    col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
 
-with col_s2:
-    with st.expander("➕ 학생 추가"):
-        new_s_name = st.text_input("학생 이름")
-        if st.button("학생 등록"):
-            if new_s_name.strip():
-                if add_student(new_s_name.strip()):
-                    st.success("등록 완료!")
-                    st.rerun()
+    with col_s1:
+        if student_list:
+            selected_student = st.selectbox("확인할 학생을 선택하세요", student_list)
+        else:
+            selected_student = None
+            st.warning("등록된 학생이 없습니다. 아래에서 학생을 먼저 추가해 주세요!")
+
+    with col_s2:
+        with st.expander("➕ 학생 추가"):
+            new_s_name = st.text_input("학생 이름")
+            if st.button("학생 등록"):
+                if new_s_name.strip():
+                    if add_student(new_s_name.strip()):
+                        st.success("등록 완료!")
+                        st.rerun()
+                    else:
+                        st.warning("이미 존재합니다.")
                 else:
-                    st.warning("이미 존재합니다.")
-            else:
-                st.error("이름을 입력하세요.")
+                    st.error("이름을 입력하세요.")
 
-with col_s3:
-    if selected_student:
-        with st.expander("🗑️ 학생 삭제"):
-            st.write(f"**{selected_student}** 삭제?")
-            if st.button("정말 삭제", type="primary"):
-                delete_student(selected_student)
-                st.success("삭제되었습니다!")
-                st.rerun()
+    with col_s3:
+        if selected_student:
+            with st.expander("🗑️ 학생 삭제"):
+                st.write(f"**{selected_student}** 삭제?")
+                if st.button("정말 삭제", type="primary"):
+                    delete_student(selected_student)
+                    st.success("삭제되었습니다!")
+                    st.rerun()
+
+    # 💡 [신규 기능] 선생님을 위한 '학생별 고유 링크 생성기' 박스!
+    if student_list:
+        with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 복사하기"):
+            st.markdown("학생들에게 카카오톡으로 아래 링크를 보내주면, **이름을 고를 필요 없이 곧바로 본인 화면**으로 접속됩니다.")
+            base_url = "https://mathpro-app-4byisa.streamlit.app" # 배포하신 주소 기반
+            for s in student_list:
+                personal_link = f"{base_url}/?student={s}"
+                st.text_input(f"📌 {s} 학생 고유 링크", value=personal_link, key=f"link_{s}")
 
 st.divider()
 
 # 2. 메인: 선택된 학생의 학습 화면
 if selected_student:
     milestones = get_milestones()
-    hw_dates = get_homework_dates() # 등록된 과제 날짜 목록 (최신순)
+    hw_dates = get_homework_dates()
     
     m_progress = get_milestone_progress(selected_student)
     h_progress = get_homework_progress(selected_student)
 
-    # 전체 달성도 계산 (모든 과제 기준)
     all_hws_flat = get_all_homework()
     total_tasks = len(milestones) + len(all_hws_flat)
     completed_m = sum(1 for m_id, _ in milestones if m_progress.get(m_id, False))
@@ -279,14 +282,12 @@ if selected_student:
 
     st.divider()
 
-    # 탭 메뉴 구성
     tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 완성 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 코멘트 & 질문방"])
 
     with st.form("roadmap_form"):
         m_checked_results = {}
         h_checked_results = {}
 
-        # 탭 1: 개념 완성 마일스톤
         with tab1:
             st.markdown("### 📘 수학(상) 핵심 개념 마일스톤")
             if milestones:
@@ -296,28 +297,22 @@ if selected_student:
             else:
                 st.info("등록된 마일스톤 항목이 없습니다.")
 
-        # 탭 2: 날짜별 과제함 (최신 과제 우선 보기 + 과거 숙제 선택 기능)
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
             if hw_dates:
-                # 기본적으로 가장 최근 날짜를 선택 상태로 설정
                 selected_date = st.selectbox(
                     "확인할 과제 날짜를 선택하세요 (기본: 가장 최근 숙제)", 
                     hw_dates,
                     format_func=lambda x: f"{x} ({get_weekday_kr(x)})"
                 )
-                
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
-                
-                # 선택한 날짜의 과제들만 불러오기
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"hw_{h_id}")
+                    h_checked_rules = h_checked_results[h_id] = st.checkbox(title, value=default_val, key=f"hw_{h_id}")
             else:
-                st.info("등록된 날짜별 과제가 없습니다. 아래 '과제 관리'에서 숙제를 등록해 주세요.")
+                st.info("등록된 날짜별 과제가 없습니다.")
 
-        # 탭 3: 코멘트 & 질문방
         with tab3:
             st.markdown("### 💬 선생님의 1:1 맞춤 코멘트")
             st.info(f"""
