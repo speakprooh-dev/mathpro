@@ -460,7 +460,7 @@ if url_student and url_student in student_list:
 
         with tab1:
             st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
-            st.info("💡 **안내:** 완료한 학습 유형의 체크박스에 체크를 하고, 하단의 **[내 체크상태 저장하기]** 버튼을 눌러주세요!")
+            st.info("💡 **안내:** 완료한 학습 유형의 **[완료]** 체크박스를 누르고, 하단의 **[내 체크상태 저장하기]** 버튼을 눌러주세요!")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name in milestones:
@@ -476,20 +476,22 @@ if url_student and url_student in student_list:
                     with st.expander(exp_label, expanded=False):
                         for m_id, t_name in items:
                             default_val = m_progress.get(m_id, False)
-                            m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                            # 체크박스 왼쪽에 [완료] 문구를 명시하여 직관성 극대화
+                            m_checked_results[m_id] = st.checkbox(f"[완료] {t_name}", value=default_val, key=f"s_milestone_{m_id}")
             else:
                 st.info("아직 부여된 학습 마일스톤이 없습니다.")
 
         with tab2:
             st.markdown("### 📝 날짜별 과제함")
-            st.info("💡 **안내:** 완료한 숙제 항목에 체크를 하고, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
+            st.info("💡 **안내:** 완료한 숙제 항목의 **[완료]** 체크박스를 누르고, 하단의 **[내 체크상태 저장하기]** 버튼을 꼭 눌러주세요!")
             if hw_dates:
                 selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
                 target_hws = get_homework_by_date(selected_date)
                 for h_id, title in target_hws:
                     default_val = h_progress.get(h_id, False)
-                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
+                    # 과제 체크박스 왼쪽에 [완료] 문구 추가
+                    h_checked_results[h_id] = st.checkbox(f"[완료] {title}", value=default_val, key=f"s_hw_{h_id}")
             else:
                 st.info("등록된 날짜별 과제가 없습니다.")
 
@@ -763,7 +765,6 @@ else:
     with t_cfg2:
         st.markdown("#### 📅 새로운 날짜별 과제 등록하기")
         
-        # 개별 등록과 대량 일괄 등록을 탭으로 분리하여 깔끔하게 구성
         hw_mode = st.radio("과제 등록 방식 선택", ["개별 과제 등록", "📥 과제 일괄 등록 (복사 & 붙여넣기)"], horizontal=True)
         
         if hw_mode == "개별 과제 등록":
