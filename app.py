@@ -589,7 +589,7 @@ if url_student and url_student in student_list:
             if saved_nums:
                 formatted_saved = format_numbers_list(saved_nums)
                 st.success(f"📋 **현재 저장된 오답 목록 (총 {len(saved_nums)}문제)**")
-                st.caption("💡 **[📋 코드 복사]** 버튼을 눌러 코드를 복사한 뒤, **[🎥 카페 해설 찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요!")
+                st.caption("💡 **[📋 코드 복사]** 버튼을 눌러 코드를 복사한 뒤, **[🎥 해설 찾기]**로 이동해 검색창에 붙여넣기(Ctrl+V) 하세요!")
                 
                 for num_int in sorted(list(saved_nums)):
                     full_code = f"{current_unit}{num_int:03d}"
@@ -599,7 +599,6 @@ if url_student and url_student in student_list:
                     with c1:
                         st.write(f"▫️ **{num_int}번** (`{full_code}`)")
                     with c2:
-                        # 자바스크립트를 활용한 클립보드 복사 버튼
                         copy_js = f"""
                         <script>
                         function copyToClipboard_{num_int}() {{
@@ -703,6 +702,7 @@ else:
         "🔍 4. 학생 오답노트 취합"
     ])
 
+    # [탭 1] 선택한 학생 개별 관리 (단원별 폴더형 접이식 구조로 깔끔하게 개선)
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
@@ -715,23 +715,37 @@ else:
             
             st.metric(label=f"{selected_student} 마일스톤 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
             
-            st.markdown("##### 📘 현재 부여된 마일스톤 및 개별 관리")
+            st.markdown("##### 📘 단원별 마일스톤 현황 및 개별 관리")
             if s_milestones:
+                # 단원별로 마일스톤 그룹화
+                grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in s_milestones:
-                    is_done = s_m_progress.get(m_id, False)
-                    col_m1, col_m2, col_m3 = st.columns([3, 1, 1])
-                    with col_m1:
-                        st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
-                    with col_m2:
-                        status_txt = "✅ 완료" if is_done else "⏳ 진행중"
-                        st.write(f"상태: {status_txt}")
-                    with col_m3:
-                        with st.popover("마일스톤 삭제"):
-                            st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
-                            if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
-                                delete_student_milestone(m_id)
-                                st.success("삭제되었습니다!")
-                                st.rerun()
+                    key = (sub, ch)
+                    if key not in grouped_t_milestones:
+                        grouped_t_milestones[key] = []
+                    grouped_t_milestones[key].append((m_id, t_name, v_url))
+
+                for (sub, ch), items in grouped_t_milestones.items():
+                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                    exp_title = f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})"
+                    
+                    with st.expander(exp_title, expanded=False):
+                        for m_id, t_name, v_url in items:
+                            is_done = s_m_progress.get(m_id, False)
+                            col_m1, col_m2, col_m3 = st.columns([3, 1, 1])
+                            with col_m1:
+                                st.write(f"▪️ **{t_name}**")
+                            with col_m2:
+                                status_txt = "✅ 완료" if is_done else "⏳ 진행중"
+                                st.write(status_txt)
+                            with col_m3:
+                                with st.popover("삭제"):
+                                    st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
+                                    if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
+                                        delete_student_milestone(m_id)
+                                        st.success("삭제되었습니다!")
+                                        st.rerun()
+                            st.divider()
             else:
                 st.info("이 학생에게 부여된 마일스톤이 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
@@ -988,25 +1002,14 @@ else:
                         
                         for num_int in sorted(list(parsed_s)):
                             full_code = f"{u_code}{num_int:03d}"
-                            cafe_url = get_cafe_search_url(u_code, num_int)
+                            search_url = get_cafe_search_url(u_code, num_int)
                             
-                            c1, c2, c3 = st.columns([2, 1, 1])
+                            c1, c2 = st.columns([3, 1])
                             with c1:
-                                st.write(f"▫️ **{num_int}번** (`{full_code}`)")
+                                st.write(f"▫️ **{num_int}번** 문제 (`{full_code}`)")
                             with c2:
-                                copy_js = f"""
-                                <script>
-                                function copyToClipboard_{u_code}_{num_int}() {{
-                                    navigator.clipboard.writeText("{full_code}");
-                                    alert("클립보드에 복사되었습니다: {full_code}");
-                                }}
-                                </script>
-                                <button onclick="copyToClipboard_{u_code}_{num_int}()" style="background-color:#f0f2f6; color:#262730; border:1px solid #d6d6d6; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 코드복사</button>
-                                """
-                                st.markdown(copy_js, unsafe_allow_html=True)
-                            with c3:
                                 st.markdown(
-                                    f'<a href="{cafe_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; width:100%;">🎥 해설찾기</a>',
+                                    f'<a href="{search_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 {full_code} 해설 보기</a>',
                                     unsafe_allow_html=True
                                 )
             else:
