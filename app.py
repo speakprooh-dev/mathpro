@@ -524,24 +524,14 @@ if url_student and url_student in student_list:
 
     st.divider()
 
-    # --- [상단 고정 저장 버튼 영역] ---
+    tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 등록함"])
+
     m_checked_results = {}
     h_checked_results = {}
-    
-    # 임시 단원 코드 입력을 위한 변수 기본값 설정 (탭 3 진입 전 미리 파악)
-    # 탭 내부에서 입력되는 값들을 받아오기 위해 먼저 탭 구성 전 상단에 저장 버튼 배치
-    col_save_info, col_save_btn = st.columns([3, 1])
-    with col_save_info:
-        st.caption("💡 체크박스 체크 및 오답 번호 입력 후, 우측의 **[내 학습 상태 저장하기]** 버튼을 누르세요!")
-    with col_save_btn:
-        save_top_clicked = st.button("💾 내 학습 상태 저장하기", type="primary", use_container_width=True)
-
-    st.divider()
-
-    tab1, tab2, tab3 = st.tabs(["🚩 1. 맞춤 진도 마일스톤", "📚 2. 날짜별 과제함", "💬 3. 오답 및 질문 등록함"])
 
     with tab1:
         st.markdown("### 📘 부여된 개념 단원 및 유형 마일스톤")
+        st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
         if milestones:
             grouped_s_milestones = {}
             for m_id, sub, ch, t_name, v_url in milestones:
@@ -571,9 +561,13 @@ if url_student and url_student in student_list:
                                 st.caption("영상 없음")
         else:
             st.info("아직 부여된 학습 마일스톤이 없습니다.")
+            
+        st.markdown("---")
+        save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
         st.markdown("### 📝 날짜별 과제함")
+        st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
         if hw_dates:
             selected_date = st.selectbox("확인할 과제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
@@ -583,6 +577,9 @@ if url_student and url_student in student_list:
                 h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
         else:
             st.info("등록된 날짜별 과제가 없습니다.")
+            
+        st.markdown("---")
+        save_btn_tab2 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t2", use_container_width=True)
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리함")
@@ -624,10 +621,13 @@ if url_student and url_student in student_list:
                     st.code(full_code, language="text")
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
+            
+        st.markdown("---")
+        save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
 
-    # 저장 버튼이 눌렸을 때의 처리 로직
-    if save_top_clicked:
-        # 모든 탭에 있는 체크박스 상태를 수집 (세션 스테이트 검사)
+    # 어느 탭에서든 저장 버튼이 눌렸을 때 공통 처리 로직
+    if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
+        # 모든 탭의 체크박스 상태 수집
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
             key = f"s_milestone_{m_id}"
@@ -642,16 +642,7 @@ if url_student and url_student in student_list:
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
         
-        # 오답 번호 저장 처리
-        target_unit_code = st.session_state.get("s_hw_0", "A114") # 안전한 기본값
-        # 현재 입력된 단원코드 가져오기 시도
-        try:
-            # 텍스트 입력창 값이 세션에 저장되어 있으므로 활용
-            pass
-        except:
-            pass
-
-        # 오답 입력값 반영
+        # 오답 번호 반영 (탭 3에서 입력한 값 반영)
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "A114")
