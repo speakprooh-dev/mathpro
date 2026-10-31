@@ -1200,10 +1200,10 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 및 관리 보드 안에서 완료/삭제/수정을 한 번에 처리)
+    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내에서 [완료]·[삭제]·[수정] 통합 처리)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 [수정]**까지 한 줄에서 바로 처리할 수 있습니다.")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 항목별 [수정]**까지 한곳에서 바로 처리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1236,7 +1236,7 @@ else:
                                 
                                 for h_id, title in s_hws:
                                     is_done = s_hw_prog.get(h_id, False)
-                                    # [완료] [삭제] 체크박스와 과제 제목을 나란히 배치
+                                    # [완료], [삭제] 체크박스
                                     col_chk, col_del, col_ttl = st.columns([1, 1, 6])
                                     with col_chk:
                                         matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
@@ -1283,8 +1283,8 @@ else:
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 과제 검사 카드 안쪽(제목 바로 옆)에 [수정] 버튼을 팝오버로 깔끔하게 통합 배치
-                    st.markdown("##### 🛠️ 개별 과제 내용 수정 (각 과제 항목별)")
+                    # 각 학생별 과제 카드 안에서 [수정]을 바로 할 수 있도록 개별 항목별 수정 영역 추가
+                    st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
                     for s_name in students_with_hw:
                         s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
                         for h_id, title in s_hws:
