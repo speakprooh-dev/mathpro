@@ -22,7 +22,6 @@ def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
-    # 테이블 생성 (기존 데이터가 있으면 구조만 유지하고 보존됨)
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
     c.execute('''
         CREATE TABLE IF NOT EXISTS subjects (
@@ -108,7 +107,6 @@ def init_db():
         )
     ''')
     
-    # 최초 실행 시에만 아주 기초적인 기본 과목명만 안전하게 삽입 (기존 데이터가 없을 때만 작동)
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -806,19 +804,29 @@ else:
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
-                st.markdown("##### 🗑️ 개별 진도 항목 삭제 관리")
-                with st.expander("항목별 삭제 열기"):
+                st.markdown("##### 🗑️ 진도 항목 다중 선택 및 일괄 삭제")
+                st.info("💡 삭제할 진도 항목들의 체크박스에 체크한 뒤, 하단의 **[선택한 진도 항목 일괄 삭제]** 버튼을 눌러주세요!")
+                
+                with st.form("teacher_milestone_bulk_del_form"):
+                    milestone_delete_checks = {}
                     for m_id, sub, ch, t_name, v_url in s_milestones:
-                        col_del1, col_del2 = st.columns([4, 1])
-                        with col_del1:
+                        col_del_chk, col_del_txt = st.columns([1, 9])
+                        with col_del_chk:
+                            milestone_delete_checks[m_id] = st.checkbox("선택", value=False, key=f"del_chk_m_{m_id}", label_visibility="collapsed")
+                        with col_del_txt:
                             st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
-                        with col_del2:
-                            with st.popover("삭제"):
-                                st.warning(f"'{t_name}' 항목을 삭제하시겠습니까?")
-                                if st.button("삭제 확인", key=f"del_m_btn_{m_id}", type="primary"):
-                                    delete_student_milestone(m_id)
-                                    st.success("삭제되었습니다!")
-                                    st.rerun()
+                        st.divider()
+                    
+                    milestone_del_submit = st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True)
+                    if milestone_del_submit:
+                        ids_to_del = [m_id for m_id, to_del in milestone_delete_checks.items() if to_del]
+                        if ids_to_del:
+                            for m_id in ids_to_del:
+                                delete_student_milestone(m_id)
+                            st.success(f"선택한 {len(ids_to_del)}개의 진도 항목이 성공적으로 삭제되었습니다!")
+                            st.rerun()
+                        else:
+                            st.warning("삭제할 진도 항목을 하나 이상 체크해주세요.")
             else:
                 st.info("이 학생에게 배정된 진도가 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
