@@ -177,7 +177,7 @@ def delete_student(name):
     c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
     c.execute("DELETE FROM student_homework WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM student_homework_progress WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
@@ -737,17 +737,18 @@ else:
     st.divider()
 
     st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
-    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong = st.tabs([
+    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong, t_cfg_matrix = st.tabs([
         f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
         "📚 2. 커리큘럼 및 진도 배정", 
         "📅 3. 선택학생 개별 과제 관리", 
-        "🔍 4. 학생 오답노트 취합"
+        "🔍 4. 학생 오답노트 취합",
+        "📊 5. 전체 학생 숙제 매트릭스"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리
+    # [탭 1] 선택한 학생 개별 관리 (종합 현황 요약 카드 포함)
     with t_cfg_student:
         if selected_student:
-            st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
+            st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 요약 및 진도 관리")
             
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
@@ -755,7 +756,28 @@ else:
             s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
-            st.metric(label=f"{selected_student} 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+            all_s_hws = get_all_student_homework(selected_student)
+            s_h_progress = get_student_homework_progress(selected_student)
+            s_completed_h = sum(1 for h in all_s_hws if s_h_progress.get(h[0], False))
+            s_total_h = len(all_s_hws)
+            s_h_percent = int((s_completed_h / s_total_h) * 100) if s_total_h > 0 else 0
+
+            # 1번 아이디어: 학생별 종합 현황 요약 카드 (Metrics)
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric(label="🎯 개념 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+            with col_m2:
+                st.metric(label="📚 숙제 완료율", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h} 완료")
+            with col_m3:
+                conn_w = sqlite3.connect("mathpro_roadmap.db")
+                c_w = conn_w.cursor()
+                c_w.execute("SELECT SUM(LENGTH(numbers_text) - LENGTH(REPLACE(numbers_text, ',', '')) + 1) FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
+                w_count_row = c_w.fetchone()
+                conn_w.close()
+                total_wrong_cnt = w_count_row[0] if w_count_row and w_count_row[0] else 0
+                st.metric(label="💬 등록된 오답 문항 수", value=f"{int(total_wrong_cnt)}문항")
+
+            st.divider()
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
             st.markdown("##### 📘 단원별 진도 현황 및 직접 체크")
@@ -1014,7 +1036,7 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 부여 및 관리 (날짜별 필터 체크 기능 포함)
+    # [탭 3] 선택학생 개별 과제 부여 및 통합 관리 (날짜별 필터 + 완료 체크 + 다중 삭제 + 수정)
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
@@ -1032,30 +1054,40 @@ else:
                         st.error("과제 내용을 입력해주세요.")
 
             st.markdown("---")
-            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인 및 완료 체크")
+            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인, 완료 체크 및 다중 삭제")
             
             hw_dates = get_student_homework_dates(selected_student)
             hw_progress_map = get_student_homework_progress(selected_student)
             
             if hw_dates:
                 selected_hw_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
-                st.markdown(f"📌 **[{selected_hw_date} ({get_weekday_kr(selected_hw_date)})]** 부여된 숙제 목록")
+                st.markdown(f"📌 **[{selected_hw_date} ({get_weekday_kr(selected_hw_date)})]** 숙제 목록")
                 
                 target_hws = get_student_homework_by_date(selected_student, selected_hw_date)
                 
                 if target_hws:
                     teacher_hw_checked = {}
-                    with st.form(f"teacher_hw_check_form_{selected_hw_date}"):
+                    teacher_hw_delete = {}
+                    
+                    with st.form(f"teacher_hw_unified_form_{selected_hw_date}"):
                         for h_id, title in target_hws:
                             is_checked_default = hw_progress_map.get(h_id, False)
-                            col_chk, col_ttl = st.columns([1, 7])
+                            
+                            col_chk, col_del, col_ttl = st.columns([1, 1, 6])
                             with col_chk:
                                 teacher_hw_checked[h_id] = st.checkbox("완료", value=is_checked_default, key=f"t_hw_chk_{h_id}")
+                            with col_del:
+                                teacher_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"t_hw_del_{h_id}")
                             with col_ttl:
                                 st.write(f"📌 {title}")
                             st.divider()
                         
-                        teacher_hw_save_btn = st.form_submit_button("💾 선생님 과제 상태 저장하기", type="primary")
+                        col_btn_save, col_btn_del = st.columns(2)
+                        with col_btn_save:
+                            teacher_hw_save_btn = st.form_submit_button("💾 완료 상태 저장하기", type="primary", use_container_width=True)
+                        with col_btn_del:
+                            teacher_hw_del_btn = st.form_submit_button("🗑️ 선택한 항목 일괄 삭제", type="secondary", use_container_width=True)
+                        
                         if teacher_hw_save_btn:
                             conn = sqlite3.connect("mathpro_roadmap.db")
                             c = conn.cursor()
@@ -1067,19 +1099,35 @@ else:
                                 ''', (selected_student, h_id, int(val), int(val)))
                             conn.commit()
                             conn.close()
-                            st.success("해당 날짜의 과제 완료 상태가 성공적으로 저장되었습니다!")
+                            st.success("과제 완료 상태가 저장되었습니다!")
                             st.rerun()
+                            
+                        if teacher_hw_del_btn:
+                            del_ids = [h_id for h_id, to_del in teacher_hw_delete.items() if to_del]
+                            if del_ids:
+                                conn = sqlite3.connect("mathpro_roadmap.db")
+                                c = conn.cursor()
+                                for h_id in del_ids:
+                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
+                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
+                                st.rerun()
+                            else:
+                                st.warning("삭제할 과제를 하나 이상 체크해주세요.")
                 else:
                     st.info("선택한 날짜에 등록된 과제가 없습니다.")
             else:
                 st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
 
+            # 전체 등록된 과제 내용 개별 수정 영역
             st.markdown("---")
-            st.markdown(f"##### 🛠️ 전체 등록된 과제 목록, 내용 수정 및 삭제")
+            st.markdown(f"##### 🛠️ 전체 등록된 과제 내용 개별 수정")
             all_student_hws = get_all_student_homework(selected_student)
             if all_student_hws:
                 for h_id, h_date, h_title in all_student_hws:
-                    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 1, 1])
+                    col_h1, col_h2, col_h3 = st.columns([2, 5, 1])
                     with col_h1:
                         st.write(f"📅 **{h_date}**")
                     with col_h2:
@@ -1093,11 +1141,6 @@ else:
                                     update_student_homework(h_id, str(ed_date), ed_title.strip())
                                     st.success("수정되었습니다!")
                                     st.rerun()
-                    with col_h4:
-                        if st.button("삭제", key=f"del_shw_{h_id}"):
-                            delete_student_homework(h_id)
-                            st.success("삭제되었습니다!")
-                            st.rerun()
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
@@ -1152,5 +1195,42 @@ else:
                                 st.markdown(bundle_copy_js, unsafe_allow_html=True)
             else:
                 st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
+        else:
+            st.info("등록된 학생이 없습니다.")
+
+    # [탭 5] 전체 학생 숙제 매트릭스 (4번 아이디어)
+    with t_cfg_matrix:
+        st.markdown("#### 📊 전체 학생 숙제 현황 매트릭스")
+        st.info("💡 공부방 전체 학생들의 날짜별 숙제 완료 상태를 한눈에 확인할 수 있는 현황판입니다.")
+        
+        all_students = get_students()
+        if all_students:
+            # 전체 등록된 모든 숙제 날짜 수집
+            conn = sqlite3.connect("mathpro_roadmap.db")
+            c = conn.cursor()
+            c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
+            all_hw_dates = [r[0] for r in c.fetchall()]
+            conn.close()
+            
+            if all_hw_dates:
+                selected_matrix_date = st.selectbox("조회할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
+                st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 전체 학생 숙제 검사표")
+                
+                # 해당 날짜에 부여된 숙제들과 각 학생별 완료 여부 매트릭스 출력
+                for s_name in all_students:
+                    with st.container(border=True):
+                        st.markdown(f"**👤 {s_name} 학생**")
+                        s_hws_on_date = get_student_homework_by_date(s_name, selected_matrix_date)
+                        s_hw_prog = get_student_homework_progress(s_name)
+                        
+                        if s_hws_on_date:
+                            for h_id, h_title in s_hws_on_date:
+                                is_done = s_hw_prog.get(h_id, False)
+                                status_str = "✅ **완료**" if is_done else "❌ **미완료**"
+                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {status_str} : {h_title}")
+                        else:
+                            st.caption("&nbsp;&nbsp;&nbsp;&nbsp;이 날짜에 부여된 과제가 없습니다.")
+            else:
+                st.info("등록된 숙제 데이터가 없습니다.")
         else:
             st.info("등록된 학생이 없습니다.")
