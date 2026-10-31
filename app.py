@@ -701,8 +701,8 @@ else:
                         st.rerun()
 
     if student_list:
-        with st.expander("🔗 [선생님 전용] 학생별 고유 링크(URL) 및 바로가기"):
-            st.markdown("학생들에게 카카오톡으로 링크를 보내거나, **[바로가기]** 버튼을 눌러 학생 화면을 직접 확인하세요.")
+        with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
+            st.markdown("학생 이름 버튼을 누르면 해당 학생 화면으로 바로 이동합니다.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -715,14 +715,11 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                c_link, c_btn = st.columns([4, 1])
-                with c_link:
-                    st.text_input(f"📌 {s} 학생 링크", value=personal_link, key=f"link_{s}", label_visibility="collapsed")
-                with c_btn:
-                    st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 10px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-top:2px;">🔗 바로가기</a>',
-                        unsafe_allow_html=True
-                    )
+                # 스마트폰 화면에서 이름을 바로 알아볼 수 있도록 큼직한 이름 버튼 형태로 배치
+                st.markdown(
+                    f'<a href="{personal_link}" target="_blank" style="display:block; background-color:#2563EB; color:white; padding:10px 14px; border-radius:6px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:8px;">👤 {s} 학생 페이지 바로가기</a>',
+                    unsafe_allow_html=True
+                )
 
     st.divider()
 
@@ -1102,4 +1099,4 @@ else:
             else:
                 st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
         else:
-            st.info("등록된 학생이 없습니다.")
+            st.info("등록된 학생 이름이 없습니다.")
