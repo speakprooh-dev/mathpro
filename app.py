@@ -17,22 +17,19 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 및 기존 데이터 보존 안전 장치
+# 1. 데이터베이스 초기화 (기존 사용자 데이터를 절대 덮어쓰지 않는 안전 구조)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     
+    # 테이블 생성 (기존 데이터가 있으면 구조만 유지하고 보존됨)
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
-    
-    # 과목 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS subjects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL
         )
     ''')
-    
-    # 단원 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS chapters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,8 +37,6 @@ def init_db():
             name TEXT NOT NULL
         )
     ''')
-    
-    # 세부 유형 테이블 (해설 영상 URL video_url 추가)
     c.execute('''
         CREATE TABLE IF NOT EXISTS chapter_types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +51,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
     
-    # 학생별 마일스톤
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +60,6 @@ def init_db():
             type_name TEXT NOT NULL
         )
     ''')
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +67,6 @@ def init_db():
             title TEXT NOT NULL
         )
     ''')
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_homework (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,7 +75,6 @@ def init_db():
             title TEXT NOT NULL
         )
     ''')
-    
     c.execute('''
         CREATE TABLE IF NOT EXISTS milestone_progress (
             student_name TEXT,
@@ -108,8 +99,6 @@ def init_db():
             PRIMARY KEY (student_name, student_hw_id)
         )
     ''')
-    
-    # 학생 오답/질문 저장 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_wrong_entries (
             student_name TEXT,
@@ -119,7 +108,7 @@ def init_db():
         )
     ''')
     
-    # 초기 기본 과목 데이터
+    # 최초 실행 시에만 아주 기초적인 기본 과목명만 안전하게 삽입 (기존 데이터가 없을 때만 작동)
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -129,20 +118,6 @@ def init_db():
             except sqlite3.IntegrityError:
                 pass
                 
-    # 초기 샘플 단원 데이터
-    c.execute("SELECT COUNT(*) FROM chapters")
-    if c.fetchone()[0] == 0:
-        default_data = [
-            ("수학(상)", "01. 다항식의 연산과 인수분해", [("유형 01. 다항식의 연산", ""), ("유형 02. 나머지정리와 인수분해", "")]),
-            ("수학(상)", "02. 복소수와 이차방정식", [("유형 01. 복소수의 연산", ""), ("유형 02. 이차방정식의 판별식과 근과 계수의 관계", "")]),
-            ("수학(상)", "03. 이차함수의 그래프와 활용", [("유형 01. 이차함수의 그래프와 최대·최소", ""), ("유형 02. 이차함수 활용 문제", "")])
-        ]
-        for sub, ch_name, types in default_data:
-            c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (sub, ch_name))
-            ch_id = c.lastrowid
-            for t_name, t_url in types:
-                c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (ch_id, t_name, t_url))
-            
     conn.commit()
     conn.close()
 
