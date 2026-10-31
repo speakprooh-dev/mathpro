@@ -753,7 +753,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones)
+            s_total_m = len(milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1036,7 +1036,7 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 부여 및 통합 관리 (날짜별 필터 + 완료 체크 + 다중 삭제 + 수정)
+    # [탭 3] 선택학생 개별 과제 부여 및 통합 관리
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
@@ -1093,10 +1093,12 @@ else:
                             c = conn.cursor()
                             for h_id, val in teacher_hw_checked.items():
                                 c.execute('''
-                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    VALUES (?, ?, ?)
-                                    ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-                                ''', (selected_student, h_id, int(val), int(val)))
+                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
+                                ''', (int(val), h_id))
+                                c.execute('''
+                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
+                                ''', (int(val), h_id))
                             conn.commit()
                             conn.close()
                             st.success("과제 완료 상태가 저장되었습니다!")
@@ -1243,19 +1245,16 @@ else:
                                         st.write(f"📌 {title}")
                                     st.divider()
                         
-                        mat_save_btn = st.form_submit_button("💾 전체 체크 상태 저장하기", type="primary", use_container_width=True)
-                        mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
+                        col_m_btn1, col_m_btn2 = st.columns(2)
+                        with col_m_btn1:
+                            mat_save_btn = st.form_submit_button("💾 전체 체크 상태 저장하기", type="primary", use_container_width=True)
+                        with col_m_btn2:
+                            mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
                         
                         if mat_save_btn:
                             conn = sqlite3.connect("mathpro_roadmap.db")
                             c = conn.cursor()
                             for h_id, val in matrix_hw_checked.items():
-                                c.execute('''
-                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    VALUES (?, ?, ?)
-                                    ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-                                ''', (selected_student_dummy if 'selected_student_dummy' in locals() else '', h_id, int(val), int(val)))
-                                # 위 student_name은 어차피 student_hw_id가 고유하므로 아래처럼 올바르게 저장되도록 보정
                                 c.execute('''
                                     UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
                                 ''', (int(val), h_id))
@@ -1282,10 +1281,28 @@ else:
                                 st.rerun()
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
+
+                    # 개별 과제 수정 영역 (팝오버 형태)
+                    st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
+                    for s_name in students_with_hw:
+                        s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
+                        for h_id, title in s_hws:
+                            col_info, col_pop = st.columns([5, 1])
+                            with col_info:
+                                st.write(f"• **{s_name}**: {title}")
+                            with col_pop:
+                                with st.popover("수정", key=f"mat_pop_edit_{h_id}"):
+                                    with st.form(f"mat_edit_form_{h_id}"):
+                                        ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
+                                        ed_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
+                                        if st.form_submit_button("수정 저장"):
+                                            update_student_homework(h_id, str(ed_d), ed_t.strip())
+                                            st.success("수정되었습니다!")
+                                            st.rerun()
                 else:
                     st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생이 없습니다.")
 
-                # 매트릭스 내에서 특정 학생에게 새 과제 추가 또는 기존 과제 수정 기능
+                # 매트릭스 내에서 특정 학생에게 새 과제 추가
                 st.markdown("---")
                 st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
                 with st.form("matrix_add_hw_form"):
