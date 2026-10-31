@@ -753,7 +753,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(milestones)
+            s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
