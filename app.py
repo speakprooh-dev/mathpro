@@ -715,7 +715,6 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                # 이름 자체를 링크로 만들고 오른쪽에는 콤팩트한 [링크 복사] 버튼 배치
                 col_name_link, col_copy_btn = st.columns([3, 1])
                 with col_name_link:
                     st.markdown(
@@ -1015,7 +1014,7 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 부여 및 관리 (선생님 체크 기능 포함)
+    # [탭 3] 선택학생 개별 과제 부여 및 관리 (날짜별 필터 체크 기능 포함)
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
@@ -1033,43 +1032,53 @@ else:
                         st.error("과제 내용을 입력해주세요.")
 
             st.markdown("---")
-            st.markdown(f"##### 📋 [{selected_student}] 학생에게 등록된 과제 목록, 완료 체크 및 관리")
-            st.info("💡 선생님 모드에서 학생의 숙제 완료 여부를 직접 체크하고 하단의 **[선생님 과제 상태 저장하기]** 버튼을 눌러주세요!")
+            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인 및 완료 체크")
             
-            student_hws = get_all_student_homework(selected_student)
+            hw_dates = get_student_homework_dates(selected_student)
             hw_progress_map = get_student_homework_progress(selected_student)
             
-            if student_hws:
-                teacher_hw_checked = {}
-                with st.form("teacher_hw_check_form"):
-                    for h_id, h_date, h_title in student_hws:
-                        is_checked_default = hw_progress_map.get(h_id, False)
-                        col_chk, col_date, col_ttl = st.columns([1, 2, 6])
-                        with col_chk:
-                            teacher_hw_checked[h_id] = st.checkbox("완료", value=is_checked_default, key=f"t_hw_chk_{h_id}")
-                        with col_date:
-                            st.write(f"📅 {h_date}")
-                        with col_ttl:
-                            st.write(f"📌 {h_title}")
-                        st.divider()
-                    
-                    teacher_hw_save_btn = st.form_submit_button("💾 선생님 과제 상태 저장하기", type="primary")
-                    if teacher_hw_save_btn:
-                        conn = sqlite3.connect("mathpro_roadmap.db")
-                        c = conn.cursor()
-                        for h_id, val in teacher_hw_checked.items():
-                            c.execute('''
-                                INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                VALUES (?, ?, ?)
-                                ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-                            ''', (selected_student, h_id, int(val), int(val)))
-                        conn.commit()
-                        conn.close()
-                        st.success("과제 완료 상태가 성공적으로 저장되었습니다!")
-                        st.rerun()
+            if hw_dates:
+                selected_hw_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
+                st.markdown(f"📌 **[{selected_hw_date} ({get_weekday_kr(selected_hw_date)})]** 부여된 숙제 목록")
+                
+                target_hws = get_student_homework_by_date(selected_student, selected_hw_date)
+                
+                if target_hws:
+                    teacher_hw_checked = {}
+                    with st.form(f"teacher_hw_check_form_{selected_hw_date}"):
+                        for h_id, title in target_hws:
+                            is_checked_default = hw_progress_map.get(h_id, False)
+                            col_chk, col_ttl = st.columns([1, 7])
+                            with col_chk:
+                                teacher_hw_checked[h_id] = st.checkbox("완료", value=is_checked_default, key=f"t_hw_chk_{h_id}")
+                            with col_ttl:
+                                st.write(f"📌 {title}")
+                            st.divider()
+                        
+                        teacher_hw_save_btn = st.form_submit_button("💾 선생님 과제 상태 저장하기", type="primary")
+                        if teacher_hw_save_btn:
+                            conn = sqlite3.connect("mathpro_roadmap.db")
+                            c = conn.cursor()
+                            for h_id, val in teacher_hw_checked.items():
+                                c.execute('''
+                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    VALUES (?, ?, ?)
+                                    ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
+                                ''', (selected_student, h_id, int(val), int(val)))
+                            conn.commit()
+                            conn.close()
+                            st.success("해당 날짜의 과제 완료 상태가 성공적으로 저장되었습니다!")
+                            st.rerun()
+                else:
+                    st.info("선택한 날짜에 등록된 과제가 없습니다.")
+            else:
+                st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
 
-                st.markdown("##### 🛠️ 개별 과제 내용 수정 및 삭제")
-                for h_id, h_date, h_title in student_hws:
+            st.markdown("---")
+            st.markdown(f"##### 🛠️ 전체 등록된 과제 목록, 내용 수정 및 삭제")
+            all_student_hws = get_all_student_homework(selected_student)
+            if all_student_hws:
+                for h_id, h_date, h_title in all_student_hws:
                     col_h1, col_h2, col_h3, col_h4 = st.columns([2, 4, 1, 1])
                     with col_h1:
                         st.write(f"📅 **{h_date}**")
@@ -1089,8 +1098,6 @@ else:
                             delete_student_homework(h_id)
                             st.success("삭제되었습니다!")
                             st.rerun()
-            else:
-                st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
