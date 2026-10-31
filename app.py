@@ -336,6 +336,18 @@ def delete_student_milestone(m_id):
     conn.commit()
     conn.close()
 
+def delete_student_milestones_by_chapter(student_name, chapter_name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id FROM milestones WHERE student_name = ? AND chapter = ?", (student_name, chapter_name))
+    m_ids = [r[0] for r in c.fetchall()]
+    for m_id in m_ids:
+        c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
+        c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
+    conn.commit()
+    conn.close()
+    return len(m_ids)
+
 def get_student_homework_dates(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -804,29 +816,48 @@ else:
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
-                st.markdown("##### 🗑️ 진도 항목 다중 선택 및 일괄 삭제")
-                st.info("💡 삭제할 진도 항목들의 체크박스에 체크한 뒤, 하단의 **[선택한 진도 항목 일괄 삭제]** 버튼을 눌러주세요!")
+                # --- [신규 추가] 단원 단위 일괄 삭제 및 유형별 다중 선택 삭제 섹션 ---
+                st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원별 일괄 삭제 및 다중 선택)")
                 
-                with st.form("teacher_milestone_bulk_del_form"):
-                    milestone_delete_checks = {}
-                    for m_id, sub, ch, t_name, v_url in s_milestones:
-                        col_del_chk, col_del_txt = st.columns([1, 9])
-                        with col_del_chk:
-                            milestone_delete_checks[m_id] = st.checkbox("선택", value=False, key=f"del_chk_m_{m_id}", label_visibility="collapsed")
-                        with col_del_txt:
-                            st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
-                        st.divider()
+                # 1. 단원 단위 일괄 삭제 기능
+                with st.expander("📂 단원 전체 삭제 (클릭하여 열기)"):
+                    st.warning("⚠️ 아래에서 단원을 선택하고 삭제 버튼을 누르면, 해당 단원에 속한 모든 유형이 한 번에 삭제됩니다!")
                     
-                    milestone_del_submit = st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True)
-                    if milestone_del_submit:
-                        ids_to_del = [m_id for m_id, to_del in milestone_delete_checks.items() if to_del]
-                        if ids_to_del:
-                            for m_id in ids_to_del:
-                                delete_student_milestone(m_id)
-                            st.success(f"선택한 {len(ids_to_del)}개의 진도 항목이 성공적으로 삭제되었습니다!")
-                            st.rerun()
-                        else:
-                            st.warning("삭제할 진도 항목을 하나 이상 체크해주세요.")
+                    existing_chapters_in_milestones = sorted(list({m[2] for m in s_milestones}))
+                    if existing_chapters_in_milestones:
+                        with st.form("chapter_bulk_del_form"):
+                            target_chapter_to_del = st.selectbox("전체 삭제할 단원 선택", existing_chapters_in_milestones)
+                            ch_del_submit = st.form_submit_button("🗑️ 선택한 단원 전체 삭제하기", type="primary", use_container_width=True)
+                            if ch_del_submit:
+                                deleted_cnt = delete_student_milestones_by_chapter(selected_student, target_chapter_to_del)
+                                st.success(f"'{target_chapter_to_del}' 단원에 속한 {deleted_cnt}개의 유형이 모두 삭제되었습니다!")
+                                st.rerun()
+                    else:
+                        st.info("배정된 단원이 없습니다.")
+
+                # 2. 유형별 다중 선택 삭제 기능
+                with st.expander("☑️ 개별 유형 다중 선택 삭제 (클릭하여 열기)"):
+                    st.info("💡 삭제할 진도 항목들의 체크박스에 체크한 뒤, 하단의 **[선택한 진도 항목 일괄 삭제]** 버튼을 눌러주세요!")
+                    with st.form("teacher_milestone_bulk_del_form"):
+                        milestone_delete_checks = {}
+                        for m_id, sub, ch, t_name, v_url in s_milestones:
+                            col_del_chk, col_del_txt = st.columns([1, 9])
+                            with col_del_chk:
+                                milestone_delete_checks[m_id] = st.checkbox("선택", value=False, key=f"del_chk_m_{m_id}", label_visibility="collapsed")
+                            with col_del_txt:
+                                st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
+                            st.divider()
+                        
+                        milestone_del_submit = st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True)
+                        if milestone_del_submit:
+                            ids_to_del = [m_id for m_id, to_del in milestone_delete_checks.items() if to_del]
+                            if ids_to_del:
+                                for m_id in ids_to_del:
+                                    delete_student_milestone(m_id)
+                                st.success(f"선택한 {len(ids_to_del)}개의 진도 항목이 성공적으로 삭제되었습니다!")
+                                st.rerun()
+                            else:
+                                st.warning("삭제할 진도 항목을 하나 이상 체크해주세요.")
             else:
                 st.info("이 학생에게 배정된 진도가 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
         else:
