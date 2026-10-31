@@ -1200,10 +1200,10 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 있는 학생만 표시 + 완료 체크/추가/수정/삭제 통합 관리)
+    # [탭 5] 전체 학생 숙제 매트릭스 (완료 체크, 삭제, 그리고 각 과제별 [수정] 버튼 내장)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 완료 체크 저장뿐만 아니라 **과제 추가, 수정, 삭제**까지 한곳에서 관리할 수 있습니다.")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 완료 체크와 삭제뿐만 아니라 각 과제별 **[수정]** 버튼을 통해 내용과 날짜를 바로 수정할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1282,23 +1282,24 @@ else:
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 개별 과제 수정 영역 (팝오버 형태)
-                    st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
+                    # 각 과제 항목 카드 안쪽에 바로 [수정] 버튼 배치 (아래쪽 분리 영역 제거 완료)
+                    st.markdown("##### 🛠️ 개별 과제 수정")
                     for s_name in students_with_hw:
                         s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
                         for h_id, title in s_hws:
-                            col_info, col_pop = st.columns([5, 1])
-                            with col_info:
-                                st.write(f"• **{s_name}**: {title}")
-                            with col_pop:
-                                with st.popover("수정", key=f"mat_pop_edit_{h_id}"):
-                                    with st.form(f"mat_edit_form_{h_id}"):
-                                        ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
-                                        ed_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
-                                        if st.form_submit_button("수정 저장"):
-                                            update_student_homework(h_id, str(ed_d), ed_t.strip())
-                                            st.success("수정되었습니다!")
-                                            st.rerun()
+                            with st.container(border=True):
+                                col_info, col_pop = st.columns([5, 1])
+                                with col_info:
+                                    st.write(f"👤 **{s_name}** | 📌 {title}")
+                                with col_pop:
+                                    with st.popover("수정", key=f"mat_pop_edit_{h_id}"):
+                                        with st.form(f"mat_edit_form_{h_id}"):
+                                            ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
+                                            ed_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
+                                            if st.form_submit_button("수정 저장"):
+                                                update_student_homework(h_id, str(ed_d), ed_t.strip())
+                                                st.success("수정되었습니다!")
+                                                st.rerun()
                 else:
                     st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생이 없습니다.")
 
