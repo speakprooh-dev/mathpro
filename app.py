@@ -487,6 +487,14 @@ def format_numbers_list(num_set):
 # --- 웹 UI 구성 ---
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
+
+# 공통 네이버 카페 바로가기 버튼 배치
+cafe_main_url = "https://cafe.naver.com/mathpro2020"
+st.markdown(
+    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:8px 12px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">☕ MathPro 네이버 카페 바로가기</a>',
+    unsafe_allow_html=True
+)
+
 st.divider()
 
 student_list = get_students()
@@ -605,7 +613,6 @@ if url_student and url_student in student_list:
 
         st.markdown("### 📋 현재 저장된 오답 목록")
         if saved_nums:
-            cafe_main_url = get_cafe_search_url(current_unit, 1)
             col_info, col_btn = st.columns([3, 1])
             with col_info:
                 st.caption(f"총 {len(saved_nums)}문제 저장됨 | 각 코드 블록 우측 상단의 **복사 아이콘(📋)**을 누르면 복사됩니다!")
@@ -651,7 +658,6 @@ if url_student and url_student in student_list:
             nums_to_del = parse_numbers(del_txt)
             
             final_nums = (saved_nums_pre | nums_to_add) - nums_to_del
-            new_saved_text = ". ".join([str(n) for n in sorted(list(final_nums))]) # 오타 수정 방지용 기본 조치
             new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
             save_student_wrong_entry(selected_student, cur_code, new_saved_text)
             
@@ -709,7 +715,6 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                # 가독성과 클릭 편의성을 위해 열 분할 배치 (입력창 + 바로가기 버튼)
                 c_link, c_btn = st.columns([4, 1])
                 with c_link:
                     st.text_input(f"📌 {s} 학생 링크", value=personal_link, key=f"link_{s}", label_visibility="collapsed")
@@ -729,7 +734,7 @@ else:
         "🔍 4. 학생 오답노트 취합"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (마일스톤 관리 및 선생님 직접 체크)
+    # [탭 1] 선택한 학생 개별 관리
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 개별 학습 및 진도 관리")
@@ -794,7 +799,6 @@ else:
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
-                # 개별 항목 삭제 관리
                 st.markdown("##### 🗑️ 개별 진도 항목 삭제 관리")
                 with st.expander("항목별 삭제 열기"):
                     for m_id, sub, ch, t_name, v_url in s_milestones:
@@ -1071,7 +1075,6 @@ else:
                             
                             st.markdown(f"##### 📖 단원코드: `{u_code}`")
                             
-                            # 선생님 직접 수정 기능 팝오버
                             with st.popover("⚙️ 오답 번호 편집하기"):
                                 with st.form(f"edit_wrong_form_{u_code}"):
                                     st.caption(f"'{chk_student}' 학생의 '{u_code}' 단원 오답 번호를 직접 수정합니다.")
