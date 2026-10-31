@@ -17,7 +17,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 및 기본 데이터 자동 복구
+# 1. 데이터베이스 초기화 및 기존 데이터 보존 안전 장치
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -129,23 +129,6 @@ def init_db():
             except sqlite3.IntegrityError:
                 pass
                 
-    # 초기 샘플 데이터 (학생이 아예 없을 경우 기본 학생 및 숙제 자동 복구)
-    c.execute("SELECT COUNT(*) FROM students")
-    if c.fetchone()[0] == 0:
-        default_students = ["강원민", "여채연"]
-        for s_name in default_students:
-            c.execute("INSERT OR IGNORE INTO students (name) VALUES (?)", (s_name,))
-            
-        # 기본 숙제 샘플 추가 (오늘 날짜 기준)
-        today_str = str(date.today())
-        sample_hws = [
-            ("강원민", today_str, "[중급 - 등차&등비 / 수열의 합] 수록 6문제씩 풀어오기"),
-            ("강원민", today_str, "[중급 - 여러 가지 함수의 미분] 수록 6문제씩 풀어오기"),
-            ("여채연", today_str, "[중급 - 통계적 추정] 25번 - 48번 (정리하기) / 49번 - 72번 (풀어오기)")
-        ]
-        for s_name, h_date, h_title in sample_hws:
-            c.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (?, ?, ?)", (s_name, h_date, h_title))
-
     # 초기 샘플 단원 데이터
     c.execute("SELECT COUNT(*) FROM chapters")
     if c.fetchone()[0] == 0:
