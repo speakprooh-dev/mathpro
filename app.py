@@ -3,6 +3,7 @@ import sqlite3
 from datetime import date
 import re
 import urllib.parse
+import pandas as pd
 
 # 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
@@ -1198,38 +1199,47 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (4번 아이디어)
+    # [탭 5] 전체 학생 숙제 매트릭스 표 (진짜 행/열 격자 표 형태)
     with t_cfg_matrix:
-        st.markdown("#### 📊 전체 학생 숙제 현황 매트릭스")
-        st.info("💡 공부방 전체 학생들의 날짜별 숙제 완료 상태를 한눈에 확인할 수 있는 현황판입니다.")
+        st.markdown("#### 📊 전체 학생 날짜별 숙제 완료 현황 매트릭스")
+        st.info("💡 세로축에는 학생 이름, 가로축에는 날짜별 과제가 배치되어 전체 학생의 숙제 완료 여부를 한눈에 비교할 수 있는 표입니다.")
         
         all_students = get_students()
         if all_students:
-            # 전체 등록된 모든 숙제 날짜 수집
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
-            c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
+            # 모든 날짜 가져오기
+            c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date ASC")
             all_hw_dates = [r[0] for r in c.fetchall()]
             conn.close()
             
             if all_hw_dates:
-                selected_matrix_date = st.selectbox("조회할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
-                st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 전체 학생 숙제 검사표")
-                
-                # 해당 날짜에 부여된 숙제들과 각 학생별 완료 여부 매트릭스 출력
+                matrix_data = []
                 for s_name in all_students:
-                    with st.container(border=True):
-                        st.markdown(f"**👤 {s_name} 학생**")
-                        s_hws_on_date = get_student_homework_by_date(s_name, selected_matrix_date)
-                        s_hw_prog = get_student_homework_progress(s_name)
-                        
+                    row_dict = {"학생 이름": s_name}
+                    s_hw_prog = get_student_homework_progress(s_name)
+                    
+                    for d_str in all_hw_dates:
+                        s_hws_on_date = get_student_homework_by_date(s_name, d_str)
                         if s_hws_on_date:
-                            for h_id, h_title in s_hws_on_date:
-                                is_done = s_hw_prog.get(h_id, False)
-                                status_str = "✅ **완료**" if is_done else "❌ **미완료**"
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {status_str} : {h_title}")
+                            # 해당 날짜에 부여된 과제들의 완료 상태 확인 (모두 완료면 O, 아니면 X 또는 미완료)
+                            all_done = True
+                            any_task = False
+                            for h_id, title in s_hws_on_date:
+                                any_task = True
+                                if not s_hw_prog.get(h_id, False):
+                                    all_done = False
+                            
+                            if any_task:
+                                row_dict[f"{d_str} ({get_weekday_kr(d_str)[:1]})"] = "✅ 완료" if all_done else "❌ 미완료"
+                            else:
+                                row_dict[f"{d_str} ({get_weekday_kr(d_str)[:1]})"] = "-"
                         else:
-                            st.caption("&nbsp;&nbsp;&nbsp;&nbsp;이 날짜에 부여된 과제가 없습니다.")
+                            row_dict[f"{d_str} ({get_weekday_kr(d_str)[:1]})"] = "-"
+                    matrix_data.append(row_dict)
+                
+                df_matrix = pd.DataFrame(matrix_data)
+                st.dataframe(df_matrix, use_container_width=True, hide_index=True)
             else:
                 st.info("등록된 숙제 데이터가 없습니다.")
         else:
