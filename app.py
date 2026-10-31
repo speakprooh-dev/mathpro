@@ -702,7 +702,7 @@ else:
 
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
-            st.markdown("학생들에게 카카오톡으로 전송할 링크를 복사하거나, **[바로가기]**를 눌러 학생 화면을 확인하세요.")
+            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 오른쪽 버튼으로 링크를 복사할 수 있습니다.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -715,14 +715,14 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                st.markdown(f"**👤 {s}**")
-                c_btn1, c_btn2 = st.columns(2)
-                with c_btn1:
+                # 이름 자체를 링크로 만들고 오른쪽에는 콤팩트한 [링크 복사] 버튼 배치
+                col_name_link, col_copy_btn = st.columns([3, 1])
+                with col_name_link:
                     st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="display:block; background-color:#2563EB; color:white; padding:8px 10px; border-radius:6px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:6px;">🔗 바로가기</a>',
+                        f'<a href="{personal_link}" target="_blank" style="font-size:16px; font-weight:bold; color:#2563EB; text-decoration:none; line-height:38px;">👤 {s}</a>',
                         unsafe_allow_html=True
                     )
-                with c_btn2:
+                with col_copy_btn:
                     copy_js = f"""
                     <script>
                     function copyLink_{s}() {{
@@ -730,7 +730,7 @@ else:
                         alert("{s} 학생 링크가 복사되었습니다! 카카오톡에 붙여넣기 하세요.");
                     }}
                     </script>
-                    <button onclick="copyLink_{s}()" style="background-color:#03C75A; color:white; border:none; padding:8px 10px; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; width:100%; margin-bottom:6px;">📋 링크 복사</button>
+                    <button onclick="copyLink_{s}()" style="background-color:#03C75A; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%; margin-top:2px;">📋 링크 복사</button>
                     """
                     st.markdown(copy_js, unsafe_allow_html=True)
                 st.divider()
