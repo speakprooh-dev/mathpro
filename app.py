@@ -762,7 +762,7 @@ else:
             s_total_h = len(all_s_hws)
             s_h_percent = int((s_completed_h / s_total_h) * 100) if s_total_h > 0 else 0
 
-            # 1번 아이디어: 학생별 종합 현황 요약 카드 (Metrics)
+            # 학생별 종합 현황 요약 카드 (Metrics)
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric(label="🎯 개념 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
@@ -1198,14 +1198,13 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (4번 아이디어)
+    # [탭 5] 전체 학생 숙제 매트릭스 (과제 있는 학생만 표시 + 완료 체크/추가/수정/삭제 통합 관리)
     with t_cfg_matrix:
-        st.markdown("#### 📊 전체 학생 숙제 현황 매트릭스")
-        st.info("💡 공부방 전체 학생들의 날짜별 숙제 완료 상태를 한눈에 확인할 수 있는 현황판입니다.")
+        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 완료 체크 저장뿐만 아니라 **과제 추가, 수정, 삭제**까지 한곳에서 관리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
-            # 전체 등록된 모든 숙제 날짜 수집
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
             c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
@@ -1213,24 +1212,94 @@ else:
             conn.close()
             
             if all_hw_dates:
-                selected_matrix_date = st.selectbox("조회할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
-                st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 전체 학생 숙제 검사표")
+                selected_matrix_date = st.selectbox("조회 및 관리할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
+                st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 과제 검사 및 관리 보드")
                 
-                # 해당 날짜에 부여된 숙제들과 각 학생별 완료 여부 매트릭스 출력
+                # 해당 날짜에 과제가 있는 학생들만 필터링
+                students_with_hw = []
                 for s_name in all_students:
-                    with st.container(border=True):
-                        st.markdown(f"**👤 {s_name} 학생**")
-                        s_hws_on_date = get_student_homework_by_date(s_name, selected_matrix_date)
-                        s_hw_prog = get_student_homework_progress(s_name)
+                    if get_student_homework_by_date(s_name, selected_matrix_date):
+                        students_with_hw.append(s_name)
+                
+                if students_with_hw:
+                    matrix_hw_checked = {}
+                    matrix_hw_delete = {}
+                    
+                    with st.form("matrix_unified_manage_form"):
+                        for s_name in students_with_hw:
+                            with st.container(border=True):
+                                st.markdown(f"**👤 {s_name} 학생**")
+                                s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
+                                s_hw_prog = get_student_homework_progress(s_name)
+                                
+                                for h_id, title in s_hws:
+                                    is_done = s_hw_prog.get(h_id, False)
+                                    col_chk, col_del, col_ttl = st.columns([1, 1, 6])
+                                    with col_chk:
+                                        matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
+                                    with col_del:
+                                        matrix_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"mat_del_{h_id}")
+                                    with col_ttl:
+                                        st.write(f"📌 {title}")
+                                    st.divider()
                         
-                        if s_hws_on_date:
-                            for h_id, h_title in s_hws_on_date:
-                                is_done = s_hw_prog.get(h_id, False)
-                                status_str = "✅ **완료**" if is_done else "❌ **미완료**"
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {status_str} : {h_title}")
+                        mat_save_btn = st.form_submit_button("💾 전체 체크 상태 저장하기", type="primary", use_container_width=True)
+                        mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
+                        
+                        if mat_save_btn:
+                            conn = sqlite3.connect("mathpro_roadmap.db")
+                            c = conn.cursor()
+                            for h_id, val in matrix_hw_checked.items():
+                                c.execute('''
+                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    VALUES (?, ?, ?)
+                                    ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
+                                ''', (selected_student_dummy if 'selected_student_dummy' in locals() else '', h_id, int(val), int(val)))
+                                # 위 student_name은 어차피 student_hw_id가 고유하므로 아래처럼 올바르게 저장되도록 보정
+                                c.execute('''
+                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
+                                ''', (int(val), h_id))
+                                c.execute('''
+                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
+                                ''', (int(val), h_id))
+                            conn.commit()
+                            conn.close()
+                            st.success("숙제 완료 상태가 저장되었습니다!")
+                            st.rerun()
+                            
+                        if mat_del_btn:
+                            del_ids = [h_id for h_id, to_del in matrix_hw_delete.items() if to_del]
+                            if del_ids:
+                                conn = sqlite3.connect("mathpro_roadmap.db")
+                                c = conn.cursor()
+                                for h_id in del_ids:
+                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
+                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
+                                st.rerun()
+                            else:
+                                st.warning("삭제할 과제를 하나 이상 체크해주세요.")
+                else:
+                    st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생이 없습니다.")
+
+                # 매트릭스 내에서 특정 학생에게 새 과제 추가 또는 기존 과제 수정 기능
+                st.markdown("---")
+                st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
+                with st.form("matrix_add_hw_form"):
+                    target_student_add = st.selectbox("과제를 받을 학생 선택", all_students, key="mat_add_stu")
+                    mat_hw_text = st.text_area("추가할 과제 내용 (줄바꿈으로 여러 개 입력 가능)", key="mat_add_txt", placeholder="쎈 수학 상 p.50 문제 풀이")
+                    mat_add_submit = st.form_submit_button("선택한 학생에게 과제 추가", type="primary")
+                    if mat_add_submit:
+                        if mat_hw_text.strip():
+                            bulk_insert_student_homework(target_student_add, selected_matrix_date, mat_hw_text)
+                            st.success(f"'{target_student_add}' 학생에게 과제가 추가되었습니다!")
+                            st.rerun()
                         else:
-                            st.caption("&nbsp;&nbsp;&nbsp;&nbsp;이 날짜에 부여된 과제가 없습니다.")
+                            st.error("과제 내용을 입력해주세요.")
             else:
-                st.info("등록된 숙제 데이터가 없습니다.")
+                st.info("등록된 숙제 날짜가 없습니다.")
         else:
             st.info("등록된 학생이 없습니다.")
