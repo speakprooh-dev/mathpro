@@ -336,17 +336,20 @@ def delete_student_milestone(m_id):
     conn.commit()
     conn.close()
 
-def delete_student_milestones_by_chapter(student_name, chapter_name):
+def delete_student_milestones_by_chapters(student_name, chapter_names):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id FROM milestones WHERE student_name = ? AND chapter = ?", (student_name, chapter_name))
-    m_ids = [r[0] for r in c.fetchall()]
-    for m_id in m_ids:
-        c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
-        c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
+    total_deleted = 0
+    for ch_name in chapter_names:
+        c.execute("SELECT id FROM milestones WHERE student_name = ? AND chapter = ?", (student_name, ch_name))
+        m_ids = [r[0] for r in c.fetchall()]
+        for m_id in m_ids:
+            c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
+            c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
+            total_deleted += 1
     conn.commit()
     conn.close()
-    return len(m_ids)
+    return total_deleted
 
 def get_student_homework_dates(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -816,22 +819,34 @@ else:
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
-                # --- [신규 추가] 단원 단위 일괄 삭제 및 유형별 다중 선택 삭제 섹션 ---
-                st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원별 일괄 삭제 및 다중 선택)")
+                # --- [개선] 단원 단위 다중 선택 삭제 및 유형별 다중 선택 삭제 섹션 ---
+                st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원 다중 선택 및 개별 유형 다중 선택)")
                 
-                # 1. 단원 단위 일괄 삭제 기능
-                with st.expander("📂 단원 전체 삭제 (클릭하여 열기)"):
-                    st.warning("⚠️ 아래에서 단원을 선택하고 삭제 버튼을 누르면, 해당 단원에 속한 모든 유형이 한 번에 삭제됩니다!")
+                # 1. 단원 단위 다중 선택 삭제 기능
+                with st.expander("📂 단원 전체 다중 삭제 (클릭하여 열기)"):
+                    st.warning("⚠️ 삭제할 단원들의 체크박스에 체크하고 하단의 버튼을 누르면, 해당 단원들에 속한 모든 유형이 한 번에 싹 삭제됩니다!")
                     
                     existing_chapters_in_milestones = sorted(list({m[2] for m in s_milestones}))
                     if existing_chapters_in_milestones:
                         with st.form("chapter_bulk_del_form"):
-                            target_chapter_to_del = st.selectbox("전체 삭제할 단원 선택", existing_chapters_in_milestones)
-                            ch_del_submit = st.form_submit_button("🗑️ 선택한 단원 전체 삭제하기", type="primary", use_container_width=True)
+                            chapter_delete_checks = {}
+                            for ch_name in existing_chapters_in_milestones:
+                                col_c_chk, col_c_txt = st.columns([1, 9])
+                                with col_c_chk:
+                                    chapter_delete_checks[ch_name] = st.checkbox("단원선택", value=False, key=f"del_chk_ch_{ch_name}", label_visibility="collapsed")
+                                with col_c_txt:
+                                    st.write(f"📁 **{ch_name}**")
+                                st.divider()
+                            
+                            ch_del_submit = st.form_submit_button("🗑️ 선택한 단원들 전체 일괄 삭제하기", type="primary", use_container_width=True)
                             if ch_del_submit:
-                                deleted_cnt = delete_student_milestones_by_chapter(selected_student, target_chapter_to_del)
-                                st.success(f"'{target_chapter_to_del}' 단원에 속한 {deleted_cnt}개의 유형이 모두 삭제되었습니다!")
-                                st.rerun()
+                                chapters_to_del = [ch for ch, to_del in chapter_delete_checks.items() if to_del]
+                                if chapters_to_del:
+                                    total_del_cnt = delete_student_milestones_by_chapters(selected_student, chapters_to_del)
+                                    st.success(f"선택한 {len(chapters_to_del)}개 단원에 속한 총 {total_del_cnt}개의 유형이 성공적으로 삭제되었습니다!")
+                                    st.rerun()
+                                else:
+                                    st.warning("삭제할 단원을 하나 이상 체크해주세요.")
                     else:
                         st.info("배정된 단원이 없습니다.")
 
