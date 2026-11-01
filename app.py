@@ -135,9 +135,16 @@ def init_db():
             student_name TEXT,
             unit_code TEXT,
             numbers_text TEXT,
+            updated_at TEXT DEFAULT (date('now', 'localtime')),
             PRIMARY KEY (student_name, unit_code)
         )
     ''')
+    
+    try:
+        c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT (date('now', 'localtime'))")
+    except sqlite3.OperationalError:
+        pass
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS problem_links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -647,11 +654,12 @@ def get_student_wrong_entry(student_name, unit_code):
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
+    today_str = str(date.today())
     c.execute('''
-        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
-        VALUES (?, ?, ?)
-        ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?
-    ''', (student_name, unit_code, numbers_text, numbers_text))
+        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
+    ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
     conn.commit()
     conn.close()
 
@@ -689,7 +697,7 @@ if url_student and url_student in student_list:
         unsafe_allow_html=True
     )
     
-    # 📖 학생용 1분 사용 설명서 접이식 메뉴 추가
+    # 📖 학생용 1분 사용 설명서 접이식 메뉴
     with st.expander("📖 [필독] 1분 만에 끝내는 MathPro 사용 설명서 보기"):
         st.markdown("""
         ### 📐 MathPro 1:1 맞춤 학습 공간 이용 가이드
@@ -991,7 +999,6 @@ else:
 
     st.divider()
 
-    # 선생님 전용 모드에서 학생별 구글 드라이브 링크 설정 관리 추가
     if selected_student:
         with st.expander(f"📁 [{selected_student}] 학생 구글 드라이브 공유 폴더 링크 설정"):
             current_url = get_student_drive_url(selected_student)
@@ -1008,7 +1015,7 @@ else:
         f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
         "📚 2. 커리큘럼 및 진도 배정", 
         "📅 3. 선택학생 개별 과제 관리", 
-        "🔍 4. 학생 오답노트 취합",
+        "🔍 4. 학생 오답노트 취합 및 모아보기",
         "📊 5. 전체 학생 숙제 매트릭스",
         "🎥 6. 문제별 해설 링크 관리"
     ])
@@ -1373,13 +1380,11 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
             
-            # --- 자주 쓰는 과제 템플릿 관리 및 개별 복사 섹션 ---
             with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
                 st.info("💡 등록된 과제 문구 옆의 **[Copy to clipboard]** 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
                 
                 templates = get_homework_templates()
                 
-                # 템플릿 등록 폼
                 with st.form("add_template_form"):
                     new_tpl_text = st.text_input("새로운 자주 쓰는 과제 문구 등록", placeholder="예: 쎈 수학(상) p.45~48 대표유형 풀이")
                     if st.form_submit_button("➕ 템플릿 저장하기"):
@@ -1407,7 +1412,6 @@ else:
                 else:
                     st.caption("등록된 과제 템플릿이 없습니다. 위에서 자주 쓰는 문구를 등록해 보세요!")
 
-            # 과제 입력 폼
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
                 hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
@@ -1513,59 +1517,149 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합
+    # [탭 4] 학생 오답노트 취합 및 다양해진 모아보기 옵션 (업데이트 완료)
     with t_cfg_wrong:
-        st.markdown("#### 🔍 학생별 오답 및 질문 번호 코드 취합")
-        st.info("학생들이 각 단원별로 입력한 오답/질문 번호들을 묶음 형태로 확인하고 복사하거나 수정할 수 있습니다.")
+        st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
         
-        all_students = get_students()
-        if all_students:
-            chk_student = st.selectbox("조회할 학생 선택", all_students, key="chk_wrong_student")
-            
+        view_mode = st.radio(
+            "📋 오답 관리 보기 모드를 선택하세요:",
+            ["👤 학생별 개별 오답 조회", "📅 오답 제출 날짜별 모아보기", "⚠️ 영상 링크 미설정 오답만 모아보기"],
+            horizontal=True
+        )
+        st.markdown("---")
+
+        # 1) 학생별 개별 오답 조회
+        if view_mode == "👤 학생별 개별 오답 조회":
+            all_students = get_students()
+            if all_students:
+                chk_student = st.selectbox("조회할 학생 선택", all_students, key="chk_wrong_student")
+                
+                conn = sqlite3.connect("mathpro_roadmap.db")
+                c = conn.cursor()
+                c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
+                wrong_rows = c.fetchall()
+                conn.close()
+                
+                if wrong_rows:
+                    for u_code, nums_txt, u_date in wrong_rows:
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
+                                bundled_str = f"{u_code}_({','.join(formatted_nums)})"
+                                
+                                st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(최종 수정: {u_date if u_date else '날짜 기록 없음'})</span>", unsafe_allow_html=True)
+                                
+                                with st.popover("⚙️ 오답 번호 편집하기"):
+                                    with st.form(f"edit_wrong_form_{u_code}"):
+                                        st.caption(f"'{chk_student}' 학생의 '{u_code}' 단원 오답 번호를 직접 수정합니다.")
+                                        new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
+                                        if st.form_submit_button("저장하기", type="primary"):
+                                            save_student_wrong_entry(chk_student, u_code, new_nums_input)
+                                            st.success("수정되었습니다!")
+                                            st.rerun()
+
+                                col_w1, col_w2 = st.columns([3, 1])
+                                with col_w1:
+                                    st.code(bundled_str, language="text")
+                                with col_w2:
+                                    st.write("")
+                                    bundle_copy_js = f"""
+                                    <script>
+                                    function copyBundle_{u_code}() {{
+                                        navigator.clipboard.writeText("{bundled_str}");
+                                        alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
+                                    }}
+                                    </script>
+                                    <button onclick="copyBundle_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
+                                    """
+                                    st.markdown(bundle_copy_js, unsafe_allow_html=True)
+                else:
+                    st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
+            else:
+                st.info("등록된 학생이 없습니다.")
+
+        # 2) 오답 제출 날짜별 모아보기
+        elif view_mode == "📅 오답 제출 날짜별 모아보기":
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
-            c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ?", (chk_student,))
-            wrong_rows = c.fetchall()
+            c.execute("SELECT DISTINCT updated_at FROM student_wrong_entries WHERE numbers_text != '' ORDER BY updated_at DESC")
+            dates_rows = c.fetchall()
             conn.close()
             
-            if wrong_rows:
-                for u_code, nums_txt in wrong_rows:
+            wrong_dates = [r[0] for r in dates_rows if r[0]]
+            
+            if wrong_dates:
+                selected_w_date = st.selectbox("확인할 오답 제출/수정 날짜를 선택하세요", wrong_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+                st.markdown(f"##### 📌 **[{selected_w_date} ({get_weekday_kr(selected_w_date)})]** 제출 및 수정된 학생별 오답 목록")
+                
+                conn = sqlite3.connect("mathpro_roadmap.db")
+                c = conn.cursor()
+                c.execute("SELECT student_name, unit_code, numbers_text FROM student_wrong_entries WHERE updated_at = ? AND numbers_text != '' ORDER BY student_name", (selected_w_date,))
+                date_wrong_rows = c.fetchall()
+                conn.close()
+                
+                for s_name, u_code, nums_txt in date_wrong_rows:
                     with st.container(border=True):
                         parsed_s = parse_numbers(nums_txt)
                         if parsed_s:
                             formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
                             bundled_str = f"{u_code}_({','.join(formatted_nums)})"
                             
-                            st.markdown(f"##### 📖 단원코드: `{u_code}`")
-                            
-                            with st.popover("⚙️ 오답 번호 편집하기"):
-                                with st.form(f"edit_wrong_form_{u_code}"):
-                                    st.caption(f"'{chk_student}' 학생의 '{u_code}' 단원 오답 번호를 직접 수정합니다.")
-                                    new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
-                                    if st.form_submit_button("저장하기", type="primary"):
-                                        save_student_wrong_entry(chk_student, u_code, new_nums_input)
-                                        st.success("수정되었습니다!")
-                                        st.rerun()
-
-                            col_w1, col_w2 = st.columns([3, 1])
-                            with col_w1:
+                            st.write(f"👤 **{s_name} 학생** | 📖 단원코드: `{u_code}`")
+                            col_dw1, col_dw2 = st.columns([3, 1])
+                            with col_dw1:
                                 st.code(bundled_str, language="text")
-                            with col_w2:
-                                st.write("")
-                                bundle_copy_js = f"""
+                            with col_dw2:
+                                bundle_copy_js2 = f"""
                                 <script>
-                                function copyBundle_{u_code}() {{
+                                function copyBundleD_{s_name}_{u_code}() {{
                                     navigator.clipboard.writeText("{bundled_str}");
-                                    alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
+                                    alert("오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
                                 }}
                                 </script>
-                                <button onclick="copyBundle_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
+                                <button onclick="copyBundleD_{s_name}_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
                                 """
-                                st.markdown(bundle_copy_js, unsafe_allow_html=True)
+                                st.markdown(bundle_copy_js2, unsafe_allow_html=True)
             else:
-                st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
-        else:
-            st.info("등록된 학생이 없습니다.")
+                st.info("날짜별 기록된 오답 내역이 없습니다.")
+
+        # 3) 영상 링크 미설정 오답만 모아보기
+        elif view_mode == "⚠️ 영상 링크 미설정 오답만 모아보기":
+            st.warning("⚠️ 학생들이 질문/오답으로 입력했으나 아직 **카페 해설 영상 링크가 연결되지 않은 문제들**입니다!")
+            
+            conn = sqlite3.connect("mathpro_roadmap.db")
+            c = conn.cursor()
+            c.execute("SELECT student_name, unit_code, numbers_text FROM student_wrong_entries WHERE numbers_text != ''")
+            all_wrong_entries = c.fetchall()
+            
+            c.execute("SELECT full_code FROM problem_links WHERE video_url != ''")
+            existing_links = {r[0] for r in c.fetchall()}
+            conn.close()
+
+            missing_link_dict = {}
+            for s_name, u_code, nums_txt in all_wrong_entries:
+                nums = parse_numbers(nums_txt)
+                for num_int in nums:
+                    full_code = f"{u_code}{num_int:03d}"
+                    if full_code not in existing_links:
+                        if full_code not in missing_link_dict:
+                            missing_link_dict[full_code] = []
+                        missing_link_dict[full_code].append(s_name)
+
+            if missing_link_dict:
+                st.markdown(f"##### 📌 총 **{len(missing_link_dict)}개**의 미설정 오답 문항 발견!")
+                st.caption("💡 6번째 '문제별 해설 링크 관리' 탭으로 가셔서 아래 문항들의 링크를 추가하시면 자동으로 해결됩니다.")
+                
+                for full_code, students in sorted(missing_link_dict.items()):
+                    with st.container(border=True):
+                        col_m1, col_m2 = st.columns([2, 3])
+                        with col_m1:
+                            st.markdown(f"📌 **{full_code}** <span style='color:#EF4444; font-size:12px; font-weight:bold;'>(링크 미등록)</span>", unsafe_allow_html=True)
+                        with col_m2:
+                            st.caption(f"🙋 질문한 학생: {', '.join(students)}")
+            else:
+                st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
 
     # [탭 5] 전체 학생 숙제 매트릭스
     with t_cfg_matrix:
