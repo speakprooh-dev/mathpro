@@ -43,6 +43,13 @@ def init_db():
     c = conn.cursor()
     
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
+    
+    # 학생 테이블에 구글 드라이브 폴더 URL 컬럼 추가 (기존에 없던 경우 자동 생성)
+    try:
+        c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS subjects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,11 +183,26 @@ def get_students():
     conn.close()
     return [r[0] for r in rows]
 
+def get_student_drive_url(name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row and row[0] else ""
+
+def update_student_drive_url(name, drive_url):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("UPDATE students SET drive_url = ? WHERE name = ?", (drive_url, name))
+    conn.commit()
+    conn.close()
+
 def add_student(name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO students (name) VALUES (?)", (name,))
+        c.execute("INSERT INTO students (name, drive_url) VALUES (?, ?)", (name, ""))
         conn.commit()
         success = True
     except sqlite3.IntegrityError:
@@ -661,6 +683,14 @@ if url_student and url_student in student_list:
     selected_student = url_student
     st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
     
+    # 상단 구글 드라이브 폴더 바로가기 버튼 추가 (등록되어 있는 경우에만 표시)
+    student_drive = get_student_drive_url(selected_student)
+    if student_drive and student_drive.strip() != "":
+        st.markdown(
+            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:20px; border:1px solid #334155; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📁 내 구글 드라이브 공유 폴더 바로가기 ➔</a>',
+            unsafe_allow_html=True
+        )
+
     milestones = get_student_milestones(selected_student)
     hw_dates = get_student_homework_dates(selected_student)
     m_progress = get_milestone_progress(selected_student)
@@ -932,6 +962,18 @@ else:
                 st.divider()
 
     st.divider()
+
+    # 선생님 전용 모드에서 학생별 구글 드라이브 링크 설정 관리 추가
+    if selected_student:
+        with st.expander(f"📁 [{selected_student}] 학생 구글 드라이브 공유 폴더 링크 설정"):
+            current_url = get_student_drive_url(selected_student)
+            with st.form(f"drive_url_form_{selected_student}"):
+                new_drive_url = st.text_input("구글 드라이브 폴더 공유 URL 입력", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
+                drive_submit = st.form_submit_button("💾 드라이브 링크 저장", type="primary")
+                if drive_submit:
+                    update_student_drive_url(selected_student, new_drive_url.strip())
+                    st.success(f"'{selected_student}' 학생의 구글 드라이브 링크가 저장되었습니다!")
+                    st.rerun()
 
     st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
     t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
@@ -1305,7 +1347,7 @@ else:
             
             # --- 자주 쓰는 과제 템플릿 관리 및 개별 복사 섹션 ---
             with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
-                st.info("💡 등록된 과제 문구 옆의 **[📋 복사]** 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
+                st.info("💡 등록된 과제 문구 옆의 **[Copy to clipboard]** 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
                 
                 templates = get_homework_templates()
                 
@@ -1325,10 +1367,9 @@ else:
                     for t_id, t_title in templates:
                         col_t_txt, col_t_del = st.columns([5, 1])
                         with col_t_txt:
-                            # Streamlit 고유의 확실한 클립보드 복사 기능이 포함된 코드 블록 활용
                             st.code(t_title, language="text")
                         with col_t_del:
-                            st.write("") # 버튼 위치 맞춤용 여백
+                            st.write("")
                             st.write("")
                             if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}", use_container_width=True):
                                 delete_homework_template(t_id)
