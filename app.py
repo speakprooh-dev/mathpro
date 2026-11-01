@@ -612,12 +612,18 @@ def parse_numbers(text):
     return set(int(n) for n in nums)
 
 # --- 웹 UI 구성 ---
+
+# 만약 로고 이미지 파일이 있다면 아래 주석을 풀고 파일명을 넣어주세요! (예: "mathpro_logo.png")
+# st.image("mathpro_logo.png", width=150)
+
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
+
+# 네이버 상징 초록색(#03C75A)과 깔끔한 흰색 글씨로 변경한 카페 바로가기 버튼
 st.markdown(
-    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px 14px; border-radius:8px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; border: 1px solid #334155;">☕ MathPro 네이버 카페 바로가기</a>',
+    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 MathPro 네이버 카페 바로가기</a>',
     unsafe_allow_html=True
 )
 
