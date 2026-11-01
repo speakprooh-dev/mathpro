@@ -647,6 +647,26 @@ if url_student and url_student in student_list:
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
+        # --- [추가] 학생들이 직접 오답 코드로 해설을 검색할 수 있는 풀이영상 검색 전용 섹션 ---
+        st.markdown("---")
+        st.markdown("### 🔍 학생용 풀이영상 검색 & 해설 바로가기")
+        st.info("💡 위에서 복사한 **오답 코드(예: A114005)**를 아래 검색창에 붙여넣고 엔터를 치거나 검색 버튼을 누르면, 네이버 카페에서 해당 해설을 바로 찾아보실 수 있습니다!")
+        
+        search_query_input = st.text_input("찾을 문제 코드 입력 (예: A114005)", placeholder="여기에 코드를 붙여넣으세요")
+        
+        col_s_btn1, col_s_btn2 = st.columns(2)
+        with col_s_btn1:
+            cafe_search_full_url = f"https://cafe.naver.com/mathpro2020?iframe_url=/ArticleSearchList.search%3FsearchBy=0%26query={search_query_input.strip()}" if search_query_input.strip() else cafe_main_url
+            st.markdown(
+                f'<a href="{cafe_search_full_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:10px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center;">🔍 네이버 카페에서 이 문제 해설 검색하기</a>',
+                unsafe_allow_html=True
+            )
+        with col_s_btn2:
+            st.markdown(
+                f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#2563EB; color:white; padding:10px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center;">☕ MathPro 카페 메인으로 가기</a>',
+                unsafe_allow_html=True
+            )
+
     if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
@@ -944,12 +964,10 @@ else:
 
         if subjects_data:
             for sub_id, sub_name in subjects_data:
-                # --- [수정] 과목 폴더도 상/하단 양쪽에서 열고 닫을 수 있도록 세션 상태 컨테이너 적용 ---
                 sub_exp_key = f"sub_expander_open_{sub_id}"
                 if sub_exp_key not in st.session_state:
                     st.session_state[sub_exp_key] = False
 
-                # 과목 상단 토글 버튼 (열기/닫기)
                 col_sub_top_1, col_sub_top_2 = st.columns([5, 1])
                 with col_sub_top_1:
                     st.markdown(f"📚 **[과목] {sub_name}**")
@@ -959,7 +977,6 @@ else:
                         st.session_state[sub_exp_key] = not st.session_state[sub_exp_key]
                         st.rerun()
 
-                # 과목 폴더가 열려있을 때 내부 내용 표시
                 if st.session_state[sub_exp_key]:
                     with st.container(border=True):
                         col_h1, col_h2 = st.columns([1, 1])
@@ -1126,7 +1143,6 @@ else:
                         else:
                             st.caption("등록된 단원이 없습니다.")
 
-                    # 과목 하단에도 닫기 버튼 배치
                     if st.button("🔼 이 과목 창 닫기", key=f"btn_sub_toggle_bottom_{sub_id}", use_container_width=True):
                         st.session_state[sub_exp_key] = False
                         st.rerun()
