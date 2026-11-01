@@ -782,7 +782,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(milestones)
+            s_total_m = len(s_milestones) # --- [수정] milestones -> s_milestones로 변경하여 NameError 해결 ---
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1051,7 +1051,6 @@ else:
                                             type_del_checks = {}
                                             
                                             for t_id, t_name, t_url in types_list:
-                                                # --- [개선] 각 유형을 개별 접이식 카드(expander) 형태로 감싸서 스크롤 부담 대폭 완화 ---
                                                 with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
                                                     col_chk, col_inputs = st.columns([1, 11])
                                                     with col_chk:
