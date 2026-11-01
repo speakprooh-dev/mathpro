@@ -1056,7 +1056,7 @@ else:
                                                 with tc_col1:
                                                     type_del_checks[t_id] = st.checkbox("선택", value=False, key=f"t_del_chk_{t_id}", label_visibility="collapsed")
                                                 with tc_col2:
-                                                    st.markdown(f"▪️ **{t_name}** `({v_url if v_url else '링크 없음'})`")
+                                                    st.markdown(f"▪️ **{t_name}** `({t_url if t_url else '링크 없음'})`")
                                                 st.divider()
                                             
                                             if st.form_submit_button("🗑️ 선택한 유형 일괄 삭제", type="primary", use_container_width=True):
