@@ -9,7 +9,7 @@ import io
 def get_cafe_search_url(unit_code, num_int):
     return "https://cafe.naver.com/mathpro2020"
 
-# --- [추가] 전체 데이터베이스 테이블을 엑셀 파일(다중 시트)로 변환하는 백업 함수 ---
+# 전체 데이터베이스 테이블을 엑셀 파일(다중 시트)로 변환하는 백업 함수
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -37,7 +37,7 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (기존 사용자 데이터를 절대 덮어쓰지 않는 안전 구조)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -219,10 +219,18 @@ def delete_subject(sub_id):
 def get_chapters():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, subject, name FROM chapters ORDER BY subject, name")
+    c.execute("SELECT id, subject, name FROM chapters")
     rows = c.fetchall()
     conn.close()
-    return rows
+    
+    # 단원 정렬 순서 오류 해결 (숫자 기반 자연 정렬)
+    def natural_sort_key(ch):
+        subject, name = ch[1], ch[2]
+        match = re.search(r'(\d+)', name)
+        num = int(match.group(1)) if match else 0
+        return (subject, num, name)
+        
+    return sorted(rows, key=natural_sort_key)
 
 def add_chapter(subject, name):
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -260,6 +268,13 @@ def add_chapter_type(chapter_id, name, video_url=""):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (chapter_id, name, video_url))
+    conn.commit()
+    conn.close()
+
+def update_chapter_type_name(type_id, new_name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("UPDATE chapter_types SET name = ? WHERE id = ?", (new_name, type_id))
     conn.commit()
     conn.close()
 
@@ -486,12 +501,6 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
-def format_numbers_list(num_set):
-    if not num_set:
-        return []
-    sorted_nums = sorted(list(num_set))
-    return [f"{n:03d}" for n in sorted_nums]
-
 # --- 웹 UI 구성 ---
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
@@ -673,7 +682,6 @@ if url_student and url_student in student_list:
 
 # 2. [선생님 전용 관리 모드]
 else:
-    # --- [추가] 선생님 전용 사이드바 백업 버튼 영역 ---
     with st.sidebar:
         st.markdown("### 🛠️ 선생님 전용 도구")
         st.markdown("데이터를 안전하게 정기적으로 백업하세요.")
@@ -1038,22 +1046,40 @@ else:
                                                 
                                 if types_list:
                                     with st.expander(f"속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
-                                        for t_id, t_name, t_url in types_list:
-                                            st.markdown(f"▪️ **{t_name}**")
-                                            with st.form(f"url_form_{t_id}"):
-                                                u_col1, u_col2 = st.columns([3, 1])
-                                                with u_col1:
-                                                    new_url_input = st.text_input("개념해설 영상 URL", value=t_url, key=f"url_in_{t_id}", label_visibility="collapsed", placeholder="https://cafe.naver.com/...")
-                                                with u_col2:
-                                                    if st.form_submit_button("링크 저장"):
-                                                        update_chapter_type_url(t_id, new_url_input.strip())
-                                                        st.success("저장됨!")
-                                                        st.rerun()
+                                        st.info("💡 여러 유형을 체크하여 **[선택한 유형 일괄 삭제]**를 하거나, 각 유형별 이름 및 해설 영상 링크를 수정할 수 있습니다.")
+                                        
+                                        # 유형 다중 선택 삭제 폼
+                                        with st.form(f"bulk_type_del_form_{ch_id}"):
+                                            type_del_checks = {}
+                                            for t_id, t_name, t_url in types_list:
+                                                tc_col1, tc_col2 = st.columns([1, 9])
+                                                with tc_col1:
+                                                    type_del_checks[t_id] = st.checkbox("선택", value=False, key=f"t_del_chk_{t_id}", label_visibility="collapsed")
+                                                with tc_col2:
+                                                    st.markdown(f"▪️ **{t_name}** `({v_url if v_url else '링크 없음'})`")
+                                                st.divider()
                                             
-                                            if st.button("유형 삭제", key=f"del_t_btn_{t_id}"):
-                                                delete_chapter_type(t_id)
-                                                st.rerun()
-                                            st.divider()
+                                            if st.form_submit_button("🗑️ 선택한 유형 일괄 삭제", type="primary", use_container_width=True):
+                                                ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
+                                                if ids_to_del:
+                                                    for t_id in ids_to_del:
+                                                        delete_chapter_type(t_id)
+                                                    st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
+                                                    st.rerun()
+                                                else:
+                                                    st.warning("삭제할 유형을 하나 이상 체크해주세요.")
+
+                                        st.markdown("##### ✏️ 개별 유형 이름 및 해설 영상 링크 수정")
+                                        for t_id, t_name, t_url in types_list:
+                                            with st.container(border=True):
+                                                with st.form(f"edit_type_form_{t_id}"):
+                                                    ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
+                                                    ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
+                                                    if st.form_submit_button("수정사항 저장"):
+                                                        update_chapter_type_name(t_id, ed_t_name.strip())
+                                                        update_chapter_type_url(t_id, ed_t_url.strip())
+                                                        st.success("수정되었습니다!")
+                                                        st.rerun()
                     else:
                         st.caption("등록된 단원이 없습니다.")
         else:
