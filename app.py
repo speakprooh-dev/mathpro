@@ -136,6 +136,18 @@ def init_db():
         )
     ''')
     
+    # --- [자동 마이그레이션] 기존 4자리 단원코드로 잘못 저장된 데이터 자동 보정 (뒤 3자리 문제번호 분리) ---
+    try:
+        c.execute("SELECT id, full_code FROM problem_links")
+        for row in c.fetchall():
+            l_id, f_code = row[0], row[1]
+            if len(f_code) >= 4:
+                u_code = f_code[:-3]
+                p_num = f_code[-3:]
+                c.execute("UPDATE problem_links SET unit_code = ?, prob_num = ? WHERE id = ?", (u_code, p_num, l_id))
+    except Exception:
+        pass
+
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -331,8 +343,9 @@ def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
     if len(full_code) < 4:
         return False
-    unit_code = full_code[:4]
-    prob_num = full_code[4:] if len(full_code) > 4 else "000"
+    # 뒤 3자리를 문제번호, 나머지를 단원코드로 동적 분리 (4글자, 5글자 단원코드 모두 완벽 지원)
+    unit_code = full_code[:-3]
+    prob_num = full_code[-3:]
     
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -362,15 +375,14 @@ def bulk_save_problem_links(text_data):
         line = line.strip()
         if not line:
             continue
-        # 콤마(,), 탭(\t), 공백 등으로 분리 시도
         parts = re.split(r'[, \t]+', line)
         if len(parts) >= 2:
             full_code = parts[0].strip().upper()
             video_url = parts[1].strip()
             
             if len(full_code) >= 4 and video_url.startswith("http"):
-                unit_code = full_code[:4]
-                prob_num = full_code[4:] if len(full_code) > 4 else "000"
+                unit_code = full_code[:-3]
+                prob_num = full_code[-3:]
                 try:
                     c.execute('''
                         INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
@@ -708,15 +720,15 @@ if url_student and url_student in student_list:
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
-        st.info("💡 오늘 푼 교재의 **단원코드(예: A114)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
+        st.info("💡 오늘 푼 교재의 **단원코드(예: A114 또는 B1353)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
         
-        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="A114").strip().upper()
-        current_unit = entered_unit_code if entered_unit_code else "A114"
+        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="B1353").strip().upper()
+        current_unit = entered_unit_code if entered_unit_code else "B1353"
         
         st.markdown("---")
         col_add, col_del = st.columns(2)
         with col_add:
-            add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 5, 12, 103)", placeholder="예: 5, 12")
+            add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 15, 35, 37)", placeholder="예: 15, 35")
         with col_del:
             del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
@@ -758,9 +770,9 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
         st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
-        st.info("💡 **A114140**처럼 전체 번호를 입력하면 해당 해설 영상으로 바로 이동하며, **B1353**처럼 단원코드를 입력하면 해당 단원에서 링크가 등록된 모든 문제 목록이 쫙 나타납니다!")
+        st.info("💡 **B1353015**처럼 전체 번호를 입력하면 해당 해설 영상으로 바로 이동하며, **B1353**처럼 단원코드를 입력하면 해당 단원에서 링크가 등록된 모든 문제 목록이 쫙 나타납니다!")
 
-        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: A114140 또는 B1353)", placeholder="예: B1353").strip().upper()
+        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
         
         if search_prob_input:
             if len(search_prob_input) >= 7:
@@ -810,7 +822,7 @@ if url_student and url_student in student_list:
         
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
-        cur_code = locals().get("current_unit", "A114")
+        cur_code = locals().get("current_unit", "B1353")
         
         if cur_code:
             saved_text_pre = get_student_wrong_entry(selected_student, cur_code)
@@ -1563,11 +1575,10 @@ else:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
         st.info("💡 개별 등록뿐만 아니라, **아래 일괄 등록 칸에 여러 줄을 복사·붙여넣기** 하시면 수십 개도 순식간에 등록됩니다!")
 
-        # --- [추가] 여러 개 한 번에 일괄 등록 폼 ---
         with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기 (클릭하여 열기)", expanded=True):
-            st.caption("예시 형식 (줄바꿈으로 여러 개 입력):\nB1353101 https://cafe.naver.com/...\nB1353102 https://cafe.naver.com/...")
+            st.caption("예시 형식 (줄바꿈으로 여러 개 입력):\nB1353015 https://cafe.naver.com/...\nB1353035 https://cafe.naver.com/...")
             with st.form("bulk_add_problem_links_form"):
-                bulk_input_text = st.text_area("문제번호와 URL 목록 붙여넣기", placeholder="B1353101 https://naver.me/...\nB1353102 https://naver.me/...")
+                bulk_input_text = st.text_area("문제번호와 URL 목록 붙여넣기", placeholder="B1353015 https://naver.me/...\nB1353035 https://naver.me/...")
                 bulk_submit = st.form_submit_button("🚀 일괄 등록 실행하기", type="primary")
                 if bulk_submit:
                     if bulk_input_text.strip():
@@ -1582,7 +1593,7 @@ else:
         with st.form("add_problem_link_form"):
             col_pl1, col_pl2 = st.columns([1, 2])
             with col_pl1:
-                input_full_code = st.text_input("문제 번호 입력 (예: B1353118)", placeholder="B1353118")
+                input_full_code = st.text_input("문제 번호 입력 (예: B1353015)", placeholder="B1353015")
             with col_pl2:
                 input_video_url = st.text_input("네이버 카페 해설 주소 (URL)", placeholder="https://cafe.naver.com/...")
             
