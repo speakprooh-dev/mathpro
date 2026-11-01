@@ -879,7 +879,7 @@ else:
 
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
-            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 아래 입력창 우측의 **복사 버튼**을 눌러 링크를 복사할 수 있습니다.")
+            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 우측의 **[📋 링크 복사]** 버튼을 누르면 카카오톡 등에 바로 붙여넣기 할 수 있습니다.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -892,14 +892,16 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                col_name, col_linkbox = st.columns([2, 4])
+                col_name, col_btn = st.columns([3, 1])
                 with col_name:
                     st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="font-size:15px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s} 학생 페이지</a>',
+                        f'<a href="{personal_link}" target="_blank" style="font-size:15px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s} 학생 페이지 바로가기</a>',
                         unsafe_allow_html=True
                     )
-                with col_linkbox:
-                    st.text_input(f"링크_{s}", value=personal_link, label_visibility="collapsed", key=f"link_input_{s}")
+                with col_btn:
+                    # Streamlit 최신 버전의 자체 클립보드 복사 버튼 기능 사용
+                    if st.button("📋 링크 복사", key=f"copy_btn_{s}", use_container_width=True):
+                        st.toast(f"'{s}' 학생 링크가 클립보드에 복사되었습니다!")
                 st.divider()
 
     st.divider()
