@@ -690,7 +690,6 @@ else:
 
     st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
-    # ... 학생 추가/삭제 및 탭 영역 계속 ...
 
     with col_s1:
         if student_list:
