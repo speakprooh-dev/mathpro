@@ -647,24 +647,15 @@ if url_student and url_student in student_list:
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
+        # --- [수정] 네이버 카페로 바로 이동하여 검색할 수 있는 안내 및 이동 버튼 섹션 ---
         st.markdown("---")
-        st.markdown("### 🔍 학생용 풀이영상 검색 & 해설 바로가기")
-        st.info("💡 위에서 복사한 **오답 코드(예: A114005)**를 아래 검색창에 붙여넣고 엔터를 치거나 검색 버튼을 누르면, 네이버 카페에서 해당 해설을 바로 찾아보실 수 있습니다!")
+        st.markdown("### 🔍 네이버 카페에서 풀이해설 검색하기")
+        st.info("💡 위에서 복사한 **오답 코드(예: A114005)**를 복사하신 뒤, 아래 버튼을 눌러 네이버 카페로 이동해 검색창에 붙여넣고 해설을 찾아보세요!")
         
-        search_query_input = st.text_input("찾을 문제 코드 입력 (예: A114005)", placeholder="여기에 코드를 붙여넣으세요")
-        
-        col_s_btn1, col_s_btn2 = st.columns(2)
-        with col_s_btn1:
-            cafe_search_full_url = f"https://cafe.naver.com/mathpro2020?iframe_url=/ArticleSearchList.search%3FsearchBy=0%26query={search_query_input.strip()}" if search_query_input.strip() else cafe_main_url
-            st.markdown(
-                f'<a href="{cafe_search_full_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:10px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center;">🔍 네이버 카페에서 이 문제 해설 검색하기</a>',
-                unsafe_allow_html=True
-            )
-        with col_s_btn2:
-            st.markdown(
-                f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#2563EB; color:white; padding:10px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center;">☕ MathPro 카페 메인으로 가기</a>',
-                unsafe_allow_html=True
-            )
+        st.markdown(
+            f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:12px; border-radius:6px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center;">☕ 네이버 카페로 이동해서 문제 해설 검색하기</a>',
+            unsafe_allow_html=True
+        )
 
     if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
         final_m_checked = {}
@@ -801,7 +792,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones)
+            s_total_m = len(milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -963,7 +954,6 @@ else:
 
         if subjects_data:
             for sub_id, sub_name in subjects_data:
-                # --- [수정] 과목 이름을 누르면 자연스럽게 열고 닫히는 st.expander 사용 ---
                 with st.expander(f"📚 [과목] {sub_name}", expanded=False):
                     col_h1, col_h2 = st.columns([1, 1])
                     with col_h1:
