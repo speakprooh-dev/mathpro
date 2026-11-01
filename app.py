@@ -223,7 +223,6 @@ def get_chapters():
     rows = c.fetchall()
     conn.close()
     
-    # 단원 정렬 순서 오류 해결 (숫자 기반 자연 정렬)
     def natural_sort_key(ch):
         subject, name = ch[1], ch[2]
         match = re.search(r'(\d+)', name)
@@ -783,7 +782,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones)
+            s_total_m = len(milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1045,22 +1044,22 @@ else:
                                                 st.rerun()
                                                 
                                 if types_list:
-                                    with st.expander(f"속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
-                                        st.info("💡 각 유형별로 **체크박스(일괄 삭제용)**, **이름 수정**, **해설 영상 링크 수정**을 한눈에 편리하게 관리할 수 있습니다[cite: 6, 7].")
+                                    with st.expander(f"📂 속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
+                                        st.info("💡 각 유형별로 **체크박스(일괄 삭제용)**, **이름 수정**, **해설 영상 링크 수정**을 관리할 수 있습니다.")
                                         
-                                        # 통합 유형 관리 폼 (일괄 삭제 + 개별 이름/링크 수정)
                                         with st.form(f"unified_type_manage_form_{ch_id}"):
                                             type_del_checks = {}
                                             
                                             for t_id, t_name, t_url in types_list:
-                                                with st.container(border=True):
+                                                # --- [개선] 각 유형을 개별 접이식 카드(expander) 형태로 감싸서 스크롤 부담 대폭 완화 ---
+                                                with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
                                                     col_chk, col_inputs = st.columns([1, 11])
                                                     with col_chk:
                                                         st.write("")
                                                         st.write("")
-                                                        type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}", label_visibility="collapsed")
+                                                        type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
                                                     with col_inputs:
-                                                        ed_t_name = st.text_input("유형명", value=t_name, key=f"ed_t_name_{t_id}")
+                                                        ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
                                                         ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
                                             
                                             st.divider()
