@@ -1321,12 +1321,22 @@ else:
                             st.error("문구를 입력해주세요.")
                 
                 if templates:
-                    st.markdown("##### 📋 저장된 템플릿 목록 (우측 복사 버튼 이용)")
+                    st.markdown("##### 📋 저장된 템플릿 목록")
                     for t_id, t_title in templates:
-                        col_t_txt, col_t_del = st.columns([5, 1])
+                        col_t_txt, col_t_copy, col_t_del = st.columns([4, 1, 1])
                         with col_t_txt:
-                            # 텍스트 입력창 형태로 제공하여 브라우저 제약 없이 우측 기본 복사 기능 사용
-                            st.text_input(f"tpl_{t_id}", value=t_title, label_visibility="collapsed", key=f"tpl_input_{t_id}")
+                            st.write(f"📌 {t_title}")
+                        with col_t_copy:
+                            copy_js_t = f"""
+                            <script>
+                            function copyTpl_{t_id}() {{
+                                navigator.clipboard.writeText("{t_title}");
+                                alert("과제 문구가 복사되었습니다!");
+                            }}
+                            </script>
+                            <button onclick="copyTpl_{t_id}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 복사</button>
+                            """
+                            st.markdown(copy_js_t, unsafe_allow_html=True)
                         with col_t_del:
                             if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}", use_container_width=True):
                                 delete_homework_template(t_id)
