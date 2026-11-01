@@ -617,7 +617,7 @@ st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
 st.markdown(
-    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:8px 12px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">☕ MathPro 네이버 카페 바로가기</a>',
+    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px 14px; border-radius:8px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; border: 1px solid #334155;">☕ MathPro 네이버 카페 바로가기</a>',
     unsafe_allow_html=True
 )
 
@@ -688,7 +688,7 @@ if url_student and url_student in student_list:
                         with cols[1]:
                             if v_url and v_url.strip() != "":
                                 st.markdown(
-                                    f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 개념해설</a>',
+                                    f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#1E293B; color:#38BDF8; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid #334155;">🎥 개념해설</a>',
                                     unsafe_allow_html=True
                                 )
                             else:
@@ -739,7 +739,7 @@ if url_student and url_student in student_list:
 
         st.markdown("### 📋 현재 저장된 오답 목록 및 풀이영상 바로가기")
         if saved_nums:
-            st.caption("💡 **문제 번호를 클릭**하면 등록된 네이버 카페 풀이 영상으로 바로 연결됩니다!")
+            st.caption("💡 **[📋 복사]** 버튼을 누르면 번호가 클립보드에 복사되며, 글자를 누르면 해설 영상으로 바로 연결됩니다!")
             
             linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
 
@@ -747,23 +747,36 @@ if url_student and url_student in student_list:
             for num_int in sorted_nums_list:
                 full_code = f"{current_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
-
-                if video_url and video_url.strip() != "":
-                    st.markdown(
-                        f'<a href="{video_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#1E293B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">📌 {full_code} &nbsp;&nbsp;<span style="color:#03C75A; font-size:13px;">🎥 해설 영상 바로가기 ➔</span></a>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#64748B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#94A3B8; font-size:13px;">🔍 네이버 카페에서 검색하기 ➔</span></a>',
-                        unsafe_allow_html=True
-                    )
+                
+                c_col1, c_col2 = st.columns([5, 1])
+                with c_col1:
+                    if video_url and video_url.strip() != "":
+                        st.markdown(
+                            f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:10px 14px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none;">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:10px 14px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B; font-size:13px; font-weight:normal;">🔍 네이버 카페에서 검색하기 ➔</span></a>',
+                            unsafe_allow_html=True
+                        )
+                with c_col2:
+                    copy_js = f"""
+                    <script>
+                    function copyCode_{full_code}() {{
+                        navigator.clipboard.writeText("{full_code}");
+                        alert("{full_code} 번호가 복사되었습니다!");
+                    }}
+                    </script>
+                    <button onclick="copyCode_{full_code}()" style="background-color:#334155; color:#F8FAFC; border:1px solid #475569; padding:10px 10px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 복사</button>
+                    """
+                    st.markdown(copy_js, unsafe_allow_html=True)
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
         st.markdown("---")
         st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
-        st.info("💡 **B1353015**처럼 전체 번호를 검색하면 해설 영상으로 바로 연결되며, **B1353**처럼 단원코드를 검색하면 링크가 등록된 모든 문제 목록이 깔끔하게 표시됩니다!")
+        st.info("💡 **B1353015**처럼 전체 번호를 검색하면 해설 영상으로 바로 연결되며, **B1353**처럼 단원코드를 검색하면 링크가 등록된 모든 문제 목록이 깔끔한 다콜 톤 카드로 표시됩니다!")
 
         search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
         
@@ -773,25 +786,38 @@ if url_student and url_student in student_list:
                 if matched_url:
                     st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
                     st.markdown(
-                        f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:12px; border-radius:6px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center;">🎥 [{search_prob_input}] 풀이 영상 바로가기</a>',
+                        f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:14px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid #334155;">🎥 [{search_prob_input}] 풀이 영상 바로가기 ➔</a>',
                         unsafe_allow_html=True
                     )
                 else:
                     st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 아직 없습니다. 선생님께 요청해 주세요!")
                     st.markdown(
-                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#2563EB; color:white; padding:10px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center;">☕ 네이버 카페에서 직접 검색하기</a>',
+                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; padding:12px; border-radius:8px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid #334155;">☕ 네이버 카페에서 직접 검색하기</a>',
                         unsafe_allow_html=True
                     )
             else:
                 unit_results = get_problem_links_by_unit(search_prob_input)
                 if unit_results:
                     st.markdown(f"##### 📂 `{search_prob_input}` 단원에서 링크가 설정된 문제 목록 총 {len(unit_results)}개")
-                    st.caption("💡 아래 문제 번호를 클릭하시면 해당 해설 영상으로 바로 연결됩니다!")
+                    st.caption("💡 [📋 복사] 버튼을 눌러 번호를 복사하거나 카드를 클릭해 해설 영상으로 이동하세요!")
                     for f_code, v_url in unit_results:
-                        st.markdown(
-                            f'<a href="{v_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#1E293B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">📌 {f_code} &nbsp;&nbsp;<span style="color:#03C75A; font-size:13px;">🎥 해설 영상 바로가기 ➔</span></a>',
-                            unsafe_allow_html=True
-                        )
+                        s_col1, s_col2 = st.columns([5, 1])
+                        with s_col1:
+                            st.markdown(
+                                f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:10px 14px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
+                                unsafe_allow_html=True
+                            )
+                        with s_col2:
+                            copy_js_u = f"""
+                            <script>
+                            function copyCode_{f_code}() {{
+                                navigator.clipboard.writeText("{f_code}");
+                                alert("{f_code} 번호가 복사되었습니다!");
+                            }}
+                            </script>
+                            <button onclick="copyCode_{f_code}()" style="background-color:#334155; color:#F8FAFC; border:1px solid #475569; padding:10px 10px; border-radius:8px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 복사</button>
+                            """
+                            st.markdown(copy_js_u, unsafe_allow_html=True)
                 else:
                     st.info(f"'{search_prob_input}' 단원에 등록된 해설 링크가 없습니다.")
 
@@ -895,7 +921,7 @@ else:
                 col_name_link, col_copy_btn = st.columns([3, 1])
                 with col_name_link:
                     st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="font-size:16px; font-weight:bold; color:#2563EB; text-decoration:none; line-height:38px;">👤 {s}</a>',
+                        f'<a href="{personal_link}" target="_blank" style="font-size:16px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s}</a>',
                         unsafe_allow_html=True
                     )
                 with col_copy_btn:
@@ -906,7 +932,7 @@ else:
                         alert("{s} 학생 링크가 복사되었습니다! 카카오톡에 붙여넣기 하세요.");
                     }}
                     </script>
-                    <button onclick="copyLink_{s}()" style="background-color:#03C75A; color:white; border:none; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%; margin-top:2px;">📋 링크 복사</button>
+                    <button onclick="copyLink_{s}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%; margin-top:2px;">📋 링크 복사</button>
                     """
                     st.markdown(copy_js, unsafe_allow_html=True)
                 st.divider()
@@ -1433,7 +1459,7 @@ else:
                                     alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
                                 }}
                                 </script>
-                                <button onclick="copyBundle_{u_code}()" style="background-color:#03C75A; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
+                                <button onclick="copyBundle_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
                                 """
                                 st.markdown(bundle_copy_js, unsafe_allow_html=True)
             else:
@@ -1600,20 +1626,31 @@ else:
 
         st.markdown("---")
         st.markdown("##### 📋 등록된 문제 해설 링크 목록")
-        st.caption("💡 아래 문제 번호를 클릭하시면 해당 해설 영상으로 바로 연결됩니다!")
+        st.caption("💡 [📋 복사] 버튼을 누르면 번호가 클립보드에 복사되며, 카드를 클릭하면 해당 해설 영상으로 바로 연결됩니다!")
         
         all_links = get_all_problem_links()
         if all_links:
             with st.form("manage_problem_links_form"):
                 link_del_checks = {}
                 for l_id, f_code, v_url in all_links:
-                    col_l_chk, col_l_code, col_l_url = st.columns([1, 3, 8])
+                    col_l_chk, col_l_code, col_l_url, col_l_btn = st.columns([1, 3, 6, 1])
                     with col_l_chk:
                         link_del_checks[l_id] = st.checkbox("삭제", value=False, key=f"del_link_{l_id}")
                     with col_l_code:
-                        st.markdown(f'<a href="{v_url}" target="_blank" style="font-weight:bold; color:#03C75A; text-decoration:none;">📌 {f_code} 🔗</a>', unsafe_allow_html=True)
+                        st.markdown(f'<a href="{v_url}" target="_blank" style="font-weight:bold; color:#38BDF8; text-decoration:none;">📌 {f_code} 🔗</a>', unsafe_allow_html=True)
                     with col_l_url:
                         st.write(f"`{v_url}`")
+                    with col_l_btn:
+                        copy_js_l = f"""
+                        <script>
+                        function copyCode_{f_code}() {{
+                            navigator.clipboard.writeText("{f_code}");
+                            alert("{f_code} 번호가 복사되었습니다!");
+                        }}
+                        </script>
+                        <button onclick="copyCode_{f_code}()" style="background-color:#334155; color:#F8FAFC; border:1px solid #475569; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">📋 복사</button>
+                        """
+                        st.markdown(copy_js_l, unsafe_allow_html=True)
                     st.divider()
                 
                 del_links_submit = st.form_submit_button("🗑️ 선택한 해설 링크 삭제하기", type="secondary")
