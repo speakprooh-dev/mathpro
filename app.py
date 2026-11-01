@@ -944,174 +944,194 @@ else:
 
         if subjects_data:
             for sub_id, sub_name in subjects_data:
-                with st.expander(f"📚 [과목] {sub_name}", expanded=False):
-                    col_h1, col_h2 = st.columns([1, 1])
-                    with col_h1:
-                        with st.popover("✏️ 과목명 수정"):
-                            with st.form(f"edit_sub_{sub_id}"):
-                                ed_sub = st.text_input("과목명 변경", value=sub_name, key=f"ed_sub_in_{sub_id}")
-                                if st.form_submit_button("저장"):
-                                    if ed_sub.strip():
-                                        if update_subject(sub_id, sub_name, ed_sub.strip()):
-                                            st.success("변경되었습니다!")
-                                            st.rerun()
-                                        else:
-                                            st.warning("중복된 과목명입니다.")
-                    with col_h2:
-                        with st.popover("🗑️ 과목 삭제"):
-                            st.warning(f"'{sub_name}' 과목을 삭제하시겠습니까?")
-                            if st.button("삭제 확인", key=f"del_sub_confirm_{sub_id}", type="primary"):
-                                delete_subject(sub_id)
-                                st.success("삭제되었습니다.")
-                                st.rerun()
+                # --- [수정] 과목 폴더도 상/하단 양쪽에서 열고 닫을 수 있도록 세션 상태 컨테이너 적용 ---
+                sub_exp_key = f"sub_expander_open_{sub_id}"
+                if sub_exp_key not in st.session_state:
+                    st.session_state[sub_exp_key] = False
 
-                    st.markdown("---")
+                # 과목 상단 토글 버튼 (열기/닫기)
+                col_sub_top_1, col_sub_top_2 = st.columns([5, 1])
+                with col_sub_top_1:
+                    st.markdown(f"📚 **[과목] {sub_name}**")
+                with col_sub_top_2:
+                    sub_toggle_label = "닫기 🔼" if st.session_state[sub_exp_key] else "열기 🔽"
+                    if st.button(sub_toggle_label, key=f"btn_sub_toggle_top_{sub_id}", use_container_width=True):
+                        st.session_state[sub_exp_key] = not st.session_state[sub_exp_key]
+                        st.rerun()
 
-                    with st.form(f"add_ch_form_{sub_id}"):
-                        col_ac1, col_ac2 = st.columns([3, 1])
-                        with col_ac1:
-                            new_ch_name = st.text_input(f"새 단원명 입력 (예: 01. 다항식의 연산)", key=f"ch_input_{sub_id}")
-                        with col_ac2:
-                            st.write("")
-                            st.write("")
-                            add_ch_submit = st.form_submit_button("단원 추가")
-                    if add_ch_submit:
-                        if new_ch_name.strip():
-                            add_chapter(sub_name, new_ch_name.strip())
-                            st.success("단원이 추가되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error("단원명을 입력하세요.")
-
-                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
-                    if chapters_data:
-                        st.markdown("##### 📌 등록된 단원 및 세부 유형 목록")
-                        for ch_id, ch_sub, ch_name in chapters_data:
-                            with st.container(border=True):
-                                c_box1, c_box2, c_box3 = st.columns([3, 1, 1])
-                                with c_box1:
-                                    st.write(f"▫️ **{ch_name}**")
-                                with c_box2:
-                                    with st.popover("✏️ 단원 수정"):
-                                        with st.form(f"edit_ch_{ch_id}"):
-                                            ed_ch_name = st.text_input("단원명 수정", value=ch_name, key=f"ed_ch_in_{ch_id}")
-                                            if st.form_submit_button("저장"):
-                                                if ed_ch_name.strip():
-                                                    update_chapter(ch_id, sub_name, ed_ch_name.strip())
-                                                    st.success("수정되었습니다!")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("단원명을 입력하세요.")
-                                with c_box3:
-                                    with st.popover("🗑️ 단원 삭제"):
-                                        st.warning(f"'{ch_name}' 단원을 삭제하시겠습니까?")
-                                        if st.button("삭제 확인", key=f"del_ch_confirm_{ch_id}", type="primary"):
-                                            delete_chapter(ch_id)
-                                            st.success("삭제되었습니다.")
-                                            st.rerun()
-
-                                with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
-                                    st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
-                                    with st.form(f"bulk_t_form_{ch_id}"):
-                                        bulk_t_text = st.text_area("유형 목록 텍스트", key=f"bulk_t_area_{ch_id}", placeholder="- 다항식의 연산\n- 나머지정리")
-                                        if st.form_submit_button("유형 일괄 등록 실행"):
-                                            if bulk_t_text.strip():
-                                                bulk_insert_types_for_chapter(ch_id, bulk_t_text)
-                                                st.success("유형들이 성공적으로 일괄 등록되었습니다!")
+                # 과목 폴더가 열려있을 때 내부 내용 표시
+                if st.session_state[sub_exp_key]:
+                    with st.container(border=True):
+                        col_h1, col_h2 = st.columns([1, 1])
+                        with col_h1:
+                            with st.popover("✏️ 과목명 수정"):
+                                with st.form(f"edit_sub_{sub_id}"):
+                                    ed_sub = st.text_input("과목명 변경", value=sub_name, key=f"ed_sub_in_{sub_id}")
+                                    if st.form_submit_button("저장"):
+                                        if ed_sub.strip():
+                                            if update_subject(sub_id, sub_name, ed_sub.strip()):
+                                                st.success("변경되었습니다!")
                                                 st.rerun()
                                             else:
-                                                st.error("내용을 입력해주세요.")
+                                                st.warning("중복된 과목명입니다.")
+                        with col_h2:
+                            with st.popover("🗑️ 과목 삭제"):
+                                st.warning(f"'{sub_name}' 과목을 삭제하시겠습니까?")
+                                if st.button("삭제 확인", key=f"del_sub_confirm_{sub_id}", type="primary"):
+                                    delete_subject(sub_id)
+                                    st.success("삭제되었습니다.")
+                                    st.rerun()
 
-                                types_list = get_chapter_types(ch_id)
-                                with st.form(f"add_t_{ch_id}"):
-                                    tc1, tc2 = st.columns([3, 1])
-                                    with tc1:
-                                        t_in = st.text_input("개별 유형 추가", key=f"t_in_{ch_id}", placeholder="예: 나머지정리 활용", label_visibility="collapsed")
-                                    with tc2:
-                                        if st.form_submit_button("유형 추가"):
-                                            if t_in.strip():
-                                                c_conn = sqlite3.connect("mathpro_roadmap.db")
-                                                c_cur = c_conn.cursor()
-                                                c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
-                                                cnt = c_cur.fetchone()[0] + 1
-                                                c_conn.close()
-                                                
-                                                formatted_t = t_in.strip()
-                                                if not formatted_t.startswith("유형"):
-                                                    formatted_t = f"유형 {cnt:02d}. {formatted_t}"
-                                                
-                                                add_chapter_type(ch_id, formatted_t, "")
-                                                st.rerun()
-                                                
-                                if types_list:
-                                    # --- [수정] expander 대신 컨테이너 + 세션 상태를 활용하여 상/하단 어디서나 열고 닫을 수 있도록 개선 ---
-                                    expander_key = f"expander_open_{ch_id}"
-                                    if expander_key not in st.session_state:
-                                        st.session_state[expander_key] = False
+                        st.markdown("---")
 
-                                    # 상단 토글 버튼 (열기/닫기)
-                                    col_exp_top_1, col_exp_top_2 = st.columns([5, 1])
-                                    with col_exp_top_1:
-                                        st.markdown(f"📂 **속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)**")
-                                    with col_exp_top_2:
-                                        toggle_label = "닫기 🔼" if st.session_state[expander_key] else "열기 🔽"
-                                        if st.button(toggle_label, key=f"btn_toggle_top_{ch_id}", use_container_width=True):
-                                            st.session_state[expander_key] = not st.session_state[expander_key]
-                                            st.rerun()
+                        with st.form(f"add_ch_form_{sub_id}"):
+                            col_ac1, col_ac2 = st.columns([3, 1])
+                            with col_ac1:
+                                new_ch_name = st.text_input(f"새 단원명 입력 (예: 01. 다항식의 연산)", key=f"ch_input_{sub_id}")
+                            with col_ac2:
+                                st.write("")
+                                st.write("")
+                                add_ch_submit = st.form_submit_button("단원 추가")
+                        if add_ch_submit:
+                            if new_ch_name.strip():
+                                add_chapter(sub_name, new_ch_name.strip())
+                                st.success("단원이 추가되었습니다!")
+                                st.rerun()
+                            else:
+                                st.error("단원명을 입력하세요.")
 
-                                    # 열려있을 때만 표시되는 관리 영역
-                                    if st.session_state[expander_key]:
-                                        with st.container(border=True):
-                                            st.info("💡 각 유형별로 체크박스(일괄 삭제용), 이름 수정, 해설 영상 링크 수정 및 **개별 접이식 카드**를 통해 편리하게 관리할 수 있습니다.")
-                                            
-                                            with st.form(f"unified_type_manage_form_{ch_id}"):
-                                                type_del_checks = {}
-                                                
-                                                for t_id, t_name, t_url in types_list:
-                                                    with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
-                                                        col_chk, col_inputs = st.columns([1, 11])
-                                                        with col_chk:
-                                                            st.write("")
-                                                            st.write("")
-                                                            type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
-                                                        with col_inputs:
-                                                            ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
-                                                            ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
-                                                
-                                                st.divider()
-                                                col_f_btn1, col_f_btn2 = st.columns(2)
-                                                with col_f_btn1:
-                                                    save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
-                                                with col_f_btn2:
-                                                    del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
-                                                
-                                                if save_types_btn:
-                                                    for t_id, _, _ in types_list:
-                                                        new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
-                                                        new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
-                                                        if new_name_val:
-                                                            update_chapter_type_name(t_id, new_name_val)
-                                                            update_chapter_type_url(t_id, new_url_val)
-                                                    st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
-                                                    st.rerun()
-
-                                                if del_types_btn:
-                                                    ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
-                                                    if ids_to_del:
-                                                        for t_id in ids_to_del:
-                                                            delete_chapter_type(t_id)
-                                                        st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
+                        chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
+                        if chapters_data:
+                            st.markdown("##### 📌 등록된 단원 및 세부 유형 목록")
+                            for ch_id, ch_sub, ch_name in chapters_data:
+                                with st.container(border=True):
+                                    c_box1, c_box2, c_box3 = st.columns([3, 1, 1])
+                                    with c_box1:
+                                        st.write(f"▫️ **{ch_name}**")
+                                    with c_box2:
+                                        with st.popover("✏️ 단원 수정"):
+                                            with st.form(f"edit_ch_{ch_id}"):
+                                                ed_ch_name = st.text_input("단원명 수정", value=ch_name, key=f"ed_ch_in_{ch_id}")
+                                                if st.form_submit_button("저장"):
+                                                    if ed_ch_name.strip():
+                                                        update_chapter(ch_id, sub_name, ed_ch_name.strip())
+                                                        st.success("수정되었습니다!")
                                                         st.rerun()
                                                     else:
-                                                        st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
+                                                        st.error("단원명을 입력하세요.")
+                                    with c_box3:
+                                        with st.popover("🗑️ 단원 삭제"):
+                                            st.warning(f"'{ch_name}' 단원을 삭제하시겠습니까?")
+                                            if st.button("삭제 확인", key=f"del_ch_confirm_{ch_id}", type="primary"):
+                                                delete_chapter(ch_id)
+                                                st.success("삭제되었습니다.")
+                                                st.rerun()
 
-                                        # --- [추가] 스크롤을 내린 상태에서도 편하게 닫을 수 있도록 하단에도 닫기 버튼 배치 ---
-                                        if st.button("🔼 이 창 닫기", key=f"btn_toggle_bottom_{ch_id}", use_container_width=True):
+                                    with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
+                                        st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
+                                        with st.form(f"bulk_t_form_{ch_id}"):
+                                            bulk_t_text = st.text_area("유형 목록 텍스트", key=f"bulk_t_area_{ch_id}", placeholder="- 다항식의 연산\n- 나머지정리")
+                                            if st.form_submit_button("유형 일괄 등록 실행"):
+                                                if bulk_t_text.strip():
+                                                    bulk_insert_types_for_chapter(ch_id, bulk_t_text)
+                                                    st.success("유형들이 성공적으로 일괄 등록되었습니다!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("내용을 입력해주세요.")
+
+                                    types_list = get_chapter_types(ch_id)
+                                    with st.form(f"add_t_{ch_id}"):
+                                        tc1, tc2 = st.columns([3, 1])
+                                        with tc1:
+                                            t_in = st.text_input("개별 유형 추가", key=f"t_in_{ch_id}", placeholder="예: 나머지정리 활용", label_visibility="collapsed")
+                                        with tc2:
+                                            if st.form_submit_button("유형 추가"):
+                                                if t_in.strip():
+                                                    c_conn = sqlite3.connect("mathpro_roadmap.db")
+                                                    c_cur = c_conn.cursor()
+                                                    c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
+                                                    cnt = c_cur.fetchone()[0] + 1
+                                                    c_conn.close()
+                                                    
+                                                    formatted_t = t_in.strip()
+                                                    if not formatted_t.startswith("유형"):
+                                                        formatted_t = f"유형 {cnt:02d}. {formatted_t}"
+                                                    
+                                                    add_chapter_type(ch_id, formatted_t, "")
+                                                    st.rerun()
+                                                    
+                                    if types_list:
+                                        expander_key = f"expander_open_{ch_id}"
+                                        if expander_key not in st.session_state:
                                             st.session_state[expander_key] = False
-                                            st.rerun()
 
-                    else:
-                        st.caption("등록된 단원이 없습니다.")
+                                        col_exp_top_1, col_exp_top_2 = st.columns([5, 1])
+                                        with col_exp_top_1:
+                                            st.markdown(f"📂 **속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)**")
+                                        with col_exp_top_2:
+                                            toggle_label = "닫기 🔼" if st.session_state[expander_key] else "열기 🔽"
+                                            if st.button(toggle_label, key=f"btn_toggle_top_{ch_id}", use_container_width=True):
+                                                st.session_state[expander_key] = not st.session_state[expander_key]
+                                                st.rerun()
+
+                                        if st.session_state[expander_key]:
+                                            with st.container(border=True):
+                                                st.info("💡 각 유형별로 체크박스(일괄 삭제용), 이름 수정, 해설 영상 링크 수정 및 **개별 접이식 카드**를 통해 편리하게 관리할 수 있습니다.")
+                                                
+                                                with st.form(f"unified_type_manage_form_{ch_id}"):
+                                                    type_del_checks = {}
+                                                    
+                                                    for t_id, t_name, t_url in types_list:
+                                                        with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
+                                                            col_chk, col_inputs = st.columns([1, 11])
+                                                            with col_chk:
+                                                                st.write("")
+                                                                st.write("")
+                                                                type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
+                                                            with col_inputs:
+                                                                ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
+                                                                ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
+                                                    
+                                                    st.divider()
+                                                    col_f_btn1, col_f_btn2 = st.columns(2)
+                                                    with col_f_btn1:
+                                                        save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
+                                                    with col_f_btn2:
+                                                        del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
+                                                    
+                                                    if save_types_btn:
+                                                        for t_id, _, _ in types_list:
+                                                            new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
+                                                            new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
+                                                            if new_name_val:
+                                                                update_chapter_type_name(t_id, new_name_val)
+                                                                update_chapter_type_url(t_id, new_url_val)
+                                                        st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
+                                                        st.rerun()
+
+                                                    if del_types_btn:
+                                                        ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
+                                                        if ids_to_del:
+                                                            for t_id in ids_to_del:
+                                                                delete_chapter_type(t_id)
+                                                            st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
+                                                            st.rerun()
+                                                        else:
+                                                            st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
+
+                                            if st.button("🔼 이 창 닫기", key=f"btn_toggle_bottom_{ch_id}", use_container_width=True):
+                                                st.session_state[expander_key] = False
+                                                st.rerun()
+
+                        else:
+                            st.caption("등록된 단원이 없습니다.")
+
+                    # 과목 하단에도 닫기 버튼 배치
+                    if st.button("🔼 이 과목 창 닫기", key=f"btn_sub_toggle_bottom_{sub_id}", use_container_width=True):
+                        st.session_state[sub_exp_key] = False
+                        st.rerun()
+
+                st.divider()
         else:
             st.info("등록된 과목이 없습니다. 위에서 과목을 추가해 주세요.")
 
