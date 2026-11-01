@@ -1303,9 +1303,9 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
             
-            # --- 자주 쓰는 과제 템플릿 불러오기 및 관리 섹션 ---
-            with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 불러오기"):
-                st.info("💡 자주 쓰는 과제 문구를 등록해 두고 버튼을 누르면 아래 과제 입력창에 문구가 자동으로 쏙 들어갑니다!")
+            # --- 자주 쓰는 과제 템플릿 관리 및 개별 복사 섹션 ---
+            with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
+                st.info("💡 등록된 과제 문구 옆의 **[📋 복사]** 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
                 
                 templates = get_homework_templates()
                 
@@ -1321,36 +1321,41 @@ else:
                             st.error("문구를 입력해주세요.")
                 
                 if templates:
-                    st.markdown("##### 📋 저장된 템플릿 목록 (클릭하여 과제 입력창에 적용)")
+                    st.markdown("##### 📋 저장된 템플릿 목록 (클릭하여 복사)")
                     for t_id, t_title in templates:
-                        col_t_apply, col_t_del = st.columns([5, 1])
-                        with col_t_apply:
-                            if st.button(f"📥 [{t_title}] 불러오기", key=f"apply_tpl_{t_id}", use_container_width=True):
-                                st.session_state["hw_textarea_input"] = t_title
-                                st.rerun()
+                        col_t_txt, col_t_copy, col_t_del = st.columns([5, 1, 1])
+                        with col_t_txt:
+                            st.write(f"📌 {t_title}")
+                        with col_t_copy:
+                            copy_js_t = f"""
+                            <script>
+                            function copyTpl_{t_id}() {{
+                                navigator.clipboard.writeText("{t_title}");
+                                alert("과제 문구가 복사되었습니다:\\n{t_title}");
+                            }}
+                            </script>
+                            <button onclick="copyTpl_{t_id}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%;">📋 복사</button>
+                            """
+                            st.markdown(copy_js_t, unsafe_allow_html=True)
                         with col_t_del:
                             if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}", use_container_width=True):
                                 delete_homework_template(t_id)
                                 st.success("삭제되었습니다!")
                                 st.rerun()
+                        st.divider()
                 else:
                     st.caption("등록된 과제 템플릿이 없습니다. 위에서 자주 쓰는 문구를 등록해 보세요!")
 
-            # 과제 입력 폼 (session_state 연동)
-            if "hw_textarea_input" not in st.session_state:
-                st.session_state["hw_textarea_input"] = ""
-
+            # 과제 입력 폼
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
-                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", value=st.session_state["hw_textarea_input"], key="hw_textarea_form_key", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
+                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
                 hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 과제 등록하기", type="primary")
                 if hw_submit:
-                    final_text = st.session_state.get("hw_textarea_form_key", "")
-                    if final_text.strip():
+                    if hw_text_area.strip():
                         date_str = str(hw_date_input)
-                        added_c = bulk_insert_student_homework(selected_student, date_str, final_text)
+                        added_c = bulk_insert_student_homework(selected_student, date_str, hw_text_area)
                         st.success(f"총 {added_c}개의 과제가 {selected_student} 학생에게 등록되었습니다!")
-                        st.session_state["hw_textarea_input"] = "" # 초기화
                         st.rerun()
                     else:
                         st.error("과제 내용을 입력해주세요.")
@@ -1654,7 +1659,7 @@ else:
                         st.success(f"'{input_full_code.strip().upper()}' 문제 해설 링크가 안전하게 저장되었습니다!")
                         st.rerun()
                     else:
-                        st.error("저장 중 오류가 저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
+                        st.error("저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
                 else:
                     st.warning("문제 번호와 영상 주소를 모두 입력해주세요.")
 
