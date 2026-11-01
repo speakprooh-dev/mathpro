@@ -135,13 +135,13 @@ def init_db():
             student_name TEXT,
             unit_code TEXT,
             numbers_text TEXT,
-            updated_at TEXT DEFAULT (date('now', 'localtime')),
+            updated_at TEXT DEFAULT '',
             PRIMARY KEY (student_name, unit_code)
         )
     ''')
     
     try:
-        c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT (date('now', 'localtime'))")
+        c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass
 
@@ -689,7 +689,6 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # 환영 인사 카드
     st.markdown(
         f'<div style="background-color:#F0FDF4; border-left:5px solid #10B981; padding:12px 16px; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
         f'<span style="font-size:16px; font-weight:bold; color:#065F46;">✨ [{selected_student}] 학생만을 위한 1:1 맞춤 학습 공간입니다.</span>'
@@ -697,7 +696,6 @@ if url_student and url_student in student_list:
         unsafe_allow_html=True
     )
     
-    # 📖 학생용 1분 사용 설명서 접이식 메뉴
     with st.expander("📖 [필독] 1분 만에 끝내는 MathPro 사용 설명서 보기"):
         st.markdown("""
         ### 📐 MathPro 1:1 맞춤 학습 공간 이용 가이드
@@ -719,7 +717,6 @@ if url_student and url_student in student_list:
         * 하단에 생성된 문제 번호를 누르면 **[🎥 해설 영상]**으로 바로 연결되어 오답 복습이 쉬워집니다!
         """)
     
-    # 구글 드라이브 폴더 바로가기 버튼 (등록된 경우에만 표시)
     student_drive = get_student_drive_url(selected_student)
     if student_drive and student_drive.strip() != "":
         st.markdown(
@@ -1517,7 +1514,7 @@ else:
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합 및 다양해진 모아보기 옵션 (업데이트 완료)
+    # [탭 4] 학생 오답노트 취합 및 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
         
@@ -1528,7 +1525,6 @@ else:
         )
         st.markdown("---")
 
-        # 1) 학생별 개별 오답 조회
         if view_mode == "👤 학생별 개별 오답 조회":
             all_students = get_students()
             if all_students:
@@ -1579,11 +1575,10 @@ else:
             else:
                 st.info("등록된 학생이 없습니다.")
 
-        # 2) 오답 제출 날짜별 모아보기
         elif view_mode == "📅 오답 제출 날짜별 모아보기":
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
-            c.execute("SELECT DISTINCT updated_at FROM student_wrong_entries WHERE numbers_text != '' ORDER BY updated_at DESC")
+            c.execute("SELECT DISTINCT updated_at FROM student_wrong_entries WHERE numbers_text != '' AND updated_at != '' ORDER BY updated_at DESC")
             dates_rows = c.fetchall()
             conn.close()
             
@@ -1624,7 +1619,6 @@ else:
             else:
                 st.info("날짜별 기록된 오답 내역이 없습니다.")
 
-        # 3) 영상 링크 미설정 오답만 모아보기
         elif view_mode == "⚠️ 영상 링크 미설정 오답만 모아보기":
             st.warning("⚠️ 학생들이 질문/오답으로 입력했으나 아직 **카페 해설 영상 링크가 연결되지 않은 문제들**입니다!")
             
