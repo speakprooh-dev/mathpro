@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import re
-import urllib.parse
 
 # 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
@@ -24,7 +23,7 @@ except Exception as e:
     st.error(f"데이터베이스 연결에 실패했습니다. Streamlit Secrets 설정을 확인해주세요: {e}")
     st.stop()
 
-# 2. Supabase 테이블 초기화 (PostgreSQL 문법 완벽 대응)
+# 2. Supabase 테이블 초기화 (PostgreSQL 문법 대응)
 def init_db():
     with conn.session as s:
         s.execute("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);")
@@ -49,7 +48,7 @@ def init_db():
 
 init_db()
 
-# --- 데이터 관리 함수들 (Supabase/PostgreSQL 쿼리 전환) ---
+# --- 데이터 관리 함수들 ---
 def get_students():
     df = conn.query("SELECT name FROM students ORDER BY name;", ttl=0)
     return df["name"].tolist() if not df.empty else []
@@ -305,7 +304,6 @@ def format_numbers_list(num_set):
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
-# 공통 네이버 카페 바로가기 버튼 배치
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
 st.markdown(
     f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:8px 12px; border-radius:6px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">☕ MathPro 네이버 카페 바로가기</a>',
