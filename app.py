@@ -782,7 +782,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones) # --- [수정] milestones -> s_milestones로 변경하여 NameError 해결 ---
+            s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1044,49 +1044,72 @@ else:
                                                 st.rerun()
                                                 
                                 if types_list:
-                                    with st.expander(f"📂 속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
-                                        st.info("💡 각 유형별로 **체크박스(일괄 삭제용)**, **이름 수정**, **해설 영상 링크 수정**을 관리할 수 있습니다.")
-                                        
-                                        with st.form(f"unified_type_manage_form_{ch_id}"):
-                                            type_del_checks = {}
-                                            
-                                            for t_id, t_name, t_url in types_list:
-                                                with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
-                                                    col_chk, col_inputs = st.columns([1, 11])
-                                                    with col_chk:
-                                                        st.write("")
-                                                        st.write("")
-                                                        type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
-                                                    with col_inputs:
-                                                        ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
-                                                        ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
-                                            
-                                            st.divider()
-                                            col_f_btn1, col_f_btn2 = st.columns(2)
-                                            with col_f_btn1:
-                                                save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
-                                            with col_f_btn2:
-                                                del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
-                                            
-                                            if save_types_btn:
-                                                for t_id, _, _ in types_list:
-                                                    new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
-                                                    new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
-                                                    if new_name_val:
-                                                        update_chapter_type_name(t_id, new_name_val)
-                                                        update_chapter_type_url(t_id, new_url_val)
-                                                st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
-                                                st.rerun()
+                                    # --- [수정] expander 대신 컨테이너 + 세션 상태를 활용하여 상/하단 어디서나 열고 닫을 수 있도록 개선 ---
+                                    expander_key = f"expander_open_{ch_id}"
+                                    if expander_key not in st.session_state:
+                                        st.session_state[expander_key] = False
 
-                                            if del_types_btn:
-                                                ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
-                                                if ids_to_del:
-                                                    for t_id in ids_to_del:
-                                                        delete_chapter_type(t_id)
-                                                    st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
+                                    # 상단 토글 버튼 (열기/닫기)
+                                    col_exp_top_1, col_exp_top_2 = st.columns([5, 1])
+                                    with col_exp_top_1:
+                                        st.markdown(f"📂 **속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)**")
+                                    with col_exp_top_2:
+                                        toggle_label = "닫기 🔼" if st.session_state[expander_key] else "열기 🔽"
+                                        if st.button(toggle_label, key=f"btn_toggle_top_{ch_id}", use_container_width=True):
+                                            st.session_state[expander_key] = not st.session_state[expander_key]
+                                            st.rerun()
+
+                                    # 열려있을 때만 표시되는 관리 영역
+                                    if st.session_state[expander_key]:
+                                        with st.container(border=True):
+                                            st.info("💡 각 유형별로 체크박스(일괄 삭제용), 이름 수정, 해설 영상 링크 수정 및 **개별 접이식 카드**를 통해 편리하게 관리할 수 있습니다.")
+                                            
+                                            with st.form(f"unified_type_manage_form_{ch_id}"):
+                                                type_del_checks = {}
+                                                
+                                                for t_id, t_name, t_url in types_list:
+                                                    with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
+                                                        col_chk, col_inputs = st.columns([1, 11])
+                                                        with col_chk:
+                                                            st.write("")
+                                                            st.write("")
+                                                            type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
+                                                        with col_inputs:
+                                                            ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
+                                                            ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
+                                                
+                                                st.divider()
+                                                col_f_btn1, col_f_btn2 = st.columns(2)
+                                                with col_f_btn1:
+                                                    save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
+                                                with col_f_btn2:
+                                                    del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
+                                                
+                                                if save_types_btn:
+                                                    for t_id, _, _ in types_list:
+                                                        new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
+                                                        new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
+                                                        if new_name_val:
+                                                            update_chapter_type_name(t_id, new_name_val)
+                                                            update_chapter_type_url(t_id, new_url_val)
+                                                    st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
                                                     st.rerun()
-                                                else:
-                                                    st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
+
+                                                if del_types_btn:
+                                                    ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
+                                                    if ids_to_del:
+                                                        for t_id in ids_to_del:
+                                                            delete_chapter_type(t_id)
+                                                        st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
+                                                        st.rerun()
+                                                    else:
+                                                        st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
+
+                                        # --- [추가] 스크롤을 내린 상태에서도 편하게 닫을 수 있도록 하단에도 닫기 버튼 배치 ---
+                                        if st.button("🔼 이 창 닫기", key=f"btn_toggle_bottom_{ch_id}", use_container_width=True):
+                                            st.session_state[expander_key] = False
+                                            st.rerun()
+
                     else:
                         st.caption("등록된 단원이 없습니다.")
         else:
