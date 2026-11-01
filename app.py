@@ -33,11 +33,14 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 
 # 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
-    d = date.fromisoformat(date_str)
-    weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
-    return weekdays[d.weekday()]
+    try:
+        d = date.fromisoformat(date_str)
+        weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
+        return weekdays[d.weekday()]
+    except:
+        return "날짜 확인"
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 초기화 및 기존 빈 날짜 자동 보정
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -144,6 +147,10 @@ def init_db():
         c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT ''")
     except sqlite3.OperationalError:
         pass
+
+    # 기존 데이터 중 updated_at이 비어있거나 없는 경우 오늘 날짜로 자동 채우기
+    today_str = str(date.today())
+    c.execute("UPDATE student_wrong_entries SET updated_at = ? WHERE updated_at IS NULL OR updated_at = ''", (today_str,))
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS problem_links (
