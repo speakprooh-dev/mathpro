@@ -879,7 +879,7 @@ else:
 
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
-            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 오른쪽 버튼으로 링크를 복사할 수 있습니다.")
+            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 아래 입력창 우측의 **복사 버튼**을 눌러 링크를 복사할 수 있습니다.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -892,23 +892,14 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 
-                col_name_link, col_copy_btn = st.columns([3, 1])
-                with col_name_link:
+                col_name, col_linkbox = st.columns([2, 4])
+                with col_name:
                     st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="font-size:16px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s}</a>',
+                        f'<a href="{personal_link}" target="_blank" style="font-size:15px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s} 학생 페이지</a>',
                         unsafe_allow_html=True
                     )
-                with col_copy_btn:
-                    copy_js = f"""
-                    <script>
-                    function copyLink_{s}() {{
-                        navigator.clipboard.writeText("{personal_link}");
-                        alert("{s} 학생 링크가 복사되었습니다! 카카오톡에 붙여넣기 하세요.");
-                    }}
-                    </script>
-                    <button onclick="copyLink_{s}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:6px 10px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; width:100%; margin-top:2px;">📋 링크 복사</button>
-                    """
-                    st.markdown(copy_js, unsafe_allow_html=True)
+                with col_linkbox:
+                    st.text_input(f"링크_{s}", value=personal_link, label_visibility="collapsed", key=f"link_input_{s}")
                 st.divider()
 
     st.divider()
