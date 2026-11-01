@@ -1046,20 +1046,41 @@ else:
                                                 
                                 if types_list:
                                     with st.expander(f"속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
-                                        st.info("💡 여러 유형을 체크하여 **[선택한 유형 일괄 삭제]**를 하거나, 각 유형별 이름 및 해설 영상 링크를 수정할 수 있습니다.")
+                                        st.info("💡 각 유형별로 **체크박스(일괄 삭제용)**, **이름 수정**, **해설 영상 링크 수정**을 한눈에 편리하게 관리할 수 있습니다[cite: 6, 7].")
                                         
-                                        # 유형 다중 선택 삭제 폼
-                                        with st.form(f"bulk_type_del_form_{ch_id}"):
+                                        # 통합 유형 관리 폼 (일괄 삭제 + 개별 이름/링크 수정)
+                                        with st.form(f"unified_type_manage_form_{ch_id}"):
                                             type_del_checks = {}
-                                            for t_id, t_name, t_url in types_list:
-                                                tc_col1, tc_col2 = st.columns([1, 9])
-                                                with tc_col1:
-                                                    type_del_checks[t_id] = st.checkbox("선택", value=False, key=f"t_del_chk_{t_id}", label_visibility="collapsed")
-                                                with tc_col2:
-                                                    st.markdown(f"▪️ **{t_name}** `({t_url if t_url else '링크 없음'})`")
-                                                st.divider()
                                             
-                                            if st.form_submit_button("🗑️ 선택한 유형 일괄 삭제", type="primary", use_container_width=True):
+                                            for t_id, t_name, t_url in types_list:
+                                                with st.container(border=True):
+                                                    col_chk, col_inputs = st.columns([1, 11])
+                                                    with col_chk:
+                                                        st.write("")
+                                                        st.write("")
+                                                        type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}", label_visibility="collapsed")
+                                                    with col_inputs:
+                                                        ed_t_name = st.text_input("유형명", value=t_name, key=f"ed_t_name_{t_id}")
+                                                        ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
+                                            
+                                            st.divider()
+                                            col_f_btn1, col_f_btn2 = st.columns(2)
+                                            with col_f_btn1:
+                                                save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
+                                            with col_f_btn2:
+                                                del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
+                                            
+                                            if save_types_btn:
+                                                for t_id, _, _ in types_list:
+                                                    new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
+                                                    new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
+                                                    if new_name_val:
+                                                        update_chapter_type_name(t_id, new_name_val)
+                                                        update_chapter_type_url(t_id, new_url_val)
+                                                st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
+                                                st.rerun()
+
+                                            if del_types_btn:
                                                 ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
                                                 if ids_to_del:
                                                     for t_id in ids_to_del:
@@ -1067,19 +1088,7 @@ else:
                                                     st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
                                                     st.rerun()
                                                 else:
-                                                    st.warning("삭제할 유형을 하나 이상 체크해주세요.")
-
-                                        st.markdown("##### ✏️ 개별 유형 이름 및 해설 영상 링크 수정")
-                                        for t_id, t_name, t_url in types_list:
-                                            with st.container(border=True):
-                                                with st.form(f"edit_type_form_{t_id}"):
-                                                    ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
-                                                    ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
-                                                    if st.form_submit_button("수정사항 저장"):
-                                                        update_chapter_type_name(t_id, ed_t_name.strip())
-                                                        update_chapter_type_url(t_id, ed_t_url.strip())
-                                                        st.success("수정되었습니다!")
-                                                        st.rerun()
+                                                    st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
                     else:
                         st.caption("등록된 단원이 없습니다.")
         else:
