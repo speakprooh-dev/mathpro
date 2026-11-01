@@ -44,7 +44,6 @@ def init_db():
     
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
     
-    # 학생 테이블에 구글 드라이브 폴더 URL 컬럼 추가 (기존에 없던 경우 자동 생성)
     try:
         c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
     except sqlite3.OperationalError:
@@ -682,7 +681,7 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # 학업적이고 자연스러운 학생 환영 안내 카드 디자인 개선
+    # 환영 인사 카드
     st.markdown(
         f'<div style="background-color:#F0FDF4; border-left:5px solid #10B981; padding:12px 16px; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
         f'<span style="font-size:16px; font-weight:bold; color:#065F46;">✨ [{selected_student}] 학생만을 위한 1:1 맞춤 학습 공간입니다.</span>'
@@ -690,7 +689,29 @@ if url_student and url_student in student_list:
         unsafe_allow_html=True
     )
     
-    # 학업적인 느낌의 드라이브 폴더 바로가기 버튼 (등록된 경우에만 표시)
+    # 📖 학생용 1분 사용 설명서 접이식 메뉴 추가
+    with st.expander("📖 [필독] 1분 만에 끝내는 MathPro 사용 설명서 보기"):
+        st.markdown("""
+        ### 📐 MathPro 1:1 맞춤 학습 공간 이용 가이드
+        
+        **1️⃣ 개인 학습 자료실 및 과제 제출함 (Google Drive)**
+        * 상단의 파란색 드라이브 버튼을 누르면 나만의 구글 드라이브 폴더로 바로 이동해 과제를 제출하거나 자료를 확인할 수 있어요!
+        
+        **2️⃣ 🚩 1. 개념 학습 진도 체크하기**
+        * 배정된 단원의 학습을 마친 후 체크박스(☑️)에 체크하세요.
+        * 모르는 개념은 우측 **[🎥 개념해설]** 버튼을 눌러 영상을 시청할 수 있습니다.
+        * 체크가 끝나면 맨 아래 **[💾 내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!
+        
+        **3️⃣ 📚 2. 날짜별 숙제 확인하기**
+        * 상단 날짜를 선택해 오늘 해야 할 숙제를 확인하고 완료 시 체크박스(☑️)를 체크하세요.
+        * 마찬가지로 하단의 **[💾 내 학습 상태 저장하기]**를 눌러야 선생님에게 완료가 전달됩니다.
+        
+        **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
+        * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
+        * 하단에 생성된 문제 번호를 누르면 **[🎥 해설 영상]**으로 바로 연결되어 오답 복습이 쉬워집니다!
+        """)
+    
+    # 구글 드라이브 폴더 바로가기 버튼 (등록된 경우에만 표시)
     student_drive = get_student_drive_url(selected_student)
     if student_drive and student_drive.strip() != "":
         st.markdown(
@@ -1645,7 +1666,7 @@ else:
                                                 st.success("수정되었습니다!")
                                                 st.rerun()
                 else:
-                    st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생이 없습니다.")
+                    st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생들 중 등록된 내용이 없습니다.")
 
                 st.markdown("---")
                 st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
