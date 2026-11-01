@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import re
+from sqlalchemy import text
 
 # 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
@@ -23,27 +24,27 @@ except Exception as e:
     st.error(f"데이터베이스 연결에 실패했습니다. Streamlit Secrets 설정을 확인해주세요: {e}")
     st.stop()
 
-# 2. Supabase 테이블 초기화 (PostgreSQL 문법 대응)
+# 2. Supabase 테이블 초기화 (SQLAlchemy 2.0 text() 적용)
 def init_db():
     with conn.session as s:
-        s.execute("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);")
-        s.execute("CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);")
-        s.execute("CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);")
-        s.execute("CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT '');")
-        s.execute("CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);")
-        s.execute("CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
-        s.execute("CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
-        s.execute("CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));")
-        s.execute("CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));")
-        s.execute("CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));")
-        s.execute("CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, PRIMARY KEY (student_name, unit_code));")
+        s.execute(text("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT '');"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL);"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));"))
+        s.execute(text("CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, PRIMARY KEY (student_name, unit_code));"))
         
         # 기본 과목 데이터 삽입
-        res = s.execute("SELECT COUNT(*) FROM subjects;").fetchone()
+        res = s.execute(text("SELECT COUNT(*) FROM subjects;")).fetchone()
         if res[0] == 0:
             default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
             for sub in default_subjects:
-                s.execute("INSERT INTO subjects (name) VALUES (:name) ON CONFLICT DO NOTHING;", {"name": sub})
+                s.execute(text("INSERT INTO subjects (name) VALUES (:name) ON CONFLICT DO NOTHING;"), {"name": sub})
         s.commit()
 
 init_db()
@@ -56,7 +57,7 @@ def get_students():
 def add_student(name):
     try:
         with conn.session as s:
-            s.execute("INSERT INTO students (name) VALUES (:name);", {"name": name})
+            s.execute(text("INSERT INTO students (name) VALUES (:name);"), {"name": name})
             s.commit()
         return True
     except:
@@ -64,13 +65,13 @@ def add_student(name):
 
 def delete_student(name):
     with conn.session as s:
-        s.execute("DELETE FROM students WHERE name = :name;", {"name": name})
-        s.execute("DELETE FROM milestones WHERE student_name = :name;", {"name": name})
-        s.execute("DELETE FROM milestone_progress WHERE student_name = :name;", {"name": name})
-        s.execute("DELETE FROM homework_progress WHERE student_name = :name;", {"name": name})
-        s.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = :name);", {"name": name})
-        s.execute("DELETE FROM student_homework WHERE student_name = :name;", {"name": name})
-        s.execute("DELETE FROM student_wrong_entries WHERE student_name = :name;", {"name": name})
+        s.execute(text("DELETE FROM students WHERE name = :name;"), {"name": name})
+        s.execute(text("DELETE FROM milestones WHERE student_name = :name;"), {"name": name})
+        s.execute(text("DELETE FROM milestone_progress WHERE student_name = :name;"), {"name": name})
+        s.execute(text("DELETE FROM homework_progress WHERE student_name = :name;"), {"name": name})
+        s.execute(text("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = :name);"), {"name": name})
+        s.execute(text("DELETE FROM student_homework WHERE student_name = :name;"), {"name": name})
+        s.execute(text("DELETE FROM student_wrong_entries WHERE student_name = :name;"), {"name": name})
         s.commit()
 
 def get_subjects():
@@ -80,7 +81,7 @@ def get_subjects():
 def add_subject(name):
     try:
         with conn.session as s:
-            s.execute("INSERT INTO subjects (name) VALUES (:name);", {"name": name})
+            s.execute(text("INSERT INTO subjects (name) VALUES (:name);"), {"name": name})
             s.commit()
         return True
     except:
@@ -89,9 +90,9 @@ def add_subject(name):
 def update_subject(sub_id, old_name, new_name):
     try:
         with conn.session as s:
-            s.execute("UPDATE subjects SET name = :new_name WHERE id = :id;", {"new_name": new_name, "id": sub_id})
-            s.execute("UPDATE chapters SET subject = :new_name WHERE subject = :old_name;", {"new_name": new_name, "old_name": old_name})
-            s.execute("UPDATE milestones SET subject = :new_name WHERE subject = :old_name;", {"new_name": new_name, "old_name": old_name})
+            s.execute(text("UPDATE subjects SET name = :new_name WHERE id = :id;"), {"new_name": new_name, "id": sub_id})
+            s.execute(text("UPDATE chapters SET subject = :new_name WHERE subject = :old_name;"), {"new_name": new_name, "old_name": old_name})
+            s.execute(text("UPDATE milestones SET subject = :new_name WHERE subject = :old_name;"), {"new_name": new_name, "old_name": old_name})
             s.commit()
         return True
     except:
@@ -99,7 +100,7 @@ def update_subject(sub_id, old_name, new_name):
 
 def delete_subject(sub_id):
     with conn.session as s:
-        s.execute("DELETE FROM subjects WHERE id = :id;", {"id": sub_id})
+        s.execute(text("DELETE FROM subjects WHERE id = :id;"), {"id": sub_id})
         s.commit()
 
 def get_chapters():
@@ -108,20 +109,20 @@ def get_chapters():
 
 def add_chapter(subject, name):
     with conn.session as s:
-        res = s.execute("INSERT INTO chapters (subject, name) VALUES (:subject, :name) RETURNING id;", {"subject": subject, "name": name})
+        res = s.execute(text("INSERT INTO chapters (subject, name) VALUES (:subject, :name) RETURNING id;"), {"subject": subject, "name": name})
         ch_id = res.fetchone()[0]
         s.commit()
     return ch_id
 
 def update_chapter(ch_id, subject, name):
     with conn.session as s:
-        s.execute("UPDATE chapters SET subject = :subject, name = :name WHERE id = :id;", {"subject": subject, "name": name, "id": ch_id})
+        s.execute(text("UPDATE chapters SET subject = :subject, name = :name WHERE id = :id;"), {"subject": subject, "name": name, "id": ch_id})
         s.commit()
 
 def delete_chapter(ch_id):
     with conn.session as s:
-        s.execute("DELETE FROM chapters WHERE id = :id;", {"id": ch_id})
-        s.execute("DELETE FROM chapter_types WHERE chapter_id = :id;", {"id": ch_id})
+        s.execute(text("DELETE FROM chapters WHERE id = :id;"), {"id": ch_id})
+        s.execute(text("DELETE FROM chapter_types WHERE chapter_id = :id;"), {"id": ch_id})
         s.commit()
 
 def get_chapter_types(chapter_id):
@@ -130,22 +131,22 @@ def get_chapter_types(chapter_id):
 
 def add_chapter_type(chapter_id, name, video_url=""):
     with conn.session as s:
-        s.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, :v_url);", {"ch_id": chapter_id, "name": name, "v_url": video_url})
+        s.execute(text("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, :v_url);"), {"ch_id": chapter_id, "name": name, "v_url": video_url})
         s.commit()
 
 def update_chapter_type_url(type_id, video_url):
     with conn.session as s:
-        s.execute("UPDATE chapter_types SET video_url = :v_url WHERE id = :id;", {"v_url": video_url, "id": type_id})
+        s.execute(text("UPDATE chapter_types SET video_url = :v_url WHERE id = :id;"), {"v_url": video_url, "id": type_id})
         s.commit()
 
 def delete_chapter_type(type_id):
     with conn.session as s:
-        s.execute("DELETE FROM chapter_types WHERE id = :id;", {"id": type_id})
+        s.execute(text("DELETE FROM chapter_types WHERE id = :id;"), {"id": type_id})
         s.commit()
 
 def bulk_insert_types_for_chapter(chapter_id, text_data):
     with conn.session as s:
-        res = s.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = :id;", {"id": chapter_id}).fetchone()
+        res = s.execute(text("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = :id;"), {"id": chapter_id}).fetchone()
         type_counter = (res[0] if res else 0) + 1
         
         lines = text_data.strip().split('\n')
@@ -156,7 +157,7 @@ def bulk_insert_types_for_chapter(chapter_id, text_data):
             raw_type_name = line_str.lstrip('-•* ').strip()
             if raw_type_name:
                 type_name = raw_type_name if raw_type_name.startswith("유형") else f"유형 {type_counter:02d}. {raw_type_name}"
-                s.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, '');", {"ch_id": chapter_id, "name": type_name})
+                s.execute(text("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, '');"), {"ch_id": chapter_id, "name": type_name})
                 type_counter += 1
         s.commit()
 
@@ -176,7 +177,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
         existing = set(zip(existing_df['chapter'], existing_df['type_name'])) if not existing_df.empty else set()
 
         for chapter_id in chapter_ids:
-            ch_res = s.execute("SELECT subject, name FROM chapters WHERE id = :id;", {"id": chapter_id}).fetchone()
+            ch_res = s.execute(text("SELECT subject, name FROM chapters WHERE id = :id;"), {"id": chapter_id}).fetchone()
             if not ch_res:
                 continue
             sub, ch_name = ch_res
@@ -186,7 +187,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
             
             for t_name in types_to_add:
                 if (ch_name, t_name) not in existing:
-                    s.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (:sname, :sub, :ch, :tname);",
+                    s.execute(text("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (:sname, :sub, :ch, :tname);"),
                               {"sname": student_name, "sub": sub, "ch": ch_name, "tname": t_name})
                     added_count += 1
         s.commit()
@@ -194,8 +195,8 @@ def assign_chapters_to_student(student_name, chapter_ids):
 
 def delete_student_milestone(m_id):
     with conn.session as s:
-        s.execute("DELETE FROM milestones WHERE id = :id;", {"id": m_id})
-        s.execute("DELETE FROM milestone_progress WHERE milestone_id = :id;", {"id": m_id})
+        s.execute(text("DELETE FROM milestones WHERE id = :id;"), {"id": m_id})
+        s.execute(text("DELETE FROM milestone_progress WHERE milestone_id = :id;"), {"id": m_id})
         s.commit()
 
 def delete_student_milestones_by_chapters(student_name, chapter_names):
@@ -206,8 +207,8 @@ def delete_student_milestones_by_chapters(student_name, chapter_names):
             if not m_df.empty:
                 m_ids = m_df['id'].tolist()
                 for m_id in m_ids:
-                    s.execute("DELETE FROM milestones WHERE id = :id;", {"id": m_id})
-                    s.execute("DELETE FROM milestone_progress WHERE milestone_id = :id;", {"id": m_id})
+                    s.execute(text("DELETE FROM milestones WHERE id = :id;"), {"id": m_id})
+                    s.execute(text("DELETE FROM milestone_progress WHERE milestone_id = :id;"), {"id": m_id})
                     total_deleted += 1
         s.commit()
     return total_deleted
@@ -234,7 +235,7 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
                 continue
             title = line_str.lstrip('-•* ').strip()
             if title:
-                s.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (:sname, :hdate, :title);",
+                s.execute(text("INSERT INTO student_homework (student_name, hw_date, title) VALUES (:sname, :hdate, :title);"),
                           {"sname": student_name, "hdate": hw_date, "title": title})
                 added_count += 1
         s.commit()
@@ -242,13 +243,13 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
 
 def update_student_homework(shw_id, hw_date, title):
     with conn.session as s:
-        s.execute("UPDATE student_homework SET hw_date = :hdate, title = :title WHERE id = :id;", {"hdate": hw_date, "title": title, "id": shw_id})
+        s.execute(text("UPDATE student_homework SET hw_date = :hdate, title = :title WHERE id = :id;"), {"hdate": hw_date, "title": title, "id": shw_id})
         s.commit()
 
 def delete_student_homework(shw_id):
     with conn.session as s:
-        s.execute("DELETE FROM student_homework WHERE id = :id;", {"id": shw_id})
-        s.execute("DELETE FROM student_homework_progress WHERE student_hw_id = :id;", {"id": shw_id})
+        s.execute(text("DELETE FROM student_homework WHERE id = :id;"), {"id": shw_id})
+        s.execute(text("DELETE FROM student_homework_progress WHERE student_hw_id = :id;"), {"id": shw_id})
         s.commit()
 
 def get_milestone_progress(student_name):
@@ -262,17 +263,17 @@ def get_student_homework_progress(student_name):
 def save_student_progress(student_name, m_checked, h_checked):
     with conn.session as s:
         for m_id, val in m_checked.items():
-            s.execute("""
+            s.execute(text("""
                 INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
                 VALUES (:sname, :mid, :val)
                 ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-            """, {"sname": student_name, "mid": m_id, "val": int(val)})
+            """), {"sname": student_name, "mid": m_id, "val": int(val)})
         for h_id, val in h_checked.items():
-            s.execute("""
+            s.execute(text("""
                 INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
                 VALUES (:sname, :hid, :val)
                 ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-            """, {"sname": student_name, "hid": h_id, "val": int(val)})
+            """), {"sname": student_name, "hid": h_id, "val": int(val)})
         s.commit()
 
 def get_student_wrong_entry(student_name, unit_code):
@@ -281,11 +282,11 @@ def get_student_wrong_entry(student_name, unit_code):
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     with conn.session as s:
-        s.execute("""
+        s.execute(text("""
             INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
             VALUES (:sname, :ucode, :numtxt)
             ON CONFLICT (student_name, unit_code) DO UPDATE SET numbers_text = EXCLUDED.numbers_text;
-        """, {"sname": student_name, "ucode": unit_code, "numtxt": numbers_text})
+        """), {"sname": student_name, "ucode": unit_code, "numtxt": numbers_text})
         s.commit()
 
 def parse_numbers(text):
@@ -634,11 +635,11 @@ else:
                 if st.button("선생님 진도 상태 저장하기", type="primary", key="teacher_save_btn"):
                     with conn.session as s:
                         for m_id, val in teacher_m_checked.items():
-                            s.execute("""
+                            s.execute(text("""
                                 INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
                                 VALUES (:sname, :mid, :val)
                                 ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                            """, {"sname": selected_student, "mid": m_id, "val": int(val)})
+                            """), {"sname": selected_student, "mid": m_id, "val": int(val)})
                         s.commit()
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
@@ -934,11 +935,11 @@ else:
                         if teacher_hw_save_btn:
                             with conn.session as s:
                                 for h_id, val in teacher_hw_checked.items():
-                                    s.execute("""
+                                    s.execute(text("""
                                         INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
                                         VALUES (:sname, :hid, :val)
                                         ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                                    """, {"sname": selected_student, "hid": h_id, "val": int(val)})
+                                    """), {"sname": selected_student, "hid": h_id, "val": int(val)})
                                 s.commit()
                             st.success("과제 완료 상태가 저장되었습니다!")
                             st.rerun()
@@ -1078,11 +1079,11 @@ else:
                         if mat_save_btn:
                             with conn.session as s:
                                 for h_id, val in matrix_hw_checked.items():
-                                    s.execute("""
+                                    s.execute(text("""
                                         INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
                                         SELECT student_name, id, :val FROM student_homework WHERE id = :hid
                                         ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                                    """, {"val": int(val), "hid": h_id})
+                                    """), {"val": int(val), "hid": h_id})
                                 s.commit()
                             st.success("숙제 완료 상태가 저장되었습니다!")
                             st.rerun()
