@@ -2,10 +2,31 @@ import streamlit as st
 import sqlite3
 from datetime import date
 import re
+import pandas as pd
+import io
 
 # 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
     return "https://cafe.naver.com/mathpro2020"
+
+# --- [추가] 전체 데이터베이스 테이블을 엑셀 파일(다중 시트)로 변환하는 백업 함수 ---
+def create_excel_backup():
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        conn = sqlite3.connect("mathpro_roadmap.db")
+        tables = [
+            "students", "subjects", "chapters", "chapter_types", 
+            "milestones", "student_homework", "milestone_progress", 
+            "student_homework_progress", "student_wrong_entries"
+        ]
+        for table in tables:
+            try:
+                df = pd.read_sql(f"SELECT * FROM {table}", conn)
+                df.to_excel(writer, sheet_name=table, index=False)
+            except Exception:
+                pass
+        conn.close()
+    return output.getvalue()
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -652,8 +673,24 @@ if url_student and url_student in student_list:
 
 # 2. [선생님 전용 관리 모드]
 else:
+    # --- [추가] 선생님 전용 사이드바 백업 버튼 영역 ---
+    with st.sidebar:
+        st.markdown("### 🛠️ 선생님 전용 도구")
+        st.markdown("데이터를 안전하게 정기적으로 백업하세요.")
+        
+        excel_data = create_excel_backup()
+        st.download_button(
+            label="📥 전체 데이터 엑셀 백업하기",
+            data=excel_data,
+            file_name=f"mathpro_backup_{date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        st.divider()
+
     st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
     col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+    # ... 학생 추가/삭제 및 탭 영역 계속 ...
 
     with col_s1:
         if student_list:
