@@ -3,26 +3,39 @@ import pandas as pd
 from datetime import date
 import re
 import psycopg2
-import urllib.parse
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# Supabase 직접 연결 함수 (가장 안정적)
+# Supabase 안전 개별 인자 연결 함수 (특수문자 비밀번호 완벽 대응)
 def get_db_connection():
     try:
+        # Streamlit Secrets에서 가져오거나 직접 정의된 접속 정보 사용
         secrets_url = st.secrets["connections"]["sql"]["url"]
     except Exception:
-        # 시크릿 설정이 없을 경우를 대비한 기본값 (선생님 URI 반영)
         secrets_url = "postgresql://postgres:Speakpro.2020!@db.qfpclacalaaxbhhheosw.supabase.co:5432/postgres"
-        
-    parsed_url = urllib.parse.urlparse(secrets_url)
+    
+    # URL 파싱 대신 정규표현식으로 안전하게 추출
+    # 형식: postgresql://user:password@host:port/dbname
+    pattern = r"postgresql://([^:]+):([^@]+)@([^:/]+):(\d+)/(.+)"
+    match = re.match(pattern, secrets_url)
+    
+    if match:
+        user, password, host, port, dbname = match.groups()
+    else:
+        # 기본값 세팅 (선생님 Supabase 정보)
+        user = "postgres"
+        password = "Speakpro.2020!"
+        host = "db.qfpclacalaaxbhhheosw.supabase.co"
+        port = "5432"
+        dbname = "postgres"
+
     conn = psycopg2.connect(
-        database=parsed_url.path[1:],
-        user=parsed_url.username,
-        password=parsed_url.password,
-        host=parsed_url.hostname,
-        port=parsed_url.port,
+        dbname=dbname,
+        user=user,
+        password=password,
+        host=host,
+        port=port,
         sslmode='require'
     )
     return conn
@@ -1197,7 +1210,7 @@ else:
                                 c.execute("""
                                     INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
                                     SELECT student_name, id, %s FROM student_homework WHERE id = %s
-                                    ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                                    ON CONFLICT (student_name, student_homework_progress.student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
                                 """, (int(val), h_id))
                             conn.commit()
                             c.close()
