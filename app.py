@@ -1,5 +1,5 @@
 import streamlit as st
-import sqlite3
+import pandas as pd
 from datetime import date
 import re
 import urllib.parse
@@ -17,448 +17,277 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. 데이터베이스 초기화 (기존 사용자 데이터를 절대 덮어쓰지 않는 안전 구조)
+# 1. Supabase(PostgreSQL) 데이터베이스 연결 설정
+try:
+    conn = st.connection("sql", type="sql")
+except Exception as e:
+    st.error(f"데이터베이스 연결에 실패했습니다. Streamlit Secrets 설정을 확인해주세요: {e}")
+    st.stop()
+
+# 2. Supabase 테이블 초기화 (PostgreSQL 문법 완벽 대응)
 def init_db():
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    
-    c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS chapters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            subject TEXT NOT NULL,
-            name TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS chapter_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            chapter_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            video_url TEXT DEFAULT ''
-        )
-    ''')
-    
-    try:
-        c.execute("ALTER TABLE chapter_types ADD COLUMN video_url TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            chapter TEXT NOT NULL,
-            type_name TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS homework (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hw_date TEXT NOT NULL,
-            title TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_homework (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            hw_date TEXT NOT NULL,
-            title TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS milestone_progress (
-            student_name TEXT,
-            milestone_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, milestone_id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS homework_progress (
-            student_name TEXT,
-            homework_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, homework_id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_homework_progress (
-            student_name TEXT,
-            student_hw_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, student_hw_id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_wrong_entries (
-            student_name TEXT,
-            unit_code TEXT,
-            numbers_text TEXT,
-            PRIMARY KEY (student_name, unit_code)
-        )
-    ''')
-    
-    c.execute("SELECT COUNT(*) FROM subjects")
-    if c.fetchone()[0] == 0:
-        default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
-        for sub in default_subjects:
-            try:
-                c.execute("INSERT INTO subjects (name) VALUES (?)", (sub,))
-            except sqlite3.IntegrityError:
-                pass
-                
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);")
+        s.execute("CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);")
+        s.execute("CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);")
+        s.execute("CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT '');")
+        s.execute("CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);")
+        s.execute("CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
+        s.execute("CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
+        s.execute("CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));")
+        s.execute("CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));")
+        s.execute("CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));")
+        s.execute("CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, PRIMARY KEY (student_name, unit_code));")
+        
+        # 기본 과목 데이터 삽입
+        res = s.execute("SELECT COUNT(*) FROM subjects;").fetchone()
+        if res[0] == 0:
+            default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
+            for sub in default_subjects:
+                s.execute("INSERT INTO subjects (name) VALUES (:name) ON CONFLICT DO NOTHING;", {"name": sub})
+        s.commit()
 
 init_db()
 
-# --- 데이터 관리 함수들 ---
+# --- 데이터 관리 함수들 (Supabase/PostgreSQL 쿼리 전환) ---
 def get_students():
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT name FROM students ORDER BY name")
-    rows = c.fetchall()
-    conn.close()
-    return [r[0] for r in rows]
+    df = conn.query("SELECT name FROM students ORDER BY name;", ttl=0)
+    return df["name"].tolist() if not df.empty else []
 
 def add_student(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
     try:
-        c.execute("INSERT INTO students (name) VALUES (?)", (name,))
-        conn.commit()
-        success = True
-    except sqlite3.IntegrityError:
-        success = False
-    conn.close()
-    return success
+        with conn.session as s:
+            s.execute("INSERT INTO students (name) VALUES (:name);", {"name": name})
+            s.commit()
+        return True
+    except:
+        return False
 
 def delete_student(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM students WHERE name = ?", (name,))
-    c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM milestone_progress WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM homework_progress WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM student_homework WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
-    c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM students WHERE name = :name;", {"name": name})
+        s.execute("DELETE FROM milestones WHERE student_name = :name;", {"name": name})
+        s.execute("DELETE FROM milestone_progress WHERE student_name = :name;", {"name": name})
+        s.execute("DELETE FROM homework_progress WHERE student_name = :name;", {"name": name})
+        s.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = :name);", {"name": name})
+        s.execute("DELETE FROM student_homework WHERE student_name = :name;", {"name": name})
+        s.execute("DELETE FROM student_wrong_entries WHERE student_name = :name;", {"name": name})
+        s.commit()
 
 def get_subjects():
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT id, name FROM subjects ORDER BY id")
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    df = conn.query("SELECT id, name FROM subjects ORDER BY id;", ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_subject(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
     try:
-        c.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
-        conn.commit()
-        success = True
-    except sqlite3.IntegrityError:
-        success = False
-    conn.close()
-    return success
+        with conn.session as s:
+            s.execute("INSERT INTO subjects (name) VALUES (:name);", {"name": name})
+            s.commit()
+        return True
+    except:
+        return False
 
 def update_subject(sub_id, old_name, new_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
     try:
-        c.execute("UPDATE subjects SET name = ? WHERE id = ?", (new_name, sub_id))
-        c.execute("UPDATE chapters SET subject = ? WHERE subject = ?", (new_name, old_name))
-        c.execute("UPDATE milestones SET subject = ? WHERE subject = ?", (new_name, old_name))
-        conn.commit()
-        success = True
-    except sqlite3.IntegrityError:
-        success = False
-    conn.close()
-    return success
+        with conn.session as s:
+            s.execute("UPDATE subjects SET name = :new_name WHERE id = :id;", {"new_name": new_name, "id": sub_id})
+            s.execute("UPDATE chapters SET subject = :new_name WHERE subject = :old_name;", {"new_name": new_name, "old_name": old_name})
+            s.execute("UPDATE milestones SET subject = :new_name WHERE subject = :old_name;", {"new_name": new_name, "old_name": old_name})
+            s.commit()
+        return True
+    except:
+        return False
 
 def delete_subject(sub_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM subjects WHERE id = ?", (sub_id,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM subjects WHERE id = :id;", {"id": sub_id})
+        s.commit()
 
 def get_chapters():
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT id, subject, name FROM chapters ORDER BY subject, CAST(SUBSTR(name, 1, INSTR(name || '.', '.') - 1) AS INTEGER), name")
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    df = conn.query("SELECT id, subject, name FROM chapters ORDER BY subject, name;", ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_chapter(subject, name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (subject, name))
-    ch_id = c.lastrowid
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        res = s.execute("INSERT INTO chapters (subject, name) VALUES (:subject, :name) RETURNING id;", {"subject": subject, "name": name})
+        ch_id = res.fetchone()[0]
+        s.commit()
     return ch_id
 
 def update_chapter(ch_id, subject, name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("UPDATE chapters SET subject = ?, name = ? WHERE id = ?", (subject, name, ch_id))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("UPDATE chapters SET subject = :subject, name = :name WHERE id = :id;", {"subject": subject, "name": name, "id": ch_id})
+        s.commit()
 
 def delete_chapter(ch_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM chapters WHERE id = ?", (ch_id,))
-    c.execute("DELETE FROM chapter_types WHERE chapter_id = ?", (ch_id,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM chapters WHERE id = :id;", {"id": ch_id})
+        s.execute("DELETE FROM chapter_types WHERE chapter_id = :id;", {"id": ch_id})
+        s.commit()
 
 def get_chapter_types(chapter_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    df = conn.query(f"SELECT id, name, video_url FROM chapter_types WHERE chapter_id = {chapter_id} ORDER BY id;", ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_chapter_type(chapter_id, name, video_url=""):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (chapter_id, name, video_url))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, :v_url);", {"ch_id": chapter_id, "name": name, "v_url": video_url})
+        s.commit()
 
 def update_chapter_type_url(type_id, video_url):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("UPDATE chapter_types SET video_url = ? WHERE id = ?", (video_url, type_id))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("UPDATE chapter_types SET video_url = :v_url WHERE id = :id;", {"v_url": video_url, "id": type_id})
+        s.commit()
 
 def delete_chapter_type(type_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM chapter_types WHERE id = ?", (type_id,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM chapter_types WHERE id = :id;", {"id": type_id})
+        s.commit()
 
 def bulk_insert_types_for_chapter(chapter_id, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    
-    c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-    count_row = c.fetchone()
-    type_counter = (count_row[0] if count_row else 0) + 1
-    
-    lines = text_data.strip().split('\n')
-    for line in lines:
-        line_str = line.strip()
-        if not line_str:
-            continue
+    with conn.session as s:
+        res = s.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = :id;", {"id": chapter_id}).fetchone()
+        type_counter = (res[0] if res else 0) + 1
         
-        raw_type_name = line_str.lstrip('-•* ').strip()
-        if raw_type_name:
-            if not raw_type_name.startswith("유형"):
-                type_name = f"유형 {type_counter:02d}. {raw_type_name}"
-            else:
-                type_name = raw_type_name
-            
-            c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (chapter_id, type_name, ""))
-            type_counter += 1
-            
-    conn.commit()
-    conn.close()
+        lines = text_data.strip().split('\n')
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            raw_type_name = line_str.lstrip('-•* ').strip()
+            if raw_type_name:
+                type_name = raw_type_name if raw_type_name.startswith("유형") else f"유형 {type_counter:02d}. {raw_type_name}"
+                s.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, '');", {"ch_id": chapter_id, "name": type_name})
+                type_counter += 1
+        s.commit()
 
 def get_student_milestones(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("""
+    query = f"""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
                (SELECT t.video_url FROM chapter_types t WHERE t.name = m.type_name LIMIT 1) as video_url
-        FROM milestones m WHERE m.student_name = ?
-    """, (student_name,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
+        FROM milestones m WHERE m.student_name = '{student_name}' ORDER BY m.id;
+    """
+    df = conn.query(query, ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def assign_chapters_to_student(student_name, chapter_ids):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    
     added_count = 0
-    for chapter_id in chapter_ids:
-        c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
-        ch_row = c.fetchone()
-        if not ch_row:
-            continue
-        sub, ch_name = ch_row
-        
-        c.execute("SELECT name FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-        type_rows = c.fetchall()
-        
-        types_to_add = [r[0] for r in type_rows]
-        if not types_to_add:
-            types_to_add = ["단원 기본 학습"]
+    with conn.session as s:
+        existing_df = conn.query(f"SELECT chapter, type_name FROM milestones WHERE student_name = '{student_name}';", ttl=0)
+        existing = set(zip(existing_df['chapter'], existing_df['type_name'])) if not existing_df.empty else set()
+
+        for chapter_id in chapter_ids:
+            ch_res = s.execute("SELECT subject, name FROM chapters WHERE id = :id;", {"id": chapter_id}).fetchone()
+            if not ch_res:
+                continue
+            sub, ch_name = ch_res
             
-        c.execute("SELECT chapter, type_name FROM milestones WHERE student_name = ?", (student_name,))
-        existing = {(r[0], r[1]) for r in c.fetchall()}
-        
-        for t_name in types_to_add:
-            if (ch_name, t_name) not in existing:
-                c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", 
-                          (student_name, sub, ch_name, t_name))
-                added_count += 1
-                
-    conn.commit()
-    conn.close()
+            t_df = conn.query(f"SELECT name FROM chapter_types WHERE chapter_id = {chapter_id};", ttl=0)
+            types_to_add = t_df['name'].tolist() if not t_df.empty else ["단원 기본 학습"]
+            
+            for t_name in types_to_add:
+                if (ch_name, t_name) not in existing:
+                    s.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (:sname, :sub, :ch, :tname);",
+                              {"sname": student_name, "sub": sub, "ch": ch_name, "tname": t_name})
+                    added_count += 1
+        s.commit()
     return added_count
 
 def delete_student_milestone(m_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
-    c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM milestones WHERE id = :id;", {"id": m_id})
+        s.execute("DELETE FROM milestone_progress WHERE milestone_id = :id;", {"id": m_id})
+        s.commit()
 
 def delete_student_milestones_by_chapters(student_name, chapter_names):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
     total_deleted = 0
-    for ch_name in chapter_names:
-        c.execute("SELECT id FROM milestones WHERE student_name = ? AND chapter = ?", (student_name, ch_name))
-        m_ids = [r[0] for r in c.fetchall()]
-        for m_id in m_ids:
-            c.execute("DELETE FROM milestones WHERE id = ?", (m_id,))
-            c.execute("DELETE FROM milestone_progress WHERE milestone_id = ?", (m_id,))
-            total_deleted += 1
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        for ch_name in chapter_names:
+            m_df = conn.query(f"SELECT id FROM milestones WHERE student_name = '{student_name}' AND chapter = '{ch_name}';", ttl=0)
+            if not m_df.empty:
+                m_ids = m_df['id'].tolist()
+                for m_id in m_ids:
+                    s.execute("DELETE FROM milestones WHERE id = :id;", {"id": m_id})
+                    s.execute("DELETE FROM milestone_progress WHERE milestone_id = :id;", {"id": m_id})
+                    total_deleted += 1
+        s.commit()
     return total_deleted
 
 def get_student_homework_dates(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
-    rows = c.fetchall()
-    conn.close()
-    return [r[0] for r in rows]
+    df = conn.query(f"SELECT DISTINCT hw_date FROM student_homework WHERE student_name = '{student_name}' ORDER BY hw_date DESC;", ttl=0)
+    return df['hw_date'].tolist() if not df.empty else []
 
 def get_student_homework_by_date(student_name, hw_date):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    df = conn.query(f"SELECT id, title FROM student_homework WHERE student_name = '{student_name}' AND hw_date = '{hw_date}' ORDER BY id;", ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def get_all_student_homework(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    df = conn.query(f"SELECT id, hw_date, title FROM student_homework WHERE student_name = '{student_name}' ORDER BY hw_date DESC, id;", ttl=0)
+    return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def bulk_insert_student_homework(student_name, hw_date, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    lines = text_data.strip().split('\n')
     added_count = 0
-    for line in lines:
-        line_str = line.strip()
-        if not line_str:
-            continue
-        title = line_str.lstrip('-•* ').strip()
-        if title:
-            c.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (?, ?, ?)", (student_name, hw_date, title))
-            added_count += 1
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        lines = text_data.strip().split('\n')
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            title = line_str.lstrip('-•* ').strip()
+            if title:
+                s.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (:sname, :hdate, :title);",
+                          {"sname": student_name, "hdate": hw_date, "title": title})
+                added_count += 1
+        s.commit()
     return added_count
 
 def update_student_homework(shw_id, hw_date, title):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("UPDATE student_homework SET hw_date = ?, title = ? WHERE id = ?", (hw_date, title, shw_id))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("UPDATE student_homework SET hw_date = :hdate, title = :title WHERE id = :id;", {"hdate": hw_date, "title": title, "id": shw_id})
+        s.commit()
 
 def delete_student_homework(shw_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("DELETE FROM student_homework WHERE id = ?", (shw_id,))
-    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (shw_id,))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("DELETE FROM student_homework WHERE id = :id;", {"id": shw_id})
+        s.execute("DELETE FROM student_homework_progress WHERE student_hw_id = :id;", {"id": shw_id})
+        s.commit()
 
 def get_milestone_progress(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: bool(r[1]) for r in rows}
+    df = conn.query(f"SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = '{student_name}';", ttl=0)
+    return dict(zip(df['milestone_id'], df['is_checked'].astype(bool))) if not df.empty else {}
 
 def get_student_homework_progress(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: bool(r[1]) for r in rows}
+    df = conn.query(f"SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = '{student_name}';", ttl=0)
+    return dict(zip(df['student_hw_id'], df['is_checked'].astype(bool))) if not df.empty else {}
 
 def save_student_progress(student_name, m_checked, h_checked):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    for m_id, val in m_checked.items():
-        c.execute('''
-            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-            VALUES (?, ?, ?)
-            ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-        ''', (student_name, m_id, int(val), int(val)))
-    for h_id, val in h_checked.items():
-        c.execute('''
-            INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-            VALUES (?, ?, ?)
-            ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-        ''', (student_name, h_id, int(val), int(val)))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        for m_id, val in m_checked.items():
+            s.execute("""
+                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                VALUES (:sname, :mid, :val)
+                ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+            """, {"sname": student_name, "mid": m_id, "val": int(val)})
+        for h_id, val in h_checked.items():
+            s.execute("""
+                INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                VALUES (:sname, :hid, :val)
+                ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+            """, {"sname": student_name, "hid": h_id, "val": int(val)})
+        s.commit()
 
 def get_student_wrong_entry(student_name, unit_code):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute("SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else ""
+    df = conn.query(f"SELECT numbers_text FROM student_wrong_entries WHERE student_name = '{student_name}' AND unit_code = '{unit_code}';", ttl=0)
+    return df['numbers_text'].iloc[0] if not df.empty else ""
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    conn = sqlite3.connect("mathpro_roadmap.db")
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
-        VALUES (?, ?, ?)
-        ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?
-    ''', (student_name, unit_code, numbers_text, numbers_text))
-    conn.commit()
-    conn.close()
+    with conn.session as s:
+        s.execute("""
+            INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
+            VALUES (:sname, :ucode, :numtxt)
+            ON CONFLICT (student_name, unit_code) DO UPDATE SET numbers_text = EXCLUDED.numbers_text;
+        """, {"sname": student_name, "ucode": unit_code, "numtxt": numbers_text})
+        s.commit()
 
 def parse_numbers(text):
     if not text:
@@ -548,7 +377,7 @@ if url_student and url_student in student_list:
                         with cols[0]:
                             m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
                         with cols[1]:
-                            if v_url and v_url.strip() != "":
+                            if v_url and str(v_url).strip() != "":
                                 st.markdown(
                                     f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#03C75A; color:white; padding:4px 8px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px;">🎥 개념해설</a>',
                                     unsafe_allow_html=True
@@ -733,7 +562,7 @@ else:
         "📊 5. 전체 학생 숙제 매트릭스"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (종합 현황 요약 카드 포함)
+    # [탭 1] 선택한 학생 개별 관리
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 요약 및 진도 관리")
@@ -750,19 +579,18 @@ else:
             s_total_h = len(all_s_hws)
             s_h_percent = int((s_completed_h / s_total_h) * 100) if s_total_h > 0 else 0
 
-            # 학생별 종합 현황 요약 카드 (Metrics)
+            # metrics
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric(label="🎯 개념 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
             with col_m2:
                 st.metric(label="📚 숙제 완료율", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h} 완료")
             with col_m3:
-                conn_w = sqlite3.connect("mathpro_roadmap.db")
-                c_w = conn_w.cursor()
-                c_w.execute("SELECT SUM(LENGTH(numbers_text) - LENGTH(REPLACE(numbers_text, ',', '')) + 1) FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
-                w_count_row = c_w.fetchone()
-                conn_w.close()
-                total_wrong_cnt = w_count_row[0] if w_count_row and w_count_row[0] else 0
+                df_w = conn.query(f"SELECT numbers_text FROM student_wrong_entries WHERE student_name = '{selected_student}' AND numbers_text != '';", ttl=0)
+                total_wrong_cnt = 0
+                if not df_w.empty:
+                    for txt in df_w['numbers_text']:
+                        total_wrong_cnt += len(parse_numbers(txt))
                 st.metric(label="💬 등록된 오답 문항 수", value=f"{int(total_wrong_cnt)}문항")
 
             st.divider()
@@ -806,23 +634,19 @@ else:
 
                 st.divider()
                 if st.button("선생님 진도 상태 저장하기", type="primary", key="teacher_save_btn"):
-                    conn = sqlite3.connect("mathpro_roadmap.db")
-                    c = conn.cursor()
-                    for m_id, val in teacher_m_checked.items():
-                        c.execute('''
-                            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-                            VALUES (?, ?, ?)
-                            ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-                        ''', (selected_student, m_id, int(val), int(val)))
-                    conn.commit()
-                    conn.close()
+                    with conn.session as s:
+                        for m_id, val in teacher_m_checked.items():
+                            s.execute("""
+                                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                                VALUES (:sname, :mid, :val)
+                                ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                            """, {"sname": selected_student, "mid": m_id, "val": int(val)})
+                        s.commit()
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
-                # --- [개선] 단원 단위 다중 선택 삭제 및 유형별 다중 선택 삭제 섹션 ---
                 st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원 다중 선택 및 개별 유형 다중 선택)")
                 
-                # 1. 단원 단위 다중 선택 삭제 기능
                 with st.expander("📂 단원 전체 다중 삭제 (클릭하여 열기)"):
                     st.warning("⚠️ 삭제할 단원들의 체크박스에 체크하고 하단의 버튼을 누르면, 해당 단원들에 속한 모든 유형이 한 번에 싹 삭제됩니다!")
                     
@@ -850,7 +674,6 @@ else:
                     else:
                         st.info("배정된 단원이 없습니다.")
 
-                # 2. 유형별 다중 선택 삭제 기능
                 with st.expander("☑️ 개별 유형 다중 선택 삭제 (클릭하여 열기)"):
                     st.info("💡 삭제할 진도 항목들의 체크박스에 체크한 뒤, 하단의 **[선택한 진도 항목 일괄 삭제]** 버튼을 눌러주세요!")
                     with st.form("teacher_milestone_bulk_del_form"):
@@ -993,16 +816,9 @@ else:
                                     with tc2:
                                         if st.form_submit_button("유형 추가"):
                                             if t_in.strip():
-                                                c_conn = sqlite3.connect("mathpro_roadmap.db")
-                                                c_cur = c_conn.cursor()
-                                                c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
-                                                cnt = c_cur.fetchone()[0] + 1
-                                                c_conn.close()
-                                                
-                                                formatted_t = t_in.strip()
-                                                if not formatted_t.startswith("유형"):
-                                                    formatted_t = f"유형 {cnt:02d}. {formatted_t}"
-                                                
+                                                types_df = conn.query(f"SELECT COUNT(*) FROM chapter_types WHERE chapter_id = {ch_id};", ttl=0)
+                                                cnt = types_df.iloc[0, 0] + 1
+                                                formatted_t = t_in.strip() if t_in.strip().startswith("유형") else f"유형 {cnt:02d}. {t_in.strip()}"
                                                 add_chapter_type(ch_id, formatted_t, "")
                                                 st.rerun()
                                                 
@@ -1013,7 +829,7 @@ else:
                                             with st.form(f"url_form_{t_id}"):
                                                 u_col1, u_col2 = st.columns([3, 1])
                                                 with u_col1:
-                                                    new_url_input = st.text_input("개념해설 영상 URL", value=t_url, key=f"url_in_{t_id}", label_visibility="collapsed", placeholder="https://cafe.naver.com/...")
+                                                    new_url_input = st.text_input("개념해설 영상 URL", value=t_url if t_url else "", key=f"url_in_{t_id}", label_visibility="collapsed", placeholder="https://cafe.naver.com/...")
                                                 with u_col2:
                                                     if st.form_submit_button("링크 저장"):
                                                         update_chapter_type_url(t_id, new_url_input.strip())
@@ -1118,31 +934,22 @@ else:
                             teacher_hw_del_btn = st.form_submit_button("🗑️ 선택한 항목 일괄 삭제", type="secondary", use_container_width=True)
                         
                         if teacher_hw_save_btn:
-                            conn = sqlite3.connect("mathpro_roadmap.db")
-                            c = conn.cursor()
-                            for h_id, val in teacher_hw_checked.items():
-                                c.execute('''
-                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
-                                ''', (int(val), h_id))
-                                c.execute('''
-                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
-                                ''', (int(val), h_id))
-                            conn.commit()
-                            conn.close()
+                            with conn.session as s:
+                                for h_id, val in teacher_hw_checked.items():
+                                    s.execute("""
+                                        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                        VALUES (:sname, :hid, :val)
+                                        ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                                    """, {"sname": selected_student, "hid": h_id, "val": int(val)})
+                                s.commit()
                             st.success("과제 완료 상태가 저장되었습니다!")
                             st.rerun()
                             
                         if teacher_hw_del_btn:
                             del_ids = [h_id for h_id, to_del in teacher_hw_delete.items() if to_del]
                             if del_ids:
-                                conn = sqlite3.connect("mathpro_roadmap.db")
-                                c = conn.cursor()
                                 for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
-                                conn.commit()
-                                conn.close()
+                                    delete_student_homework(h_id)
                                 st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
                                 st.rerun()
                             else:
@@ -1152,7 +959,6 @@ else:
             else:
                 st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
 
-            # 전체 등록된 과제 내용 개별 수정 영역
             st.markdown("---")
             st.markdown(f"##### 🛠️ 전체 등록된 과제 내용 개별 수정")
             all_student_hws = get_all_student_homework(selected_student)
@@ -1184,14 +990,12 @@ else:
         if all_students:
             chk_student = st.selectbox("조회할 학생 선택", all_students, key="chk_wrong_student")
             
-            conn = sqlite3.connect("mathpro_roadmap.db")
-            c = conn.cursor()
-            c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ?", (chk_student,))
-            wrong_rows = c.fetchall()
-            conn.close()
+            df_wrong = conn.query(f"SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = '{chk_student}';", ttl=0)
             
-            if wrong_rows:
-                for u_code, nums_txt in wrong_rows:
+            if not df_wrong.empty:
+                for _, row in df_wrong.iterrows():
+                    u_code = row['unit_code']
+                    nums_txt = row['numbers_text']
                     with st.container(border=True):
                         parsed_s = parse_numbers(nums_txt)
                         if parsed_s:
@@ -1229,28 +1033,21 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내에서 [완료]·[삭제]·[수정] 통합 처리)
+    # [탭 5] 전체 학생 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 항목별 [수정]**까지 한곳에서 바로 처리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
-            conn = sqlite3.connect("mathpro_roadmap.db")
-            c = conn.cursor()
-            c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
-            all_hw_dates = [r[0] for r in c.fetchall()]
-            conn.close()
+            df_dates = conn.query("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC;", ttl=0)
+            all_hw_dates = df_dates['hw_date'].tolist() if not df_dates.empty else []
             
             if all_hw_dates:
                 selected_matrix_date = st.selectbox("조회 및 관리할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
                 st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 과제 검사 및 관리 보드")
                 
-                # 해당 날짜에 과제가 있는 학생들만 필터링
-                students_with_hw = []
-                for s_name in all_students:
-                    if get_student_homework_by_date(s_name, selected_matrix_date):
-                        students_with_hw.append(s_name)
+                students_with_hw = [s_name for s_name in all_students if get_student_homework_by_date(s_name, selected_matrix_date)]
                 
                 if students_with_hw:
                     matrix_hw_checked = {}
@@ -1265,7 +1062,6 @@ else:
                                 
                                 for h_id, title in s_hws:
                                     is_done = s_hw_prog.get(h_id, False)
-                                    # [완료], [삭제] 체크박스
                                     col_chk, col_del, col_ttl = st.columns([1, 1, 6])
                                     with col_chk:
                                         matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
@@ -1282,37 +1078,27 @@ else:
                             mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
                         
                         if mat_save_btn:
-                            conn = sqlite3.connect("mathpro_roadmap.db")
-                            c = conn.cursor()
-                            for h_id, val in matrix_hw_checked.items():
-                                c.execute('''
-                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
-                                ''', (int(val), h_id))
-                                c.execute('''
-                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
-                                ''', (int(val), h_id))
-                            conn.commit()
-                            conn.close()
+                            with conn.session as s:
+                                for h_id, val in matrix_hw_checked.items():
+                                    s.execute("""
+                                        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                        SELECT student_name, id, :val FROM student_homework WHERE id = :hid
+                                        ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                                    """, {"val": int(val), "hid": h_id})
+                                s.commit()
                             st.success("숙제 완료 상태가 저장되었습니다!")
                             st.rerun()
                             
                         if mat_del_btn:
                             del_ids = [h_id for h_id, to_del in matrix_hw_delete.items() if to_del]
                             if del_ids:
-                                conn = sqlite3.connect("mathpro_roadmap.db")
-                                c = conn.cursor()
                                 for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
-                                conn.commit()
-                                conn.close()
+                                    delete_student_homework(h_id)
                                 st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
                                 st.rerun()
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 각 학생별 과제 카드 안에서 [수정]을 바로 할 수 있도록 개별 항목별 수정 영역 추가
                     st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
                     for s_name in students_with_hw:
                         s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
@@ -1333,7 +1119,6 @@ else:
                 else:
                     st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생이 없습니다.")
 
-                # 매트릭스 내에서 특정 학생에게 새 과제 추가
                 st.markdown("---")
                 st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
                 with st.form("matrix_add_hw_form"):
