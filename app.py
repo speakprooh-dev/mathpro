@@ -17,7 +17,7 @@ def create_excel_backup():
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
-            "student_homework_progress", "student_wrong_entries", "problem_links"
+            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
         ]
         for table in tables:
             try:
@@ -91,6 +91,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_name TEXT NOT NULL,
             hw_date TEXT NOT NULL,
+            title TEXT NOT NULL
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS homework_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL
         )
     ''')
@@ -429,6 +435,29 @@ def delete_problem_link(link_id):
     conn.commit()
     conn.close()
 
+# --- 과제 템플릿 관리 함수들 ---
+def get_homework_templates():
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, title FROM homework_templates ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_homework_template(title):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO homework_templates (title) VALUES (?)", (title,))
+    conn.commit()
+    conn.close()
+
+def delete_homework_template(t_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM homework_templates WHERE id = ?", (t_id,))
+    conn.commit()
+    conn.close()
+
 def get_student_milestones(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -612,18 +641,12 @@ def parse_numbers(text):
     return set(int(n) for n in nums)
 
 # --- 웹 UI 구성 ---
-
-# 만약 로고 이미지 파일이 있다면 아래 주석을 풀고 파일명을 넣어주세요! (예: "mathpro_logo.png")
-# st.image("mathpro_logo.png", width=150)
-
 st.title("📐 MathPro 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
-
-# 네이버 상징 초록색(#03C75A)과 깔끔한 흰색 글씨로 변경한 카페 바로가기 버튼
 st.markdown(
-    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 MathPro 네이버 카페 바로가기</a>',
+    f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#03C75A; color:#FFFFFF; padding:10px 14px; border-radius:8px; font-size:14px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; border: 1px solid #03C75A;">🟢 MathPro 네이버 카페 바로가기</a>',
     unsafe_allow_html=True
 )
 
@@ -885,7 +908,7 @@ else:
 
     if student_list:
         with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
-            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 우측의 **[📋 복사]** 버튼을 누르면 링크가 클립보드에 바로 복사됩니다.")
+            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 우측의 **코드 블록**을 통해 링크를 복사할 수 있습니다.")
             try:
                 base_url = st.context.headers.get("Host", "")
                 if base_url:
@@ -905,7 +928,6 @@ else:
                         unsafe_allow_html=True
                     )
                 with col_btn:
-                    # Streamlit 최신 네이티브 복사 버튼 (버튼만 누르면 바로 복사됨)
                     st.code(personal_link, language="text")
                 st.divider()
 
@@ -1280,15 +1302,55 @@ else:
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
+            
+            # --- 자주 쓰는 과제 템플릿 불러오기 및 관리 섹션 ---
+            with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 불러오기"):
+                st.info("💡 자주 쓰는 과제 문구를 등록해 두고 버튼을 누르면 아래 과제 입력창에 문구가 자동으로 쏙 들어갑니다!")
+                
+                templates = get_homework_templates()
+                
+                # 템플릿 등록 폼
+                with st.form("add_template_form"):
+                    new_tpl_text = st.text_input("새로운 자주 쓰는 과제 문구 등록", placeholder="예: 쎈 수학(상) p.45~48 대표유형 풀이")
+                    if st.form_submit_button("➕ 템플릿 저장하기"):
+                        if new_tpl_text.strip():
+                            add_homework_template(new_tpl_text.strip())
+                            st.success("템플릿이 저장되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("문구를 입력해주세요.")
+                
+                if templates:
+                    st.markdown("##### 📋 저장된 템플릿 목록 (클릭하여 과제 입력창에 적용)")
+                    for t_id, t_title in templates:
+                        col_t_apply, col_t_del = st.columns([5, 1])
+                        with col_t_apply:
+                            if st.button(f"📥 [{t_title}] 불러오기", key=f"apply_tpl_{t_id}", use_container_width=True):
+                                st.session_state["hw_textarea_input"] = t_title
+                                st.rerun()
+                        with col_t_del:
+                            if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}", use_container_width=True):
+                                delete_homework_template(t_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+                else:
+                    st.caption("등록된 과제 템플릿이 없습니다. 위에서 자주 쓰는 문구를 등록해 보세요!")
+
+            # 과제 입력 폼 (session_state 연동)
+            if "hw_textarea_input" not in st.session_state:
+                st.session_state["hw_textarea_input"] = ""
+
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
-                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
+                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", value=st.session_state["hw_textarea_input"], key="hw_textarea_form_key", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
                 hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 과제 등록하기", type="primary")
                 if hw_submit:
-                    if hw_text_area.strip():
+                    final_text = st.session_state.get("hw_textarea_form_key", "")
+                    if final_text.strip():
                         date_str = str(hw_date_input)
-                        added_c = bulk_insert_student_homework(selected_student, date_str, hw_text_area)
+                        added_c = bulk_insert_student_homework(selected_student, date_str, final_text)
                         st.success(f"총 {added_c}개의 과제가 {selected_student} 학생에게 등록되었습니다!")
+                        st.session_state["hw_textarea_input"] = "" # 초기화
                         st.rerun()
                     else:
                         st.error("과제 내용을 입력해주세요.")
@@ -1592,7 +1654,7 @@ else:
                         st.success(f"'{input_full_code.strip().upper()}' 문제 해설 링크가 안전하게 저장되었습니다!")
                         st.rerun()
                     else:
-                        st.error("저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
+                        st.error("저장 중 오류가 저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
                 else:
                     st.warning("문제 번호와 영상 주소를 모두 입력해주세요.")
 
