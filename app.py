@@ -136,7 +136,6 @@ def init_db():
         )
     ''')
     
-    # --- [자동 마이그레이션] 기존 4자리 단원코드로 잘못 저장된 데이터 자동 보정 (뒤 3자리 문제번호 분리) ---
     try:
         c.execute("SELECT id, full_code FROM problem_links")
         for row in c.fetchall():
@@ -343,7 +342,6 @@ def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
     if len(full_code) < 4:
         return False
-    # 뒤 3자리를 문제번호, 나머지를 단원코드로 동적 분리 (4글자, 5글자 단원코드 모두 완벽 지원)
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
     
@@ -362,7 +360,6 @@ def save_problem_link(full_code, video_url):
     conn.close()
     return success
 
-# 여러 개 일괄 등록 함수
 def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
     success_count = 0
@@ -742,7 +739,7 @@ if url_student and url_student in student_list:
 
         st.markdown("### 📋 현재 저장된 오답 목록 및 풀이영상 바로가기")
         if saved_nums:
-            st.caption("각 문제 번호를 누르거나 **[🎥 해설보기]** 버튼을 누르면 등록된 네이버 카페 풀이 영상으로 바로 연결됩니다!")
+            st.caption("💡 **문제 번호를 클릭**하면 등록된 네이버 카페 풀이 영상으로 바로 연결됩니다!")
             
             linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
 
@@ -751,26 +748,22 @@ if url_student and url_student in student_list:
                 full_code = f"{current_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
 
-                col_c1, col_c2 = st.columns([3, 1])
-                with col_c1:
-                    st.code(full_code, language="text")
-                with col_c2:
-                    if video_url and video_url.strip() != "":
-                        st.markdown(
-                            f'<a href="{video_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 10px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🎥 해설보기</a>',
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        st.markdown(
-                            f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#9CA3AF; color:white; padding:6px 10px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🔍 카페검색</a>',
-                            unsafe_allow_html=True
-                        )
+                if video_url and video_url.strip() != "":
+                    st.markdown(
+                        f'<a href="{video_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#1E293B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">📌 {full_code} &nbsp;&nbsp;<span style="color:#03C75A; font-size:13px;">🎥 해설 영상 바로가기 ➔</span></a>',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(
+                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#64748B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#94A3B8; font-size:13px;">🔍 네이버 카페에서 검색하기 ➔</span></a>',
+                        unsafe_allow_html=True
+                    )
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
         st.markdown("---")
         st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
-        st.info("💡 **B1353015**처럼 전체 번호를 입력하면 해당 해설 영상으로 바로 이동하며, **B1353**처럼 단원코드를 입력하면 해당 단원에서 링크가 등록된 모든 문제 목록이 쫙 나타납니다!")
+        st.info("💡 **B1353015**처럼 전체 번호를 검색하면 해설 영상으로 바로 연결되며, **B1353**처럼 단원코드를 검색하면 링크가 등록된 모든 문제 목록이 깔끔하게 표시됩니다!")
 
         search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
         
@@ -793,15 +786,12 @@ if url_student and url_student in student_list:
                 unit_results = get_problem_links_by_unit(search_prob_input)
                 if unit_results:
                     st.markdown(f"##### 📂 `{search_prob_input}` 단원에서 링크가 설정된 문제 목록 총 {len(unit_results)}개")
+                    st.caption("💡 아래 문제 번호를 클릭하시면 해당 해설 영상으로 바로 연결됩니다!")
                     for f_code, v_url in unit_results:
-                        col_r1, col_r2 = st.columns([3, 1])
-                        with col_r1:
-                            st.code(f_code, language="text")
-                        with col_r2:
-                            st.markdown(
-                                f'<a href="{v_url}" target="_blank" style="display:block; background-color:#03C75A; color:white; padding:6px 10px; border-radius:4px; font-size:13px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🎥 해설보기</a>',
-                                unsafe_allow_html=True
-                            )
+                        st.markdown(
+                            f'<a href="{v_url}" target="_blank" style="display:block; background-color:#F8FAFC; color:#1E293B; border:1px solid #E2E8F0; padding:10px 14px; border-radius:6px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">📌 {f_code} &nbsp;&nbsp;<span style="color:#03C75A; font-size:13px;">🎥 해설 영상 바로가기 ➔</span></a>',
+                            unsafe_allow_html=True
+                        )
                 else:
                     st.info(f"'{search_prob_input}' 단원에 등록된 해설 링크가 없습니다.")
 
@@ -1610,21 +1600,20 @@ else:
 
         st.markdown("---")
         st.markdown("##### 📋 등록된 문제 해설 링크 목록")
+        st.caption("💡 아래 문제 번호를 클릭하시면 해당 해설 영상으로 바로 연결됩니다!")
         
         all_links = get_all_problem_links()
         if all_links:
             with st.form("manage_problem_links_form"):
                 link_del_checks = {}
                 for l_id, f_code, v_url in all_links:
-                    col_l_chk, col_l_code, col_l_url, col_l_btn = st.columns([1, 2, 6, 1])
+                    col_l_chk, col_l_code, col_l_url = st.columns([1, 3, 8])
                     with col_l_chk:
                         link_del_checks[l_id] = st.checkbox("삭제", value=False, key=f"del_link_{l_id}")
                     with col_l_code:
-                        st.write(f"📌 **{f_code}**")
+                        st.markdown(f'<a href="{v_url}" target="_blank" style="font-weight:bold; color:#03C75A; text-decoration:none;">📌 {f_code} 🔗</a>', unsafe_allow_html=True)
                     with col_l_url:
-                        st.write(f"🔗 `{v_url}`")
-                    with col_l_btn:
-                        st.markdown(f'<a href="{v_url}" target="_blank">🎥 보기</a>', unsafe_allow_html=True)
+                        st.write(f"`{v_url}`")
                     st.divider()
                 
                 del_links_submit = st.form_submit_button("🗑️ 선택한 해설 링크 삭제하기", type="secondary")
