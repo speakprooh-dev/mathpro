@@ -126,7 +126,6 @@ def init_db():
             PRIMARY KEY (student_name, unit_code)
         )
     ''')
-    # --- [추가] 개별 문제 해설 링크 저장 테이블 ---
     c.execute('''
         CREATE TABLE IF NOT EXISTS problem_links (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -328,7 +327,6 @@ def bulk_insert_types_for_chapter(chapter_id, text_data):
     conn.commit()
     conn.close()
 
-# --- [추가] 문제 해설 링크 관리 함수들 ---
 def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
     if len(full_code) < 4:
@@ -694,7 +692,6 @@ if url_student and url_student in student_list:
         if saved_nums:
             st.caption("각 문제 번호를 누르거나 **[🎥 해설보기]** 버튼을 누르면 등록된 네이버 카페 풀이 영상으로 바로 연결됩니다!")
             
-            # --- [수정] 단원코드별 등록된 링크 불러오기 ---
             linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
 
             sorted_nums_list = sorted(list(saved_nums))
@@ -719,7 +716,6 @@ if url_student and url_student in student_list:
         else:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
-        # --- [추가] 학생들이 직접 전체 번호(A114140)나 단원코드(A114)로 검색해서 해설을 찾는 섹션 ---
         st.markdown("---")
         st.markdown("### 🔍 문제 번호로 풀이해설 검색하기")
         st.info("💡 **A114140**처럼 전체 번호를 입력하면 등록된 해설 영상으로 바로 이동하며, **A114**처럼 단원코드를 입력하면 해당 단원에서 링크가 설정된 문제들이 모두 나타납니다!")
@@ -728,7 +724,6 @@ if url_student and url_student in student_list:
         
         if search_prob_input:
             if len(search_prob_input) >= 7:
-                # 전체 번호 검색 (예: A114140)
                 matched_url = get_problem_link_by_full(search_prob_input)
                 if matched_url:
                     st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
@@ -743,7 +738,6 @@ if url_student and url_student in student_list:
                         unsafe_allow_html=True
                     )
             else:
-                # 단원코드 검색 (예: A114)
                 unit_results = get_problem_links_by_unit(search_prob_input)
                 if unit_results:
                     st.markdown(f"##### 📂 `{search_prob_input}` 단원에서 링크가 설정된 문제 목록 ({len(unit_results)}개)")
@@ -895,7 +889,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(milestones)
+            s_total_m = len(s_milestones)  # 수정 완료
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1562,8 +1556,6 @@ else:
                         st.write(f"📌 **{f_code}**")
                     with col_l_url:
                         st.write(f"🔗 `{v_url}`")
-                    with col_l_url:
-                        pass
                     with col_l_btn:
                         st.markdown(f'<a href="{v_url}" target="_blank">🎥 보기</a>', unsafe_allow_html=True)
                     st.divider()
