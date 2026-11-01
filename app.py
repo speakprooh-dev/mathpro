@@ -349,6 +349,46 @@ def save_problem_link(full_code, video_url):
     conn.close()
     return success
 
+# 여러 개 일괄 등록 함수
+def bulk_save_problem_links(text_data):
+    lines = text_data.strip().split('\n')
+    success_count = 0
+    fail_count = 0
+    
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # 콤마(,), 탭(\t), 공백 등으로 분리 시도
+        parts = re.split(r'[, \t]+', line)
+        if len(parts) >= 2:
+            full_code = parts[0].strip().upper()
+            video_url = parts[1].strip()
+            
+            if len(full_code) >= 4 and video_url.startswith("http"):
+                unit_code = full_code[:4]
+                prob_num = full_code[4:] if len(full_code) > 4 else "000"
+                try:
+                    c.execute('''
+                        INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
+                        VALUES (?, ?, ?, ?)
+                        ON CONFLICT(full_code) DO UPDATE SET video_url = ?
+                    ''', (full_code, unit_code, prob_num, video_url, video_url))
+                    success_count += 1
+                except Exception:
+                    fail_count += 1
+            else:
+                fail_count += 1
+        else:
+            fail_count += 1
+            
+    conn.commit()
+    conn.close()
+    return success_count, fail_count
+
 def get_problem_links_by_unit(unit_code):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -717,10 +757,10 @@ if url_student and url_student in student_list:
             st.info("📋 현재 저장된 오답 번호가 없습니다.")
 
         st.markdown("---")
-        st.markdown("### 🔍 문제 번호로 풀이해설 검색하기")
-        st.info("💡 **A114140**처럼 전체 번호를 입력하면 등록된 해설 영상으로 바로 이동하며, **A114**처럼 단원코드를 입력하면 해당 단원에서 링크가 설정된 문제들이 모두 나타납니다!")
+        st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
+        st.info("💡 **A114140**처럼 전체 번호를 입력하면 해당 해설 영상으로 바로 이동하며, **B1353**처럼 단원코드를 입력하면 해당 단원에서 링크가 등록된 모든 문제 목록이 쫙 나타납니다!")
 
-        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: A114140 또는 A114)", placeholder="예: A114140").strip().upper()
+        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: A114140 또는 B1353)", placeholder="예: B1353").strip().upper()
         
         if search_prob_input:
             if len(search_prob_input) >= 7:
@@ -740,7 +780,7 @@ if url_student and url_student in student_list:
             else:
                 unit_results = get_problem_links_by_unit(search_prob_input)
                 if unit_results:
-                    st.markdown(f"##### 📂 `{search_prob_input}` 단원에서 링크가 설정된 문제 목록 ({len(unit_results)}개)")
+                    st.markdown(f"##### 📂 `{search_prob_input}` 단원에서 링크가 설정된 문제 목록 총 {len(unit_results)}개")
                     for f_code, v_url in unit_results:
                         col_r1, col_r2 = st.columns([3, 1])
                         with col_r1:
@@ -889,7 +929,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones)  # 수정 완료
+            s_total_m = len(s_milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -1521,16 +1561,32 @@ else:
     # [탭 6] 문제별 해설 링크 관리 (선생님 전용)
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
-        st.info("💡 선생님께서 시간 날 때마다 **A114140** 같은 전체 문제 번호와 네이버 카페 해설 주소를 등록해 두시면, 학생들이 앱에서 검색하거나 오답 목록을 볼 때 자동으로 해설 영상으로 연결됩니다!")
+        st.info("💡 개별 등록뿐만 아니라, **아래 일괄 등록 칸에 여러 줄을 복사·붙여넣기** 하시면 수십 개도 순식간에 등록됩니다!")
 
+        # --- [추가] 여러 개 한 번에 일괄 등록 폼 ---
+        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기 (클릭하여 열기)", expanded=True):
+            st.caption("예시 형식 (줄바꿈으로 여러 개 입력):\nB1353101 https://cafe.naver.com/...\nB1353102 https://cafe.naver.com/...")
+            with st.form("bulk_add_problem_links_form"):
+                bulk_input_text = st.text_area("문제번호와 URL 목록 붙여넣기", placeholder="B1353101 https://naver.me/...\nB1353102 https://naver.me/...")
+                bulk_submit = st.form_submit_button("🚀 일괄 등록 실행하기", type="primary")
+                if bulk_submit:
+                    if bulk_input_text.strip():
+                        s_cnt, f_cnt = bulk_save_problem_links(bulk_input_text)
+                        st.success(f"총 {s_cnt}개의 해설 링크가 성공적으로 등록/수정되었습니다! (실패: {f_cnt}개)")
+                        st.rerun()
+                    else:
+                        st.warning("등록할 내용을 입력해주세요.")
+
+        st.markdown("---")
+        st.markdown("##### ➕ 개별 해설 링크 등록 / 수정")
         with st.form("add_problem_link_form"):
             col_pl1, col_pl2 = st.columns([1, 2])
             with col_pl1:
-                input_full_code = st.text_input("문제 번호 입력 (예: A114140)", placeholder="A114140")
+                input_full_code = st.text_input("문제 번호 입력 (예: B1353118)", placeholder="B1353118")
             with col_pl2:
                 input_video_url = st.text_input("네이버 카페 해설 주소 (URL)", placeholder="https://cafe.naver.com/...")
             
-            link_submit = st.form_submit_button("➕ 해설 링크 등록 / 수정하기", type="primary")
+            link_submit = st.form_submit_button("➕ 개별 등록 / 수정하기", type="primary")
             if link_submit:
                 if input_full_code.strip() and input_video_url.strip():
                     if save_problem_link(input_full_code.strip(), input_video_url.strip()):
