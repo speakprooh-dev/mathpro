@@ -681,13 +681,20 @@ url_student = query_params.get("student", None)
 # 1. [학생 전용 모드]
 if url_student and url_student in student_list:
     selected_student = url_student
-    st.info(f"✨ **{selected_student}** 학생 전용 맞춤 페이지입니다.")
     
-    # 상단 구글 드라이브 폴더 바로가기 버튼 추가 (등록되어 있는 경우에만 표시)
+    # 학업적이고 자연스러운 학생 환영 안내 카드 디자인 개선
+    st.markdown(
+        f'<div style="background-color:#F0FDF4; border-left:5px solid #10B981; padding:12px 16px; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
+        f'<span style="font-size:16px; font-weight:bold; color:#065F46;">✨ [{selected_student}] 학생만을 위한 1:1 맞춤 학습 공간입니다.</span>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+    
+    # 학업적인 느낌의 드라이브 폴더 바로가기 버튼 (등록된 경우에만 표시)
     student_drive = get_student_drive_url(selected_student)
     if student_drive and student_drive.strip() != "":
         st.markdown(
-            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:20px; border:1px solid #334155; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📁 내 구글 드라이브 공유 폴더 바로가기 ➔</a>',
+            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:14px 18px; border-radius:10px; font-size:16px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:20px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2); transition: all 0.3s;">📁 개인 학습 자료실 및 과제 제출함 (Google Drive) 바로가기 ➔</a>',
             unsafe_allow_html=True
         )
 
@@ -832,7 +839,7 @@ if url_student and url_student in student_list:
                 if matched_url:
                     st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
                     st.markdown(
-                        f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:14px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid #334155;">🎥 [{search_prob_input}] 풀이 영상 바로가기 ➔</a>',
+                        f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:14px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid #334155;">🎥 [{search_prob_input}] 풀이 영상 바로가기 ➔</span></a>',
                         unsafe_allow_html=True
                     )
                 else:
