@@ -2,14 +2,30 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import re
-from sqlalchemy import text
-
-# 네이버 카페 메인 주소 반환 함수
-def get_cafe_search_url(unit_code, num_int):
-    return "https://cafe.naver.com/mathpro2020"
+import psycopg2
+import urllib.parse
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
+
+# Supabase 직접 연결 함수 (가장 안정적)
+def get_db_connection():
+    try:
+        secrets_url = st.secrets["connections"]["sql"]["url"]
+    except Exception:
+        # 시크릿 설정이 없을 경우를 대비한 기본값 (선생님 URI 반영)
+        secrets_url = "postgresql://postgres:Speakpro.2020!@db.qfpclacalaaxbhhheosw.supabase.co:5432/postgres"
+        
+    parsed_url = urllib.parse.urlparse(secrets_url)
+    conn = psycopg2.connect(
+        database=parsed_url.path[1:],
+        user=parsed_url.username,
+        password=parsed_url.password,
+        host=parsed_url.hostname,
+        port=parsed_url.port,
+        sslmode='require'
+    )
+    return conn
 
 # 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
@@ -17,277 +33,362 @@ def get_weekday_kr(date_str):
     weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
     return weekdays[d.weekday()]
 
-# 1. Supabase(PostgreSQL) 데이터베이스 연결 설정
-try:
-    conn = st.connection("sql", type="sql")
-except Exception as e:
-    st.error(f"데이터베이스 연결에 실패했습니다. Streamlit Secrets 설정을 확인해주세요: {e}")
-    st.stop()
-
-# 2. Supabase 테이블 초기화 (SQLAlchemy 2.0 text() 적용)
+# 1. 데이터베이스 테이블 초기화
 def init_db():
-    with conn.session as s:
-        s.execute(text("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT '');"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL);"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));"))
-        s.execute(text("CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, PRIMARY KEY (student_name, unit_code));"))
-        
-        # 기본 과목 데이터 삽입
-        res = s.execute(text("SELECT COUNT(*) FROM subjects;")).fetchone()
-        if res[0] == 0:
-            default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
-            for sub in default_subjects:
-                s.execute(text("INSERT INTO subjects (name) VALUES (:name) ON CONFLICT DO NOTHING;"), {"name": sub})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY);")
+    c.execute("CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);")
+    c.execute("CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);")
+    c.execute("CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT '');")
+    c.execute("CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);")
+    c.execute("CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
+    c.execute("CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL);")
+    c.execute("CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));")
+    c.execute("CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));")
+    c.execute("CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));")
+    c.execute("CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, PRIMARY KEY (student_name, unit_code));")
+    
+    c.execute("SELECT COUNT(*) FROM subjects;")
+    if c.fetchone()[0] == 0:
+        default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
+        for sub in default_subjects:
+            c.execute("INSERT INTO subjects (name) VALUES (%s) ON CONFLICT DO NOTHING;", (sub,))
+            
+    conn.commit()
+    c.close()
+    conn.close()
 
 init_db()
 
 # --- 데이터 관리 함수들 ---
 def get_students():
-    df = conn.query("SELECT name FROM students ORDER BY name;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT name FROM students ORDER BY name;", conn)
+    conn.close()
     return df["name"].tolist() if not df.empty else []
 
 def add_student(name):
+    conn = get_db_connection()
+    c = conn.cursor()
     try:
-        with conn.session as s:
-            s.execute(text("INSERT INTO students (name) VALUES (:name);"), {"name": name})
-            s.commit()
-        return True
+        c.execute("INSERT INTO students (name) VALUES (%s);", (name,))
+        conn.commit()
+        success = True
     except:
-        return False
+        success = False
+    c.close()
+    conn.close()
+    return success
 
 def delete_student(name):
-    with conn.session as s:
-        s.execute(text("DELETE FROM students WHERE name = :name;"), {"name": name})
-        s.execute(text("DELETE FROM milestones WHERE student_name = :name;"), {"name": name})
-        s.execute(text("DELETE FROM milestone_progress WHERE student_name = :name;"), {"name": name})
-        s.execute(text("DELETE FROM homework_progress WHERE student_name = :name;"), {"name": name})
-        s.execute(text("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = :name);"), {"name": name})
-        s.execute(text("DELETE FROM student_homework WHERE student_name = :name;"), {"name": name})
-        s.execute(text("DELETE FROM student_wrong_entries WHERE student_name = :name;"), {"name": name})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM students WHERE name = %s;", (name,))
+    c.execute("DELETE FROM milestones WHERE student_name = %s;", (name,))
+    c.execute("DELETE FROM milestone_progress WHERE student_name = %s;", (name,))
+    c.execute("DELETE FROM homework_progress WHERE student_name = %s;", (name,))
+    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = %s);", (name,))
+    c.execute("DELETE FROM student_homework WHERE student_name = %s;", (name,))
+    c.execute("DELETE FROM student_wrong_entries WHERE student_name = %s;", (name,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_subjects():
-    df = conn.query("SELECT id, name FROM subjects ORDER BY id;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT id, name FROM subjects ORDER BY id;", conn)
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_subject(name):
+    conn = get_db_connection()
+    c = conn.cursor()
     try:
-        with conn.session as s:
-            s.execute(text("INSERT INTO subjects (name) VALUES (:name);"), {"name": name})
-            s.commit()
-        return True
+        c.execute("INSERT INTO subjects (name) VALUES (%s);", (name,))
+        conn.commit()
+        success = True
     except:
-        return False
+        success = False
+    c.close()
+    conn.close()
+    return success
 
 def update_subject(sub_id, old_name, new_name):
+    conn = get_db_connection()
+    c = conn.cursor()
     try:
-        with conn.session as s:
-            s.execute(text("UPDATE subjects SET name = :new_name WHERE id = :id;"), {"new_name": new_name, "id": sub_id})
-            s.execute(text("UPDATE chapters SET subject = :new_name WHERE subject = :old_name;"), {"new_name": new_name, "old_name": old_name})
-            s.execute(text("UPDATE milestones SET subject = :new_name WHERE subject = :old_name;"), {"new_name": new_name, "old_name": old_name})
-            s.commit()
-        return True
+        c.execute("UPDATE subjects SET name = %s WHERE id = %s;", (new_name, sub_id))
+        c.execute("UPDATE chapters SET subject = %s WHERE subject = %s;", (new_name, old_name))
+        c.execute("UPDATE milestones SET subject = %s WHERE subject = %s;", (new_name, old_name))
+        conn.commit()
+        success = True
     except:
-        return False
+        success = False
+    c.close()
+    conn.close()
+    return success
 
 def delete_subject(sub_id):
-    with conn.session as s:
-        s.execute(text("DELETE FROM subjects WHERE id = :id;"), {"id": sub_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM subjects WHERE id = %s;", (sub_id,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_chapters():
-    df = conn.query("SELECT id, subject, name FROM chapters ORDER BY subject, name;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT id, subject, name FROM chapters ORDER BY subject, name;", conn)
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_chapter(subject, name):
-    with conn.session as s:
-        res = s.execute(text("INSERT INTO chapters (subject, name) VALUES (:subject, :name) RETURNING id;"), {"subject": subject, "name": name})
-        ch_id = res.fetchone()[0]
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO chapters (subject, name) VALUES (%s, %s) RETURNING id;", (subject, name))
+    ch_id = c.fetchone()[0]
+    conn.commit()
+    c.close()
+    conn.close()
     return ch_id
 
 def update_chapter(ch_id, subject, name):
-    with conn.session as s:
-        s.execute(text("UPDATE chapters SET subject = :subject, name = :name WHERE id = :id;"), {"subject": subject, "name": name, "id": ch_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE chapters SET subject = %s, name = %s WHERE id = %s;", (subject, name, ch_id))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def delete_chapter(ch_id):
-    with conn.session as s:
-        s.execute(text("DELETE FROM chapters WHERE id = :id;"), {"id": ch_id})
-        s.execute(text("DELETE FROM chapter_types WHERE chapter_id = :id;"), {"id": ch_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM chapters WHERE id = %s;", (ch_id,))
+    c.execute("DELETE FROM chapter_types WHERE chapter_id = %s;", (ch_id,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_chapter_types(chapter_id):
-    df = conn.query(f"SELECT id, name, video_url FROM chapter_types WHERE chapter_id = {chapter_id} ORDER BY id;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql(f"SELECT id, name, video_url FROM chapter_types WHERE chapter_id = {chapter_id} ORDER BY id;", conn)
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def add_chapter_type(chapter_id, name, video_url=""):
-    with conn.session as s:
-        s.execute(text("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, :v_url);"), {"ch_id": chapter_id, "name": name, "v_url": video_url})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (%s, %s, %s);", (chapter_id, name, video_url))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def update_chapter_type_url(type_id, video_url):
-    with conn.session as s:
-        s.execute(text("UPDATE chapter_types SET video_url = :v_url WHERE id = :id;"), {"v_url": video_url, "id": type_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE chapter_types SET video_url = %s WHERE id = %s;", (video_url, type_id))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def delete_chapter_type(type_id):
-    with conn.session as s:
-        s.execute(text("DELETE FROM chapter_types WHERE id = :id;"), {"id": type_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM chapter_types WHERE id = %s;", (type_id,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def bulk_insert_types_for_chapter(chapter_id, text_data):
-    with conn.session as s:
-        res = s.execute(text("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = :id;"), {"id": chapter_id}).fetchone()
-        type_counter = (res[0] if res else 0) + 1
-        
-        lines = text_data.strip().split('\n')
-        for line in lines:
-            line_str = line.strip()
-            if not line_str:
-                continue
-            raw_type_name = line_str.lstrip('-•* ').strip()
-            if raw_type_name:
-                type_name = raw_type_name if raw_type_name.startswith("유형") else f"유형 {type_counter:02d}. {raw_type_name}"
-                s.execute(text("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (:ch_id, :name, '');"), {"ch_id": chapter_id, "name": type_name})
-                type_counter += 1
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = %s;", (chapter_id,))
+    res = c.fetchone()
+    type_counter = (res[0] if res else 0) + 1
+    
+    lines = text_data.strip().split('\n')
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        raw_type_name = line_str.lstrip('-•* ').strip()
+        if raw_type_name:
+            type_name = raw_type_name if raw_type_name.startswith("유형") else f"유형 {type_counter:02d}. {raw_type_name}"
+            c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (%s, %s, '');", (chapter_id, type_name))
+            type_counter += 1
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_student_milestones(student_name):
+    conn = get_db_connection()
     query = f"""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
                (SELECT t.video_url FROM chapter_types t WHERE t.name = m.type_name LIMIT 1) as video_url
-        FROM milestones m WHERE m.student_name = '{student_name}' ORDER BY m.id;
+        FROM milestones m WHERE m.student_name = %s ORDER BY m.id;
     """
-    df = conn.query(query, ttl=0)
+    df = pd.read_sql(query, conn, params=(student_name,))
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def assign_chapters_to_student(student_name, chapter_ids):
     added_count = 0
-    with conn.session as s:
-        existing_df = conn.query(f"SELECT chapter, type_name FROM milestones WHERE student_name = '{student_name}';", ttl=0)
-        existing = set(zip(existing_df['chapter'], existing_df['type_name'])) if not existing_df.empty else set()
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    existing_df = pd.read_sql(f"SELECT chapter, type_name FROM milestones WHERE student_name = %s;", conn, params=(student_name,))
+    existing = set(zip(existing_df['chapter'], existing_df['type_name'])) if not existing_df.empty else set()
 
-        for chapter_id in chapter_ids:
-            ch_res = s.execute(text("SELECT subject, name FROM chapters WHERE id = :id;"), {"id": chapter_id}).fetchone()
-            if not ch_res:
-                continue
-            sub, ch_name = ch_res
-            
-            t_df = conn.query(f"SELECT name FROM chapter_types WHERE chapter_id = {chapter_id};", ttl=0)
-            types_to_add = t_df['name'].tolist() if not t_df.empty else ["단원 기본 학습"]
-            
-            for t_name in types_to_add:
-                if (ch_name, t_name) not in existing:
-                    s.execute(text("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (:sname, :sub, :ch, :tname);"),
-                              {"sname": student_name, "sub": sub, "ch": ch_name, "tname": t_name})
-                    added_count += 1
-        s.commit()
+    for chapter_id in chapter_ids:
+        c.execute("SELECT subject, name FROM chapters WHERE id = %s;", (chapter_id,))
+        ch_res = c.fetchone()
+        if not ch_res:
+            continue
+        sub, ch_name = ch_res
+        
+        t_df = pd.read_sql(f"SELECT name FROM chapter_types WHERE chapter_id = {chapter_id};", conn)
+        types_to_add = t_df['name'].tolist() if not t_df.empty else ["단원 기본 학습"]
+        
+        for t_name in types_to_add:
+            if (ch_name, t_name) not in existing:
+                c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (%s, %s, %s, %s);",
+                          (student_name, sub, ch_name, t_name))
+                added_count += 1
+    conn.commit()
+    c.close()
+    conn.close()
     return added_count
 
 def delete_student_milestone(m_id):
-    with conn.session as s:
-        s.execute(text("DELETE FROM milestones WHERE id = :id;"), {"id": m_id})
-        s.execute(text("DELETE FROM milestone_progress WHERE milestone_id = :id;"), {"id": m_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM milestones WHERE id = %s;", (m_id,))
+    c.execute("DELETE FROM milestone_progress WHERE milestone_id = %s;", (m_id,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def delete_student_milestones_by_chapters(student_name, chapter_names):
     total_deleted = 0
-    with conn.session as s:
-        for ch_name in chapter_names:
-            m_df = conn.query(f"SELECT id FROM milestones WHERE student_name = '{student_name}' AND chapter = '{ch_name}';", ttl=0)
-            if not m_df.empty:
-                m_ids = m_df['id'].tolist()
-                for m_id in m_ids:
-                    s.execute(text("DELETE FROM milestones WHERE id = :id;"), {"id": m_id})
-                    s.execute(text("DELETE FROM milestone_progress WHERE milestone_id = :id;"), {"id": m_id})
-                    total_deleted += 1
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    for ch_name in chapter_names:
+        m_df = pd.read_sql("SELECT id FROM milestones WHERE student_name = %s AND chapter = %s;", conn, params=(student_name, ch_name))
+        if not m_df.empty:
+            m_ids = m_df['id'].tolist()
+            for m_id in m_ids:
+                c.execute("DELETE FROM milestones WHERE id = %s;", (m_id,))
+                c.execute("DELETE FROM milestone_progress WHERE milestone_id = %s;", (m_id,))
+                total_deleted += 1
+    conn.commit()
+    c.close()
+    conn.close()
     return total_deleted
 
 def get_student_homework_dates(student_name):
-    df = conn.query(f"SELECT DISTINCT hw_date FROM student_homework WHERE student_name = '{student_name}' ORDER BY hw_date DESC;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = %s ORDER BY hw_date DESC;", conn, params=(student_name,))
+    conn.close()
     return df['hw_date'].tolist() if not df.empty else []
 
 def get_student_homework_by_date(student_name, hw_date):
-    df = conn.query(f"SELECT id, title FROM student_homework WHERE student_name = '{student_name}' AND hw_date = '{hw_date}' ORDER BY id;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT id, title FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id;", conn, params=(student_name, hw_date))
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def get_all_student_homework(student_name):
-    df = conn.query(f"SELECT id, hw_date, title FROM student_homework WHERE student_name = '{student_name}' ORDER BY hw_date DESC, id;", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT id, hw_date, title FROM student_homework WHERE student_name = %s ORDER BY hw_date DESC, id;", conn, params=(student_name,))
+    conn.close()
     return list(df.itertuples(index=False, name=None)) if not df.empty else []
 
 def bulk_insert_student_homework(student_name, hw_date, text_data):
     added_count = 0
-    with conn.session as s:
-        lines = text_data.strip().split('\n')
-        for line in lines:
-            line_str = line.strip()
-            if not line_str:
-                continue
-            title = line_str.lstrip('-•* ').strip()
-            if title:
-                s.execute(text("INSERT INTO student_homework (student_name, hw_date, title) VALUES (:sname, :hdate, :title);"),
-                          {"sname": student_name, "hdate": hw_date, "title": title})
-                added_count += 1
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    lines = text_data.strip().split('\n')
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        title = line_str.lstrip('-•* ').strip()
+        if title:
+            c.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (%s, %s, %s);",
+                      (student_name, hw_date, title))
+            added_count += 1
+    conn.commit()
+    c.close()
+    conn.close()
     return added_count
 
 def update_student_homework(shw_id, hw_date, title):
-    with conn.session as s:
-        s.execute(text("UPDATE student_homework SET hw_date = :hdate, title = :title WHERE id = :id;"), {"hdate": hw_date, "title": title, "id": shw_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE student_homework SET hw_date = %s, title = %s WHERE id = %s;", (hw_date, title, shw_id))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def delete_student_homework(shw_id):
-    with conn.session as s:
-        s.execute(text("DELETE FROM student_homework WHERE id = :id;"), {"id": shw_id})
-        s.execute(text("DELETE FROM student_homework_progress WHERE student_hw_id = :id;"), {"id": shw_id})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM student_homework WHERE id = %s;", (shw_id,))
+    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = %s;", (shw_id,))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_milestone_progress(student_name):
-    df = conn.query(f"SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = '{student_name}';", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = %s;", conn, params=(student_name,))
+    conn.close()
     return dict(zip(df['milestone_id'], df['is_checked'].astype(bool))) if not df.empty else {}
 
 def get_student_homework_progress(student_name):
-    df = conn.query(f"SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = '{student_name}';", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = %s;", conn, params=(student_name,))
+    conn.close()
     return dict(zip(df['student_hw_id'], df['is_checked'].astype(bool))) if not df.empty else {}
 
 def save_student_progress(student_name, m_checked, h_checked):
-    with conn.session as s:
-        for m_id, val in m_checked.items():
-            s.execute(text("""
-                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-                VALUES (:sname, :mid, :val)
-                ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-            """), {"sname": student_name, "mid": m_id, "val": int(val)})
-        for h_id, val in h_checked.items():
-            s.execute(text("""
-                INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                VALUES (:sname, :hid, :val)
-                ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-            """), {"sname": student_name, "hid": h_id, "val": int(val)})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    for m_id, val in m_checked.items():
+        c.execute("""
+            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+        """, (student_name, m_id, int(val)))
+    for h_id, val in h_checked.items():
+        c.execute("""
+            INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+        """, (student_name, h_id, int(val)))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def get_student_wrong_entry(student_name, unit_code):
-    df = conn.query(f"SELECT numbers_text FROM student_wrong_entries WHERE student_name = '{student_name}' AND unit_code = '{unit_code}';", ttl=0)
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT numbers_text FROM student_wrong_entries WHERE student_name = %s AND unit_code = %s;", conn, params=(student_name, unit_code))
+    conn.close()
     return df['numbers_text'].iloc[0] if not df.empty else ""
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    with conn.session as s:
-        s.execute(text("""
-            INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
-            VALUES (:sname, :ucode, :numtxt)
-            ON CONFLICT (student_name, unit_code) DO UPDATE SET numbers_text = EXCLUDED.numbers_text;
-        """), {"sname": student_name, "ucode": unit_code, "numtxt": numbers_text})
-        s.commit()
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (student_name, unit_code) DO UPDATE SET numbers_text = EXCLUDED.numbers_text;
+    """, (student_name, unit_code, numbers_text))
+    conn.commit()
+    c.close()
+    conn.close()
 
 def parse_numbers(text):
     if not text:
@@ -569,7 +670,7 @@ else:
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
             s_completed_m = sum(1 for m in s_milestones if s_m_progress.get(m[0], False))
-            s_total_m = len(s_milestones)
+            s_total_m = len(milestones)
             s_percent = int((s_completed_m / s_total_m) * 100) if s_total_m > 0 else 0
             
             all_s_hws = get_all_student_homework(selected_student)
@@ -578,14 +679,15 @@ else:
             s_total_h = len(all_s_hws)
             s_h_percent = int((s_completed_h / s_total_h) * 100) if s_total_h > 0 else 0
 
-            # metrics
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric(label="🎯 개념 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
             with col_m2:
                 st.metric(label="📚 숙제 완료율", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h} 완료")
             with col_m3:
-                df_w = conn.query(f"SELECT numbers_text FROM student_wrong_entries WHERE student_name = '{selected_student}' AND numbers_text != '';", ttl=0)
+                conn_w = get_db_connection()
+                df_w = pd.read_sql("SELECT numbers_text FROM student_wrong_entries WHERE student_name = %s AND numbers_text != '';", conn_w, params=(selected_student,))
+                conn_w.close()
                 total_wrong_cnt = 0
                 if not df_w.empty:
                     for txt in df_w['numbers_text']:
@@ -633,14 +735,17 @@ else:
 
                 st.divider()
                 if st.button("선생님 진도 상태 저장하기", type="primary", key="teacher_save_btn"):
-                    with conn.session as s:
-                        for m_id, val in teacher_m_checked.items():
-                            s.execute(text("""
-                                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-                                VALUES (:sname, :mid, :val)
-                                ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                            """), {"sname": selected_student, "mid": m_id, "val": int(val)})
-                        s.commit()
+                    conn = get_db_connection()
+                    c = conn.cursor()
+                    for m_id, val in teacher_m_checked.items():
+                        c.execute("""
+                            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT (student_name, milestone_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                        """, (selected_student, m_id, int(val)))
+                    conn.commit()
+                    c.close()
+                    conn.close()
                     st.success("진도 상태가 성공적으로 저장되었습니다!")
                     st.rerun()
 
@@ -815,7 +920,9 @@ else:
                                     with tc2:
                                         if st.form_submit_button("유형 추가"):
                                             if t_in.strip():
-                                                types_df = conn.query(f"SELECT COUNT(*) FROM chapter_types WHERE chapter_id = {ch_id};", ttl=0)
+                                                conn_cnt = get_db_connection()
+                                                types_df = pd.read_sql(f"SELECT COUNT(*) FROM chapter_types WHERE chapter_id = {ch_id};", conn_cnt)
+                                                conn_cnt.close()
                                                 cnt = types_df.iloc[0, 0] + 1
                                                 formatted_t = t_in.strip() if t_in.strip().startswith("유형") else f"유형 {cnt:02d}. {t_in.strip()}"
                                                 add_chapter_type(ch_id, formatted_t, "")
@@ -933,14 +1040,17 @@ else:
                             teacher_hw_del_btn = st.form_submit_button("🗑️ 선택한 항목 일괄 삭제", type="secondary", use_container_width=True)
                         
                         if teacher_hw_save_btn:
-                            with conn.session as s:
-                                for h_id, val in teacher_hw_checked.items():
-                                    s.execute(text("""
-                                        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                        VALUES (:sname, :hid, :val)
-                                        ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                                    """), {"sname": selected_student, "hid": h_id, "val": int(val)})
-                                s.commit()
+                            conn = get_db_connection()
+                            c = conn.cursor()
+                            for h_id, val in teacher_hw_checked.items():
+                                c.execute("""
+                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                                """, (selected_student, h_id, int(val)))
+                            conn.commit()
+                            c.close()
+                            conn.close()
                             st.success("과제 완료 상태가 저장되었습니다!")
                             st.rerun()
                             
@@ -989,7 +1099,9 @@ else:
         if all_students:
             chk_student = st.selectbox("조회할 학생 선택", all_students, key="chk_wrong_student")
             
-            df_wrong = conn.query(f"SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = '{chk_student}';", ttl=0)
+            conn = get_db_connection()
+            df_wrong = pd.read_sql("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = %s;", conn, params=(chk_student,))
+            conn.close()
             
             if not df_wrong.empty:
                 for _, row in df_wrong.iterrows():
@@ -1039,7 +1151,9 @@ else:
         
         all_students = get_students()
         if all_students:
-            df_dates = conn.query("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC;", ttl=0)
+            conn = get_db_connection()
+            df_dates = pd.read_sql("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC;", conn)
+            conn.close()
             all_hw_dates = df_dates['hw_date'].tolist() if not df_dates.empty else []
             
             if all_hw_dates:
@@ -1077,14 +1191,17 @@ else:
                             mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
                         
                         if mat_save_btn:
-                            with conn.session as s:
-                                for h_id, val in matrix_hw_checked.items():
-                                    s.execute(text("""
-                                        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                        SELECT student_name, id, :val FROM student_homework WHERE id = :hid
-                                        ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
-                                    """), {"val": int(val), "hid": h_id})
-                                s.commit()
+                            conn = get_db_connection()
+                            c = conn.cursor()
+                            for h_id, val in matrix_hw_checked.items():
+                                c.execute("""
+                                    INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                                    SELECT student_name, id, %s FROM student_homework WHERE id = %s
+                                    ON CONFLICT (student_name, student_hw_id) DO UPDATE SET is_checked = EXCLUDED.is_checked;
+                                """, (int(val), h_id))
+                            conn.commit()
+                            c.close()
+                            conn.close()
                             st.success("숙제 완료 상태가 저장되었습니다!")
                             st.rerun()
                             
