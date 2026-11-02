@@ -967,7 +967,7 @@ if url_student and url_student in student_list:
             monthly_logs = get_student_monthly_logs(selected_student, sel_year, sel_month)
             _, last_day = calendar.monthrange(sel_year, sel_month)
             
-            with st.expander(f"🗓️ [{sel_year}년 {sel_month}월] 루틴 실천 일자별 리스트 보기 (펼치기 / 접기)", expanded=True):
+            with st.expander(f"🗓️ [{sel_year}년 {sel_month}월] 루틴 실천 일자별 리스트 보기 (펼치기 / 접기)", expanded=False):
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
