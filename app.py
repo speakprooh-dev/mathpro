@@ -571,17 +571,16 @@ def get_student_monthly_logs(student_name, year, month):
         log_map[(str(r_id), l_date)] = bool(val)
     return log_map
 
-def get_student_daily_logs(student_name, days=1):
+def get_student_daily_logs_by_date(student_name, target_date_str):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    target_date = str(date.today())
-    c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date))
+    c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
     rows = c.fetchall()
     conn.close()
     
     log_map = {}
     for r_id, val in rows:
-        log_map[(str(r_id), target_date)] = bool(val)
+        log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
 # --- 과제 템플릿 관리 함수들 ---
@@ -847,7 +846,7 @@ if url_student and url_student in student_list:
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
         * 매일 실천하는 **[매일 루틴 과제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
-        * 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**도 체크 후 저장하세요.
+        * 지난 날짜에 못 한 루틴은 하단의 **[과거 날짜 루틴 소급 체크 및 수정]**에서 언제든 체크할 수 있어요.
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
@@ -929,13 +928,13 @@ if url_student and url_student in student_list:
         save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
-        st.markdown("### 🔥 매일 반복 루틴 과제 (학생 맞춤)")
-        st.success("💡 **자동 저장 기능 적용:** 매일 루틴 과제는 체크박스를 누르는 즉시 자동으로 안전하게 저장됩니다!")
+        st.markdown("### 🔥 매일 반복 루틴 과제 (오늘 실천)")
+        st.success("💡 **자동 저장 기능 적용:** 오늘 루틴 과제는 체크박스를 누르는 즉시 자동으로 안전하게 저장됩니다!")
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
             today_str = str(date.today())
-            current_day_logs = get_student_daily_logs(selected_student, days=1)
+            current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
                 for r_id, r_title in daily_parents:
@@ -952,7 +951,7 @@ if url_student and url_student in student_list:
                         h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             
-            # --- 실시간 자동 저장 처리 ---
+            # 오늘 날짜 실시간 자동 저장 처리
             daily_routine_checked_dict = {}
             for k, v in h_checked_results.items():
                 if str(k).startswith("daily_"):
@@ -961,10 +960,46 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-            # [학생 모드: 처음에는 접힌 상태(expanded=False)인 월간 기록 리스트 뷰]
+            # [과거 날짜 루틴 소급 체크 섹션]
+            st.markdown("---")
+            st.markdown("### 🔄 과거 날짜 루틴 소급 체크 및 수정")
+            st.info("💡 깜빡하고 체크하지 못한 지난 날짜가 있다면 아래에서 날짜를 선택하여 실천 상태를 체크·수정하실 수 있습니다!")
+            
+            past_date_input = st.date_input("소급 적용할 날짜 선택", value=date.today() - timedelta(days=1), key="student_past_date_input")
+            past_date_str = str(past_date_input)
+            past_day_logs = get_student_daily_logs_by_date(selected_student, past_date_str)
+            
+            past_checked_results = {}
+            with st.container(border=True):
+                st.markdown(f"📅 **[{past_date_str} ({get_weekday_kr(past_date_str)})]** 루틴 실천 기록 수정")
+                for r_id, r_title in daily_parents:
+                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    p_default_val = past_day_logs.get((str(r_id), past_date_str), False)
+                    
+                    if r_subs:
+                        st.markdown(f"**📌 {r_title}**")
+                        past_checked_results[f"past_{r_id}"] = st.checkbox(f"{r_title} (전체 대표)", value=p_default_val, key=f"stu_past_{past_date_str}_{r_id}")
+                        for sr_id, sr_title in r_subs:
+                            sp_default_val = past_day_logs.get((str(sr_id), past_date_str), False)
+                            past_checked_results[f"past_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=sp_default_val, key=f"stu_past_{past_date_str}_{sr_id}")
+                    else:
+                        past_checked_results[f"past_{r_id}"] = st.checkbox(f"📌 {r_title}", value=p_default_val, key=f"stu_past_{past_date_str}_{r_id}")
+                    st.divider()
+            
+            if st.button("💾 선택한 과거 날짜 루틴 상태 저장하기", type="primary", key="save_stu_past_routine", use_container_width=True):
+                past_save_dict = {}
+                for k, v in past_checked_results.items():
+                    if str(k).startswith("past_"):
+                        p_key_id = str(k).replace("past_", "")
+                        past_save_dict[p_key_id] = v
+                if past_save_dict:
+                    save_daily_routine_logs(selected_student, past_date_str, past_save_dict)
+                st.success(f"[{past_date_str}] 루틴 실천 기록이 안전하게 반영되었습니다!")
+                st.rerun()
+
+            # 월간 기록 리스트 뷰
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 기록 뷰")
-            st.info("💡 모바일과 PC 모두에서 깔끔하게 날짜별 실천 여부를 확인하실 수 있습니다!")
             
             curr_year = date.today().year
             curr_month = date.today().month
@@ -1162,14 +1197,13 @@ else:
                 teacher_pw_input = st.text_input("비밀번호 입력", type="password", placeholder="비밀번호를 입력하세요")
                 login_submit = st.form_submit_button("로그인", type="primary")
                 if login_submit:
-                    # 원하시는 비밀번호로 변경 가능 (현재 예시: 1234)
                     if teacher_pw_input == "1234":
                         st.session_state["teacher_authenticated"] = True
                         st.success("인증 성공!")
                         st.rerun()
                     else:
                         st.error("비밀번호가 틀렸습니다.")
-            st.stop() # 인증되기 전에는 아래 선생님 메뉴가 보이지 않도록 차단
+            st.stop()
         else:
             st.success("👑 선생님 모드 활성화됨")
             if st.button("로그아웃 (잠금)", use_container_width=True):
@@ -1630,8 +1664,8 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 기록 확인", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 선생님 모드에서도 월간 실천 리포트를 표 형태로 편리하게 확인하실 수 있습니다.")
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 지난 날짜 소급 관리", expanded=True):
+                st.info("💡 선생님 모드에서도 월간 리포트를 확인하실 수 있으며, 하단에서 **특정 지난 날짜를 선택해 루틴 실천 상태를 소급해서 체크·수정**하실 수 있습니다.")
                 
                 st.markdown("##### 📊 [실천 리포트] 월간 일자별 리스트 뷰")
                 t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
@@ -1668,6 +1702,43 @@ else:
                                 t_sub_list.append({"날짜": f"{d_num}일 ({w_kr})", "실천 상태": "✅ 완료" if t_sub_done else "❌ 미완료"})
                             st.dataframe(pd.DataFrame(t_sub_list), use_container_width=True, hide_index=True)
                         st.divider()
+
+                    # [선생님용 과거 날짜 루틴 소급 체크 섹션]
+                    st.markdown("##### 🔄 [선생님 전용] 과거 날짜 루틴 소급 체크 및 수정")
+                    st.info("💡 학생이 누락했거나 지난 날짜의 루틴을 소급해서 체크·수정하실 수 있습니다.")
+                    
+                    teacher_past_date_input = st.date_input("소급 적용할 날짜 선택", value=date.today() - timedelta(days=1), key="teacher_past_date_input")
+                    teacher_past_date_str = str(teacher_past_date_input)
+                    teacher_past_day_logs = get_student_daily_logs_by_date(selected_student, teacher_past_date_str)
+                    
+                    teacher_past_checked_results = {}
+                    with st.container(border=True):
+                        st.markdown(f"📅 **[{teacher_past_date_str} ({get_weekday_kr(teacher_past_date_str)})]** 루틴 기록 수정")
+                        for r_id, r_title in t_routines:
+                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                            tp_default_val = teacher_past_day_logs.get((str(r_id), teacher_past_date_str), False)
+                            
+                            if r_subs:
+                                st.markdown(f"**📌 {r_title}**")
+                                teacher_past_checked_results[f"t_past_{r_id}"] = st.checkbox(f"{r_title} (전체 대표)", value=tp_default_val, key=f"t_past_{teacher_past_date_str}_{r_id}")
+                                for sr_id, sr_title in r_subs:
+                                    tsp_default_val = teacher_past_day_logs.get((str(sr_id), teacher_past_date_str), False)
+                                    teacher_past_checked_results[f"t_past_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=tsp_default_val, key=f"t_past_{teacher_past_date_str}_{sr_id}")
+                            else:
+                                teacher_past_checked_results[f"t_past_{r_id}"] = st.checkbox(f"📌 {r_title}", value=tp_default_val, key=f"t_past_{teacher_past_date_str}_{r_id}")
+                            st.divider()
+                    
+                    if st.button("💾 선택한 날짜 루틴 상태 일괄 저장하기", type="primary", key="save_teacher_past_routine", use_container_width=True):
+                        t_past_save_dict = {}
+                        for k, v in teacher_past_checked_results.items():
+                            if str(k).startswith("t_past_"):
+                                tp_key_id = str(k).replace("t_past_", "")
+                                t_past_save_dict[tp_key_id] = v
+                        if t_past_save_dict:
+                            save_daily_routine_logs(selected_student, teacher_past_date_str, t_past_save_dict)
+                        st.success(f"[{teacher_past_date_str}] 루틴 실천 기록이 안전하게 저장되었습니다!")
+                        st.rerun()
+
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
