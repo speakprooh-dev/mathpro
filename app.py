@@ -945,15 +945,15 @@ if url_student and url_student in student_list:
                             s_default_val = current_day_logs.get((str(sr_id), today_str), False)
                             h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
                     else:
-                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [학생 모드: 모바일/PC 완벽 호환 CSS Grid 캘린더]
+            # [학생 모드: 모바일 친화적 날짜별 컴팩트 리스트 뷰]
             st.markdown("---")
-            st.markdown("### 📅 나의 매일 루틴 실천 월간 캘린더")
-            st.info("💡 이번 달 루틴 실천 현황을 달력 격자 형태로 한눈에 확인할 수 있어요!")
+            st.markdown("### 📅 나의 매일 루틴 실천 월간 기록 뷰")
+            st.info("💡 모바일과 PC 모두에서 깔끔하게 날짜별 실천 여부를 확인하실 수 있습니다!")
             
             curr_year = date.today().year
             curr_month = date.today().month
@@ -965,58 +965,34 @@ if url_student and url_student in student_list:
                 sel_month = st.selectbox("월 선택", list(range(1, 13)), index=curr_month - 1, format_func=lambda x: f"{x}월", key="cal_month")
             
             monthly_logs = get_student_monthly_logs(selected_student, sel_year, sel_month)
-            cal_matrix = calendar.monthcalendar(sel_year, sel_month)
-            weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+            _, last_day = calendar.monthrange(sel_year, sel_month)
             
-            with st.expander(f"🗓️ [{sel_year}년 {sel_month}월] 루틴 실천 캘린더 보기 (펼치기 / 접기)", expanded=True):
+            with st.expander(f"🗓️ [{sel_year}년 {sel_month}월] 루틴 실천 일자별 리스트 보기 (펼치기 / 접기)", expanded=True):
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
-                    for idx, w_name in enumerate(weekdays_kr):
-                        color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                        cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
+                    # 일자별 실천 여부를 요약 테이블/리스트 형태로 구성
+                    log_data_list = []
+                    for d_num in range(1, last_day + 1):
+                        d_str = f"{sel_year}-{sel_month:02d}-{d_num:02d}"
+                        is_done = monthly_logs.get((str(r_id), d_str), False)
+                        w_kr = get_weekday_kr(d_str)[:1]
+                        status_str = "✅ 완료" if is_done else "❌ 미완료"
+                        log_data_list.append({"날짜": f"{d_num}일 ({w_kr})", "실천 상태": status_str})
                     
-                    for week in cal_matrix:
-                        for idx, day_num in enumerate(week):
-                            if day_num == 0:
-                                cal_parts.append("<div style='padding:8px;'></div>")
-                            else:
-                                d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
-                                is_done = monthly_logs.get((str(r_id), d_str), False)
-                                is_today = (d_str == str(date.today()))
-                                
-                                bg_color = "#1E3A8A" if is_today else "#1E293B"
-                                border_color = "#60A5FA" if is_today else "#334155"
-                                
-                                cal_parts.append(f"""
-                                <div style='border:1px solid {border_color}; border-radius:6px; padding:4px 2px; text-align:center; background-color:{bg_color}; font-size:11px;'>
-                                    <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                    <div style='font-size:14px;'>{"✅" if is_done else "❌"}</div>
-                                </div>
-                                """)
-                    cal_parts.append("</div>")
-                    st.markdown("".join(cal_parts), unsafe_allow_html=True)
+                    df_log = pd.DataFrame(log_data_list)
+                    st.dataframe(df_log, use_container_width=True, hide_index=True)
                     
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
-                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
-                        for week in cal_matrix:
-                            for idx, day_num in enumerate(week):
-                                if day_num == 0:
-                                    sub_parts.append("<div style='padding:6px;'></div>")
-                                else:
-                                    d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
-                                    sub_is_done = monthly_logs.get((str(sr_id), d_str), False)
-                                    sub_parts.append(f"""
-                                    <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
-                                        <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                        <div style='font-size:12px;'>{"✅" if sub_is_done else "❌"}</div>
-                                    </div>
-                                    """)
-                        sub_parts.append("</div>")
-                        st.markdown("".join(sub_parts), unsafe_allow_html=True)
+                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ 세부항목: **{sr_title}**")
+                        sub_log_list = []
+                        for d_num in range(1, last_day + 1):
+                            d_str = f"{sel_year}-{sel_month:02d}-{d_num:02d}"
+                            sub_done = monthly_logs.get((str(sr_id), d_str), False)
+                            w_kr = get_weekday_kr(d_str)[:1]
+                            sub_log_list.append({"날짜": f"{d_num}일 ({w_kr})", "실천 상태": "✅ 완료" if sub_done else "❌ 미완료"})
+                        st.dataframe(pd.DataFrame(sub_log_list), use_container_width=True, hide_index=True)
                     st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
@@ -1625,10 +1601,10 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 캘린더 확인", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 월간 캘린더 형태의 실천 현황**을 확인하실 수 있습니다.")
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 기록 확인", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 선생님 모드에서도 월간 실천 리포트를 표 형태로 편리하게 확인하실 수 있습니다.")
                 
-                st.markdown("##### 📊 [실천 리포트] 월간 캘린더 실천 뷰")
+                st.markdown("##### 📊 [실천 리포트] 월간 일자별 리스트 뷰")
                 t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
                 if t_routines:
                     curr_year = date.today().year
@@ -1638,53 +1614,30 @@ else:
                     t_sel_month = st.selectbox("선생님 조회 월", list(range(1, 13)), index=curr_month - 1, format_func=lambda x: f"{x}월", key="t_cal_month")
                     
                     t_monthly_logs = get_student_monthly_logs(selected_student, t_sel_year, t_sel_month)
-                    t_cal_matrix = calendar.monthcalendar(t_sel_year, t_sel_month)
-                    weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+                    _, t_last_day = calendar.monthrange(t_sel_year, t_sel_month)
                     
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
                         
-                        # [선생님 모드: 모바일/PC 완벽 호환 CSS Grid 캘린더]
-                        t_cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
-                        for idx, w_name in enumerate(weekdays_kr):
-                            color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                            t_cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
+                        t_log_list = []
+                        for d_num in range(1, t_last_day + 1):
+                            d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
+                            t_done = t_monthly_logs.get((str(r_id), d_str), False)
+                            w_kr = get_weekday_kr(d_str)[:1]
+                            t_log_list.append({"날짜": f"{d_num}일 ({w_kr})", "실천 상태": "✅ 완료" if t_done else "❌ 미완료"})
                         
-                        for week in t_cal_matrix:
-                            for idx, day_num in enumerate(week):
-                                if day_num == 0:
-                                    t_cal_parts.append("<div style='padding:8px;'></div>")
-                                else:
-                                    d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
-                                    t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                    t_cal_parts.append(f"""
-                                    <div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>
-                                        <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                        <div style='font-size:14px;'>{"✅" if t_is_done else "❌"}</div>
-                                    </div>
-                                    """)
-                        t_cal_parts.append("</div>")
-                        st.markdown("".join(t_cal_parts), unsafe_allow_html=True)
+                        st.dataframe(pd.DataFrame(t_log_list), use_container_width=True, hide_index=True)
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
-                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            t_sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
-                            for week in t_cal_matrix:
-                                for idx, day_num in enumerate(week):
-                                    if day_num == 0:
-                                        t_sub_parts.append("<div style='padding:6px;'></div>")
-                                    else:
-                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
-                                        t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                        t_sub_parts.append(f"""
-                                        <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
-                                            <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                            <div style='font-size:12px;'>{"✅" if t_sub_is_done else "❌"}</div>
-                                        </div>
-                                        """)
-                            t_sub_parts.append("</div>")
-                            st.markdown("".join(t_sub_parts), unsafe_allow_html=True)
+                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ 세부항목: **{sr_title}**")
+                            t_sub_list = []
+                            for d_num in range(1, t_last_day + 1):
+                                d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
+                                t_sub_done = t_monthly_logs.get((str(sr_id), d_str), False)
+                                w_kr = get_weekday_kr(d_str)[:1]
+                                t_sub_list.append({"날짜": f"{d_num}일 ({w_kr})", "실천 상태": "✅ 완료" if t_sub_done else "❌ 미완료"})
+                            st.dataframe(pd.DataFrame(t_sub_list), use_container_width=True, hide_index=True)
                         st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
