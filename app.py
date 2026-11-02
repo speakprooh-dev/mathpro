@@ -945,7 +945,7 @@ if url_student and url_student in student_list:
                             s_default_val = current_day_logs.get((str(sr_id), today_str), False)
                             h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
                     else:
-                        h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
@@ -971,7 +971,6 @@ if url_student and url_student in student_list:
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    # 일자별 실천 여부를 요약 테이블/리스트 형태로 구성
                     log_data_list = []
                     for d_num in range(1, last_day + 1):
                         d_str = f"{sel_year}-{sel_month:02d}-{d_num:02d}"
