@@ -33,6 +33,10 @@ def create_excel_backup():
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
+# 세션 상태에 선생님 인증 여부 초기화
+if "teacher_authenticated" not in st.session_state:
+    st.session_state["teacher_authenticated"] = False
+
 # 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
     try:
@@ -950,7 +954,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [학생 모드: 모바일 친화적 날짜별 컴팩트 리스트 뷰]
+            # [학생 모드: 처음에는 접힌 상태(expanded=False)인 월간 기록 리스트 뷰]
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 기록 뷰")
             st.info("💡 모바일과 PC 모두에서 깔끔하게 날짜별 실천 여부를 확인하실 수 있습니다!")
@@ -1142,20 +1146,42 @@ if url_student and url_student in student_list:
         st.success("학습 상태가 안전하게 저장되었습니다!")
         st.rerun()
 
-# 2. [선생님 전용 관리 모드]
+# 2. [선생님 전용 관리 모드 - 비밀번호 인증 적용]
 else:
     with st.sidebar:
         st.markdown("### 🛠️ 선생님 전용 도구")
-        st.markdown("데이터를 안전하게 정기적으로 백업하세요.")
         
-        excel_data = create_excel_backup()
-        st.download_button(
-            label="📥 전체 데이터 엑셀 백업하기",
-            data=excel_data,
-            file_name=f"mathpro_backup_{date.today()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        # 비밀번호 인증 로직
+        if not st.session_state["teacher_authenticated"]:
+            st.markdown("🔒 **선생님 모드 잠금 상태**")
+            with st.form("teacher_login_form"):
+                teacher_pw_input = st.text_input("비밀번호 입력", type="password", placeholder="비밀번호를 입력하세요")
+                login_submit = st.form_submit_button("로그인", type="primary")
+                if login_submit:
+                    # 원하시는 비밀번호로 변경 가능 (현재 예시: 1234)
+                    if teacher_pw_input == "1234":
+                        st.session_state["teacher_authenticated"] = True
+                        st.success("인증 성공!")
+                        st.rerun()
+                    else:
+                        st.error("비밀번호가 틀렸습니다.")
+            st.stop() # 인증되기 전에는 아래 선생님 메뉴가 보이지 않도록 차단
+        else:
+            st.success("👑 선생님 모드 활성화됨")
+            if st.button("로그아웃 (잠금)", use_container_width=True):
+                st.session_state["teacher_authenticated"] = False
+                st.rerun()
+            
+            st.divider()
+            st.markdown("데이터를 안전하게 정기적으로 백업하세요.")
+            excel_data = create_excel_backup()
+            st.download_button(
+                label="📥 전체 데이터 엑셀 백업하기",
+                data=excel_data,
+                file_name=f"mathpro_backup_{date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         st.divider()
 
     st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
