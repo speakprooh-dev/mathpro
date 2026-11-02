@@ -148,7 +148,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # 기존 데이터 중 updated_at이 비어있거나 없는 경우 오늘 날짜로 자동 채우기
     today_str = str(date.today())
     c.execute("UPDATE student_wrong_entries SET updated_at = ? WHERE updated_at IS NULL OR updated_at = ''", (today_str,))
 
@@ -1430,7 +1429,7 @@ else:
                         st.error("과제 내용을 입력해주세요.")
 
             st.markdown("---")
-            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인, 완료 체크 및 다중 삭제")
+            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인, 완료 체크 및 수정/삭제")
             
             hw_dates = get_student_homework_dates(selected_student)
             hw_progress_map = get_student_homework_progress(selected_student)
@@ -1500,24 +1499,23 @@ else:
                 st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
 
             st.markdown("---")
-            st.markdown(f"##### 🛠️ 전체 등록된 과제 내용 개별 수정")
+            st.markdown(f"##### 🛠️ 개별 과제 내용 및 날짜 수정")
             all_student_hws = get_all_student_homework(selected_student)
             if all_student_hws:
                 for h_id, h_date, h_title in all_student_hws:
-                    col_h1, col_h2, col_h3 = st.columns([2, 5, 1])
-                    with col_h1:
-                        st.write(f"📅 **{h_date}**")
-                    with col_h2:
-                        st.write(f"📌 {h_title}")
-                    with col_h3:
-                        with st.popover("수정", key=f"pop_edit_{h_id}"):
-                            with st.form(f"edit_shw_form_{h_id}"):
-                                ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
-                                ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
-                                if st.form_submit_button("변경사항 저장"):
-                                    update_student_homework(h_id, str(ed_date), ed_title.strip())
-                                    st.success("수정되었습니다!")
-                                    st.rerun()
+                    with st.container(border=True):
+                        col_info, col_pop = st.columns([5, 1])
+                        with col_info:
+                            st.write(f"📅 **{h_date}** | 📌 {h_title}")
+                        with col_pop:
+                            with st.popover("수정"):
+                                with st.form(f"edit_shw_form_{h_id}"):
+                                    ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
+                                    ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
+                                    if st.form_submit_button("변경사항 저장"):
+                                        update_student_homework(h_id, str(ed_date), ed_title.strip())
+                                        st.success("수정되었습니다!")
+                                        st.rerun()
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
@@ -1662,7 +1660,7 @@ else:
             else:
                 st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
 
-    # [탭 5] 전체 학생 숙제 매트릭스
+    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내에 [수정] 버튼 즉시 통합)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 항목별 [수정]**까지 한곳에서 바로 처리할 수 있습니다.")
