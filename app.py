@@ -1106,7 +1106,13 @@ if url_student and url_student in student_list:
                 else:
                     st.info(f"'{search_prob_input}' 단원에 등록된 해설 링크가 없습니다.")
 
-    if save_btn_tab1 or save_daily_btn or save_btn_tab2 or save_btn_tab3:
+    # 각 탭의 버튼 변수들을 안전하게 가져오기
+    s_btn1 = locals().get("save_btn_tab1", False)
+    s_btn_daily = locals().get("save_daily_btn", False)
+    s_btn2 = locals().get("save_btn_tab2", False)
+    s_btn3 = locals().get("save_btn_tab3", False)
+
+    if s_btn1 or s_btn_daily or s_btn2 or s_btn3:
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
             key = f"s_milestone_{m_id}"
@@ -1126,14 +1132,14 @@ if url_student and url_student in student_list:
                 daily_routine_checked_dict[daily_key_id] = v
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
-        if save_daily_btn and daily_routine_checked_dict:
+        if s_btn_daily and daily_routine_checked_dict:
             save_daily_routine_logs(selected_student, str(date.today()), daily_routine_checked_dict)
         
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "B1353")
         
-        if cur_code and save_btn_tab3:
+        if cur_code and s_btn3:
             saved_text_pre = get_student_wrong_entry(selected_student, cur_code)
             saved_nums_pre = parse_numbers(saved_text_pre)
             nums_to_add = parse_numbers(add_txt)
