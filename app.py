@@ -761,21 +761,25 @@ def get_student_homework_progress(student_name):
     conn.close()
     return {r[0]: bool(r[1]) for r in rows}
 
-def save_student_progress(student_name, m_checked, h_checked):
+def save_single_milestone_progress(student_name, milestone_id, val):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    for m_id, val in m_checked.items():
-        c.execute('''
-            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-            VALUES (?, ?, ?)
-            ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-        ''', (student_name, m_id, int(val), int(val)))
-    for h_id, val in h_checked.items():
-        c.execute('''
-            INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-            VALUES (?, ?, ?)
-            ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-        ''', (student_name, h_id, int(val), int(val)))
+    c.execute('''
+        INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+        VALUES (?, ?, ?)
+        ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
+    ''', (student_name, milestone_id, int(val), int(val)))
+    conn.commit()
+    conn.close()
+
+def save_single_homework_progress(student_name, student_hw_id, val):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+        VALUES (?, ?, ?)
+        ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
+    ''', (student_name, student_hw_id, int(val), int(val)))
     conn.commit()
     conn.close()
 
@@ -840,12 +844,11 @@ if url_student and url_student in student_list:
         * 상단의 파란색 드라이브 버튼을 누르면 나만의 구글 드라이브 폴더로 바로 이동해 과제를 제출하거나 자료를 확인할 수 있어요!
         
         **2️⃣ 🚩 1. 개념 학습 진도 체크하기**
-        * 배정된 단원의 학습을 마친 후 체크박스(☑️)에 체크하세요.
+        * 배정된 단원의 학습을 마친 후 체크박스(☑️)에 체크하세요. **체크하는 순간 자동으로 저장됩니다!**
         * 모르는 개념은 우측 **[🎥 개념해설]** 버튼을 눌러 영상을 시청할 수 있습니다.
-        * 체크가 끝나면 맨 아래 **[💾 내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
-        * 매일 실천하는 **[매일 루틴 과제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
+        * 매일 실천하는 **[매일 루틴 과제]** 및 **[날짜별 숙제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
@@ -887,12 +890,9 @@ if url_student and url_student in student_list:
 
     tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 학습 진도", "📚 2. 날짜별 숙제", "💬 3. 오답 및 질문 관리"])
 
-    m_checked_results = {}
-    h_checked_results = {}
-
     with tab1:
         st.markdown("### 📘 나의 개념 학습 목록")
-        st.info("💡 **안내:** 완료한 학습 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
+        st.success("💡 **자동 저장 기능 적용:** 완료한 학습 항목의 체크박스를 누르는 즉시 자동으로 안전하게 저장됩니다!")
         if milestones:
             grouped_s_milestones = {}
             for m_id, sub, ch, t_name, v_url in milestones:
@@ -911,7 +911,10 @@ if url_student and url_student in student_list:
                         
                         cols = st.columns([4, 1])
                         with cols[0]:
-                            m_checked_results[m_id] = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                            if val != default_val:
+                                save_single_milestone_progress(selected_student, m_id, val)
+                                st.rerun()
                         with cols[1]:
                             if v_url and v_url.strip() != "":
                                 st.markdown(
@@ -922,13 +925,10 @@ if url_student and url_student in student_list:
                                 st.caption("영상 없음")
         else:
             st.info("아직 배정된 개념 학습 목록이 없습니다.")
-            
-        st.markdown("---")
-        save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
         st.markdown("### 🔥 매일 반복 루틴 과제 (오늘 실천)")
-        st.success("💡 **자동 저장 기능 적용:** 오늘 루틴 과제는 체크박스를 누르는 즉시 자동으로 안전하게 저장됩니다!")
+        st.success("💡 **자동 저장 기능 적용:** 체크박스를 누르는 즉시 자동으로 실시간 저장됩니다!")
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
@@ -936,26 +936,24 @@ if url_student and url_student in student_list:
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
+                daily_routine_checked_dict = {}
                 for r_id, r_title in daily_parents:
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     default_val = current_day_logs.get((str(r_id), today_str), False)
                     
                     if r_subs:
                         st.markdown(f"**📌 {r_title}**")
-                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
+                        val_p = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = val_p
                         for sr_id, sr_title in r_subs:
                             s_default_val = current_day_logs.get((str(sr_id), today_str), False)
-                            h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
+                            val_sp = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
+                            daily_routine_checked_dict[str(sr_id)] = val_sp
                     else:
-                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        val_s = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = val_s
                     st.divider()
             
-            # 오늘 날짜 실시간 자동 저장 처리
-            daily_routine_checked_dict = {}
-            for k, v in h_checked_results.items():
-                if str(k).startswith("daily_"):
-                    daily_key_id = str(k).replace("daily_", "")
-                    daily_routine_checked_dict[daily_key_id] = v
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
@@ -1006,7 +1004,7 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
         st.markdown("### 📝 날짜별 부여된 숙제 목록")
-        st.info("💡 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[날짜별 숙제 상태 저장하기]** 버튼을 눌러주세요!")
+        st.success("💡 **자동 저장 기능 적용:** 완료한 숙제 항목의 체크박스를 누르는 즉시 자동으로 저장됩니다!")
         if hw_dates:
             selected_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
@@ -1018,17 +1016,23 @@ if url_student and url_student in student_list:
                 
                 if sub_hws:
                     st.markdown(f"**📌 {title}**")
-                    h_checked_results[h_id] = st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}")
+                    val_h = st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}")
+                    if val_h != default_val:
+                        save_single_homework_progress(selected_student, h_id, val_h)
+                        st.rerun()
                     for s_id, s_title in sub_hws:
                         s_default_val = h_progress.get(s_id, False)
-                        h_checked_results[s_id] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default_val, key=f"s_hw_{s_id}")
+                        val_sh = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default_val, key=f"s_hw_{s_id}")
+                        if val_sh != s_default_val:
+                            save_single_homework_progress(selected_student, s_id, val_sh)
+                            st.rerun()
                 else:
-                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
+                    val_single = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
+                    if val_single != default_val:
+                        save_single_homework_progress(selected_student, h_id, val_single)
+                        st.rerun()
         else:
             st.info("등록된 날짜별 숙제가 없습니다.")
-            
-        st.markdown("---")
-        save_btn_tab2 = st.button("💾 날짜별 숙제 상태 저장하기", type="primary", key="save_t2", use_container_width=True)
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
@@ -1110,31 +1114,12 @@ if url_student and url_student in student_list:
                 else:
                     st.info(f"'{search_prob_input}' 단원에 등록된 해설 링크가 없습니다.")
 
-    # 각 탭의 버튼 변수들을 안전하게 가져오기
-    s_btn1 = locals().get("save_btn_tab1", False)
-    s_btn2 = locals().get("save_btn_tab2", False)
-    s_btn3 = locals().get("save_btn_tab3", False)
-
-    if s_btn1 or s_btn2 or s_btn3:
-        final_m_checked = {}
-        for m_id, _, _, _, _ in milestones:
-            key = f"s_milestone_{m_id}"
-            if key in st.session_state:
-                final_m_checked[m_id] = st.session_state[key]
-                
-        final_h_checked = {}
-        for h_id, _, _, _ in all_hws_flat:
-            key = f"s_hw_{h_id}"
-            if key in st.session_state:
-                final_h_checked[h_id] = st.session_state[key]
-
-        save_student_progress(selected_student, final_m_checked, final_h_checked)
-        
+    if locals().get("save_btn_tab3", False):
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "B1353")
         
-        if cur_code and s_btn3:
+        if cur_code:
             saved_text_pre = get_student_wrong_entry(selected_student, cur_code)
             saved_nums_pre = parse_numbers(saved_text_pre)
             nums_to_add = parse_numbers(add_txt)
@@ -1143,9 +1128,8 @@ if url_student and url_student in student_list:
             final_nums = (saved_nums_pre | nums_to_add) - nums_to_del
             new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
             save_student_wrong_entry(selected_student, cur_code, new_saved_text)
-            
-        st.success("학습 상태가 안전하게 저장되었습니다!")
-        st.rerun()
+            st.success("오답 목록이 안전하게 저장되었습니다!")
+            st.rerun()
 
 # 2. [선생님 전용 관리 모드 - 비밀번호 인증 적용]
 else:
