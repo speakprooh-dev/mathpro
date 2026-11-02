@@ -950,7 +950,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [학생 모드: 모바일/PC 호환 CSS Grid 월간 캘린더]
+            # [학생 모드: Streamlit 네이티브 그리드 캘린더]
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 캘린더")
             st.info("💡 이번 달 루틴 실천 현황을 달력 격자 형태로 한눈에 확인할 수 있어요!")
@@ -972,51 +972,57 @@ if url_student and url_student in student_list:
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
+                    # 요일 헤더 렌더링
+                    w_cols = st.columns(7)
                     for idx, w_name in enumerate(weekdays_kr):
-                        color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                        cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
+                        with w_cols[idx]:
+                            color_style = "color: #38BDF8;" if idx == 0 else ("color: #F87171;" if idx == 6 else "color: #94A3B8;")
+                            st.markdown(f"<div style='text-align:center; font-weight:bold; {color_style} font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                     
+                    # 날짜 격자 렌더링
                     for week in cal_matrix:
+                        d_cols = st.columns(7)
                         for idx, day_num in enumerate(week):
-                            if day_num == 0:
-                                cal_parts.append("<div style='padding:8px;'></div>")
-                            else:
-                                d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
-                                is_done = monthly_logs.get((str(r_id), d_str), False)
-                                is_today = (d_str == str(date.today()))
-                                
-                                bg_color = "#1E3A8A" if is_today else "#1E293B"
-                                border_color = "#60A5FA" if is_today else "#334155"
-                                
-                                cal_parts.append(f"""
-                                <div style='border:1px solid {border_color}; border-radius:6px; padding:4px 2px; text-align:center; background-color:{bg_color}; font-size:11px;'>
-                                    <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                    <div style='font-size:14px;'>{"✅" if is_done else "❌"}</div>
-                                </div>
-                                """)
-                    cal_parts.append("</div>")
-                    st.markdown("".join(cal_parts), unsafe_allow_html=True)
+                            with d_cols[idx]:
+                                if day_num == 0:
+                                    st.markdown("<div style='padding:12px;'></div>", unsafe_allow_html=True)
+                                else:
+                                    d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
+                                    is_done = monthly_logs.get((str(r_id), d_str), False)
+                                    is_today = (d_str == str(date.today()))
+                                    
+                                    bg_color = "#1E3A8A" if is_today else "#1E293B"
+                                    border_color = "#60A5FA" if is_today else "#334155"
+                                    mark_icon = "✅" if is_done else "❌"
+                                    
+                                    st.markdown(
+                                        f"<div style='border:1px solid {border_color}; border-radius:6px; padding:4px 2px; text-align:center; background-color:{bg_color}; font-size:11px; margin-bottom:4px;'>"
+                                        f"<div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>"
+                                        f"<div style='font-size:14px;'>{mark_icon}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
                     
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                         for week in cal_matrix:
+                            sub_d_cols = st.columns(7)
                             for idx, day_num in enumerate(week):
-                                if day_num == 0:
-                                    sub_parts.append("<div style='padding:6px;'></div>")
-                                else:
-                                    d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
-                                    sub_is_done = monthly_logs.get((str(sr_id), d_str), False)
-                                    sub_parts.append(f"""
-                                    <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
-                                        <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                        <div style='font-size:12px;'>{"✅" if sub_is_done else "❌"}</div>
-                                    </div>
-                                    """)
-                        sub_parts.append("</div>")
-                        st.markdown("".join(sub_parts), unsafe_allow_html=True)
+                                with sub_d_cols[idx]:
+                                    if day_num == 0:
+                                        st.markdown("<div style='padding:10px;'></div>", unsafe_allow_html=True)
+                                    else:
+                                        d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
+                                        sub_is_done = monthly_logs.get((str(sr_id), d_str), False)
+                                        sub_mark = "✅" if sub_is_done else "❌"
+                                        st.markdown(
+                                            f"<div style='border:1px solid #334155; border-radius:6px; padding:2px; text-align:center; background-color:#0F172A; font-size:10px; margin-bottom:3px;'>"
+                                            f"<div style='color:#94A3B8;'>{day_num}</div>"
+                                            f"<div style='font-size:12px;'>{sub_mark}</div>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                     st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
@@ -1644,47 +1650,51 @@ else:
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
                         
-                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (안전 결합 적용)]
-                        t_cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
+                        # [선생님 모드: Streamlit 네이티브 그리드 캘린더]
+                        t_w_cols = st.columns(7)
                         for idx, w_name in enumerate(weekdays_kr):
-                            color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                            t_cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
+                            with t_w_cols[idx]:
+                                color_style = "color: #38BDF8;" if idx == 0 else ("color: #F87171;" if idx == 6 else "color: #94A3B8;")
+                                st.markdown(f"<div style='text-align:center; font-weight:bold; {color_style} font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                         
                         for week in t_cal_matrix:
+                            t_d_cols = st.columns(7)
                             for idx, day_num in enumerate(week):
-                                if day_num == 0:
-                                    t_cal_parts.append("<div style='padding:8px;'></div>")
-                                else:
-                                    d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
-                                    t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                    t_cal_parts.append(f"""
-                                    <div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>
-                                        <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                        <div style='font-size:14px;'>{"✅" if t_is_done else "❌"}</div>
-                                    </div>
-                                    """)
-                        t_cal_parts.append("</div>")
-                        st.markdown("".join(t_cal_parts), unsafe_allow_html=True)
+                                with t_d_cols[idx]:
+                                    if day_num == 0:
+                                        st.markdown("<div style='padding:12px;'></div>", unsafe_allow_html=True)
+                                    else:
+                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
+                                        t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
+                                        t_mark = "✅" if t_is_done else "❌"
+                                        st.markdown(
+                                            f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#1E293B; font-size:11px; margin-bottom:4px;'>"
+                                            f"<div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>"
+                                            f"<div style='font-size:14px;'>{t_mark}</div>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            t_sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                             for week in t_cal_matrix:
+                                t_sub_d_cols = st.columns(7)
                                 for idx, day_num in enumerate(week):
-                                    if day_num == 0:
-                                        t_sub_parts.append("<div style='padding:6px;'></div>")
-                                    else:
-                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
-                                        t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                        t_sub_parts.append(f"""
-                                        <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
-                                            <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                            <div style='font-size:12px;'>{"✅" if t_sub_is_done else "❌"}</div>
-                                        </div>
-                                        """)
-                            t_sub_parts.append("</div>")
-                            st.markdown("".join(t_sub_parts), unsafe_allow_html=True)
+                                    with t_sub_d_cols[idx]:
+                                        if day_num == 0:
+                                            st.markdown("<div style='padding:10px;'></div>", unsafe_allow_html=True)
+                                        else:
+                                            d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
+                                            t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
+                                            t_sub_mark = "✅" if t_sub_is_done else "❌"
+                                            st.markdown(
+                                                f"<div style='border:1px solid #334155; border-radius:6px; padding:2px; text-align:center; background-color:#0F172A; font-size:10px; margin-bottom:3px;'>"
+                                                f"<div style='color:#94A3B8;'>{day_num}</div>"
+                                                f"<div style='font-size:12px;'>{t_sub_mark}</div>"
+                                                f"</div>",
+                                                unsafe_allow_html=True
+                                            )
                         st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
@@ -2190,7 +2200,7 @@ else:
                         st.success(f"'{input_full_code.strip().upper()}' 문제 해설 링크가 안전하게 저장되었습니다!")
                         st.rerun()
                     else:
-                        st.error("저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
+                        st.error("저장 중 오류가 저장되었습니다. 번호 형식을 확인해주세요.")
                 else:
                     st.warning("문제 번호와 영상 주소를 모두 입력해주세요.")
 
