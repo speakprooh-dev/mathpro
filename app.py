@@ -931,10 +931,10 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [신규] 펼쳐보기(st.expander)를 적용하여 공간을 차지하지 않고 깔끔하게 확인하는 7일 실천 요약 뷰
+            # [신규 적용] 캘린더(달력) 형태의 컴팩트 실천 현황 뷰 (펼쳐보기/접기 적용)
             st.markdown("---")
-            st.markdown("### 📊 나의 매일 루틴 실천 히스토리 & 누적 통계")
-            st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 한눈에 확인할 수 있어요!")
+            st.markdown("### 📊 나의 매일 루틴 실천 캘린더 & 누적 통계")
+            st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 달력 형태로 한눈에 확인할 수 있어요!")
             
             past_logs = get_student_daily_logs(selected_student, days=7)
             recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
@@ -942,17 +942,38 @@ if url_student and url_student in student_list:
             total_checked_count = sum(1 for k, v in past_logs.items() if v)
             st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
             
-            with st.expander("📅 최근 7일 실천 히스토리 펼쳐보기 / 접기"):
+            with st.expander("📅 7일 실천 캘린더 보기 (펼치기 / 접기)", expanded=True):
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
-                    status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(r_id), d), False) else '❌'}`" for d in recent_dates])
-                    st.markdown(f"<div style='font-size:13px; overflow-x:auto; padding:4px 0;'>{status_line}</div>", unsafe_allow_html=True)
+                    
+                    # 달력 형태의 7일 그리드 렌더링
+                    cal_cols = st.columns(7)
+                    for idx, d_str in enumerate(recent_dates):
+                        is_done = past_logs.get((str(r_id), d_str), False)
+                        d_obj = date.fromisoformat(d_str)
+                        day_label = f"{d_obj.month}/{d_obj.day}({get_weekday_kr(d_str)[0]})"
+                        with cal_cols[idx]:
+                            st.markdown(
+                                f"<div style='border:1px solid #334155; border-radius:6px; padding:6px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>"
+                                f"<div style='color:#94A3B8; margin-bottom:2px;'>{day_label}</div>"
+                                f"<div style='font-size:16px;'>{'✅' if is_done else '❌'}</div>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
                     
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        sub_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(sr_id), d), False) else '❌'}`" for d in recent_dates])
-                        st.markdown(f"<div style='font-size:12px; color:#64748B; overflow-x:auto; padding:2px 0;'>&nbsp;&nbsp;&nbsp;&nbsp;{sub_status_line}</div>", unsafe_allow_html=True)
+                        sub_cal_cols = st.columns(7)
+                        for idx, d_str in enumerate(recent_dates):
+                            sub_is_done = past_logs.get((str(sr_id), d_str), False)
+                            with sub_cal_cols[idx]:
+                                st.markdown(
+                                    f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>"
+                                    f"<div style='font-size:14px;'>{'✅' if sub_is_done else '❌'}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
                     st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
@@ -1561,26 +1582,45 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 실천 히스토리 확인", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 7일간 실천 히스토리**를 확인하실 수 있습니다.")
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 실천 캘린더 확인", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 캘린더 형태의 7일 실천 현황**을 확인하실 수 있습니다.")
                 
-                st.markdown("##### 📊 [실천 리포트] 최근 7일간 매일 루틴 실천 히스토리")
+                st.markdown("##### 📊 [실천 리포트] 최근 7일간 매일 루틴 캘린더 뷰")
                 t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
                 if t_routines:
                     t_past_logs = get_student_daily_logs(selected_student, days=7)
                     t_recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
                     
                     for r_id, r_title in t_routines:
-                        with st.container(border=True):
-                            st.markdown(f"📌 **{r_title}**")
-                            t_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if t_past_logs.get((str(r_id), d), False) else '❌'}`" for d in t_recent_dates])
-                            st.markdown(f"<div style='font-size:13px; overflow-x:auto; padding:4px 0;'>{t_status_line}</div>", unsafe_allow_html=True)
-                            
-                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                            for sr_id, sr_title in r_subs:
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                                t_sub_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if t_past_logs.get((str(sr_id), d), False) else '❌'}`" for d in t_recent_dates])
-                                st.markdown(f"<div style='font-size:12px; color:#64748B; overflow-x:auto; padding:2px 0;'>&nbsp;&nbsp;&nbsp;&nbsp;{t_sub_status_line}</div>", unsafe_allow_html=True)
+                        st.markdown(f"📌 **{r_title}**")
+                        t_cal_cols = st.columns(7)
+                        for idx, d_str in enumerate(t_recent_dates):
+                            t_is_done = t_past_logs.get((str(r_id), d_str), False)
+                            t_d_obj = date.fromisoformat(d_str)
+                            t_day_label = f"{t_d_obj.month}/{t_d_obj.day}({get_weekday_kr(d_str)[0]})"
+                            with t_cal_cols[idx]:
+                                st.markdown(
+                                    f"<div style='border:1px solid #334155; border-radius:6px; padding:6px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>"
+                                    f"<div style='color:#94A3B8; margin-bottom:2px;'>{t_day_label}</div>"
+                                    f"<div style='font-size:16px;'>{'✅' if t_is_done else '❌'}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
+                        
+                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                        for sr_id, sr_title in r_subs:
+                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                            t_sub_cal_cols = st.columns(7)
+                            for idx, d_str in enumerate(t_recent_dates):
+                                t_sub_is_done = t_past_logs.get((str(sr_id), d_str), False)
+                                with t_sub_cal_cols[idx]:
+                                    st.markdown(
+                                        f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>"
+                                        f"<div style='font-size:14px;'>{'✅' if t_sub_is_done else '❌'}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
+                        st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
