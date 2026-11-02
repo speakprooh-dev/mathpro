@@ -40,7 +40,7 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 초기화 및 기존 빈 날짜 자동 보정
+# 1. 데이터베이스 초기화 및 하위 과제(parent_id) 컬럼 추가
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -100,9 +100,16 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             student_name TEXT NOT NULL,
             hw_date TEXT NOT NULL,
-            title TEXT NOT NULL
+            title TEXT NOT NULL,
+            parent_id INTEGER DEFAULT NULL
         )
     ''')
+    
+    try:
+        c.execute("ALTER TABLE student_homework ADD COLUMN parent_id INTEGER DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework_templates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,17 +168,6 @@ def init_db():
         )
     ''')
     
-    try:
-        c.execute("SELECT id, full_code FROM problem_links")
-        for row in c.fetchall():
-            l_id, f_code = row[0], row[1]
-            if len(f_code) >= 4:
-                u_code = f_code[:-3]
-                p_num = f_code[-3:]
-                c.execute("UPDATE problem_links SET unit_code = ?, prob_num = ? WHERE id = ?", (u_code, p_num, l_id))
-    except Exception:
-        pass
-
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -567,10 +563,13 @@ def get_student_homework_dates(student_name):
     conn.close()
     return [r[0] for r in rows]
 
-def get_student_homework_by_date(student_name, hw_date):
+def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
+    if parent_id is None:
+        c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND (parent_id IS NULL) ORDER BY id", (student_name, hw_date))
+    else:
+        c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND parent_id = ? ORDER BY id", (student_name, hw_date, parent_id))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -578,7 +577,7 @@ def get_student_homework_by_date(student_name, hw_date):
 def get_all_student_homework(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
+    c.execute("SELECT id, hw_date, title, parent_id FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -588,14 +587,28 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     added_count = 0
+    current_parent_id = None
+    
     for line in lines:
         line_str = line.strip()
         if not line_str:
             continue
-        title = line_str.lstrip('-•* ').strip()
-        if title:
-            c.execute("INSERT INTO student_homework (student_name, hw_date, title) VALUES (?, ?, ?)", (student_name, hw_date, title))
-            added_count += 1
+        
+        # 들여쓰기나 부호로 시작하면 하위 과제로 판정
+        is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
+        title = line_str.lstrip('-•*└\t ').strip()
+        if not title:
+            continue
+            
+        if is_sub and current_parent_id is not None:
+            c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, ?)", 
+                      (student_name, hw_date, title, current_parent_id))
+        else:
+            c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", 
+                      (student_name, hw_date, title))
+            current_parent_id = c.lastrowid
+        added_count += 1
+        
     conn.commit()
     conn.close()
     return added_count
@@ -610,8 +623,8 @@ def update_student_homework(shw_id, hw_date, title):
 def delete_student_homework(shw_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("DELETE FROM student_homework WHERE id = ?", (shw_id,))
-    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (shw_id,))
+    c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (shw_id, shw_id))
+    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ? OR student_hw_id IN (SELECT id FROM student_homework WHERE parent_id = ?)", (shw_id, shw_id))
     conn.commit()
     conn.close()
 
@@ -803,10 +816,20 @@ if url_student and url_student in student_list:
         if hw_dates:
             selected_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
-            target_hws = get_student_homework_by_date(selected_student, selected_date)
-            for h_id, title in target_hws:
+            
+            parent_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=None)
+            for h_id, title in parent_hws:
                 default_val = h_progress.get(h_id, False)
-                h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
+                sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
+                
+                if sub_hws:
+                    st.markdown(f"**📌 {title}**")
+                    h_checked_results[h_id] = st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}")
+                    for s_id, s_title in sub_hws:
+                        s_default_val = h_progress.get(s_id, False)
+                        h_checked_results[s_id] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default_val, key=f"s_hw_{s_id}")
+                else:
+                    h_checked_results[h_id] = st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}")
         else:
             st.info("등록된 날짜별 숙제가 없습니다.")
             
@@ -901,7 +924,7 @@ if url_student and url_student in student_list:
                 final_m_checked[m_id] = st.session_state[key]
                 
         final_h_checked = {}
-        for h_id, _, _ in all_hws_flat:
+        for h_id, _, _, _ in all_hws_flat:
             key = f"s_hw_{h_id}"
             if key in st.session_state:
                 final_h_checked[h_id] = st.session_state[key]
@@ -1384,7 +1407,7 @@ else:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
             
             with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
-                st.info("💡 등록된 과제 문구 옆의 **[Copy to clipboard]** 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
+                st.info("💡 등록된 과제 문구 옆의 복사 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
                 
                 templates = get_homework_templates()
                 
@@ -1399,7 +1422,7 @@ else:
                             st.error("문구를 입력해주세요.")
                 
                 if templates:
-                    st.markdown("##### 📋 저장된 템플릿 목록 (우측 복사 버튼 클릭)")
+                    st.markdown("##### 📋 저장된 템플릿 목록")
                     for t_id, t_title in templates:
                         col_t_txt, col_t_del = st.columns([5, 1])
                         with col_t_txt:
@@ -1417,13 +1440,16 @@ else:
 
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
-                hw_text_area = st.text_area("과제 내용 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="쎈 수학(상) p.45~48 대표유형 풀이\n주간 오답노트 재시험 통과")
+                hw_text_area = st.text_area(
+                    "과제 내용 입력 (들여쓰기나 '-'로 하위 항목 생성 가능)", 
+                    placeholder="[온라인 과제 풀어오기]\n  - 1차시: 개념 정리 및 예제 풀이\n  - 2차시: 실전 문제 적용"
+                )
                 hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 과제 등록하기", type="primary")
                 if hw_submit:
                     if hw_text_area.strip():
                         date_str = str(hw_date_input)
                         added_c = bulk_insert_student_homework(selected_student, date_str, hw_text_area)
-                        st.success(f"총 {added_c}개의 과제가 {selected_student} 학생에게 등록되었습니다!")
+                        st.success(f"총 {added_c}개의 과제 항목이 {selected_student} 학생에게 등록되었습니다!")
                         st.rerun()
                     else:
                         st.error("과제 내용을 입력해주세요.")
@@ -1438,15 +1464,16 @@ else:
                 selected_hw_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
                 st.markdown(f"📌 **[{selected_hw_date} ({get_weekday_kr(selected_hw_date)})]** 숙제 목록")
                 
-                target_hws = get_student_homework_by_date(selected_student, selected_hw_date)
+                parent_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=None)
                 
-                if target_hws:
+                if parent_hws:
                     teacher_hw_checked = {}
                     teacher_hw_delete = {}
                     
                     with st.form(f"teacher_hw_unified_form_{selected_hw_date}"):
-                        for h_id, title in target_hws:
+                        for h_id, title in parent_hws:
                             is_checked_default = hw_progress_map.get(h_id, False)
+                            sub_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=h_id)
                             
                             col_chk, col_del, col_ttl = st.columns([1, 1, 6])
                             with col_chk:
@@ -1454,8 +1481,20 @@ else:
                             with col_del:
                                 teacher_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"t_hw_del_{h_id}")
                             with col_ttl:
-                                st.write(f"📌 {title}")
+                                st.write(f"📌 **{title}**")
                             st.divider()
+                            
+                            if sub_hws:
+                                for s_id, s_title in sub_hws:
+                                    s_checked_default = hw_progress_map.get(s_id, False)
+                                    col_s_chk, col_s_del, col_s_ttl = st.columns([1, 1, 6])
+                                    with col_s_chk:
+                                        teacher_hw_checked[s_id] = st.checkbox("완료", value=s_checked_default, key=f"t_hw_chk_{s_id}")
+                                    with col_s_del:
+                                        teacher_hw_delete[s_id] = st.checkbox("삭제", value=False, key=f"t_hw_del_{s_id}")
+                                    with col_s_ttl:
+                                        st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
+                                    st.divider()
                         
                         col_btn_save, col_btn_del = st.columns(2)
                         with col_btn_save:
@@ -1485,11 +1524,11 @@ else:
                                 conn = sqlite3.connect("mathpro_roadmap.db")
                                 c = conn.cursor()
                                 for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
+                                    c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
+                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ? OR student_hw_id IN (SELECT id FROM student_homework WHERE parent_id = ?)", (h_id, h_id))
                                 conn.commit()
                                 conn.close()
-                                st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
+                                st.success(f"선택한 과제 항목이 삭제되었습니다!")
                                 st.rerun()
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
@@ -1502,15 +1541,16 @@ else:
             st.markdown(f"##### 🛠️ 개별 과제 내용 및 날짜 수정")
             all_student_hws = get_all_student_homework(selected_student)
             if all_student_hws:
-                for h_id, h_date, h_title in all_student_hws:
+                for h_id, h_date, h_title, p_id in all_student_hws:
                     with st.container(border=True):
                         col_info, col_pop = st.columns([5, 1])
                         with col_info:
-                            st.write(f"📅 **{h_date}** | 📌 {h_title}")
+                            prefix = "└ " if p_id else "📌 "
+                            st.write(f"📅 **{h_date}** | {prefix}{h_title}")
                         with col_pop:
                             with st.expander("수정"):
                                 ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
-                                ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
+                                ed_title = st.text_area("내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
                                 if st.button("변경사항 저장", key=f"save_shw_{h_id}", type="primary"):
                                     update_student_homework(h_id, str(ed_date), ed_title.strip())
                                     st.success("수정되었습니다!")
@@ -1657,10 +1697,10 @@ else:
             else:
                 st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내 각 과제 항목 옆에 [수정] 펼치기 기능이 통합된 최종 버전)
+    # [탭 5] 전체 학생 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 과제별 [수정]**까지 한곳에서 바로 처리할 수 있습니다.")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **하위 과제별 개별 체크박스**까지 한곳에서 바로 처리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1676,23 +1716,23 @@ else:
                 
                 students_with_hw = []
                 for s_name in all_students:
-                    if get_student_homework_by_date(s_name, selected_matrix_date):
+                    if get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None):
                         students_with_hw.append(s_name)
                 
                 if students_with_hw:
                     matrix_hw_checked = {}
                     matrix_hw_delete = {}
                     
-                    # 1) 전체 완료/삭제 처리 폼
                     with st.form("matrix_unified_manage_form"):
                         for s_name in students_with_hw:
                             with st.container(border=True):
                                 st.markdown(f"**👤 {s_name} 학생**")
-                                s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
+                                parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
                                 s_hw_prog = get_student_homework_progress(s_name)
                                 
-                                for h_id, title in s_hws:
+                                for h_id, title in parent_hws:
                                     is_done = s_hw_prog.get(h_id, False)
+                                    sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                                     
                                     col_chk, col_del, col_ttl = st.columns([1, 1, 8])
                                     with col_chk:
@@ -1700,8 +1740,20 @@ else:
                                     with col_del:
                                         matrix_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"mat_del_{h_id}")
                                     with col_ttl:
-                                        st.write(f"📌 {title}")
+                                        st.write(f"📌 **{title}**")
                                     st.divider()
+                                    
+                                    if sub_hws:
+                                        for s_id, s_title in sub_hws:
+                                            s_done = s_hw_prog.get(s_id, False)
+                                            col_s_chk, col_s_del, col_s_ttl = st.columns([1, 1, 8])
+                                            with col_s_chk:
+                                                matrix_hw_checked[s_id] = st.checkbox("완료", value=s_done, key=f"mat_chk_{s_id}")
+                                            with col_s_del:
+                                                matrix_hw_delete[s_id] = st.checkbox("삭제", value=False, key=f"mat_del_{s_id}")
+                                            with col_s_ttl:
+                                                st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
+                                            st.divider()
                         
                         col_m_btn1, col_m_btn2 = st.columns(2)
                         with col_m_btn1:
@@ -1731,23 +1783,23 @@ else:
                                 conn = sqlite3.connect("mathpro_roadmap.db")
                                 c = conn.cursor()
                                 for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ?", (h_id,))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ?", (h_id,))
+                                    c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
+                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ? OR student_hw_id IN (SELECT id FROM student_homework WHERE parent_id = ?)", (h_id, h_id))
                                 conn.commit()
                                 conn.close()
-                                st.success(f"선택한 {len(del_ids)}개의 과제가 삭제되었습니다!")
+                                st.success(f"선택한 과제 항목이 삭제되었습니다!")
                                 st.rerun()
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 2) [완전 통합] 검사 보드 바로 아래에 각 과제별 [수정] 펼치기 카드 배치
+                    # 수정 영역
                     st.markdown("##### 🛠️ 검사 보드 내 각 과제별 바로 수정")
                     for s_name in students_with_hw:
-                        s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
-                        if s_hws:
+                        parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
+                        if parent_hws:
                             with st.container(border=True):
                                 st.markdown(f"**👤 {s_name} 학생 과제 수정**")
-                                for h_id, title in s_hws:
+                                for h_id, title in parent_hws:
                                     with st.expander(f"📌 {title}"):
                                         ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_in_d_{h_id}")
                                         ed_t = st.text_area("내용 변경", value=title, key=f"mat_in_t_{h_id}")
@@ -1755,6 +1807,16 @@ else:
                                             update_student_homework(h_id, str(ed_d), ed_t.strip())
                                             st.success("수정되었습니다!")
                                             st.rerun()
+                                    
+                                    sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
+                                    for s_id, s_title in sub_hws:
+                                        with st.expander(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}"):
+                                            ed_sd = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_in_d_{s_id}")
+                                            ed_st = st.text_area("내용 변경", value=s_title, key=f"mat_in_t_{s_id}")
+                                            if st.button("수정 내용 저장", key=f"mat_in_btn_{s_id}", type="primary"):
+                                                update_student_homework(s_id, str(ed_sd), ed_st.strip())
+                                                st.success("수정되었습니다!")
+                                                st.rerun()
                                     st.divider()
                 else:
                     st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생들 중 등록된 내용이 없습니다.")
@@ -1763,7 +1825,7 @@ else:
                 st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
                 with st.form("matrix_add_hw_form"):
                     target_student_add = st.selectbox("과제를 받을 학생 선택", all_students, key="mat_add_stu")
-                    mat_hw_text = st.text_area("추가할 과제 내용 (줄바꿈으로 여러 개 입력 가능)", key="mat_add_txt", placeholder="쎈 수학 상 p.50 문제 풀이")
+                    mat_hw_text = st.text_area("추가할 과제 내용 (들여쓰기로 하위 항목 생성 가능)", key="mat_add_txt", placeholder="[온라인 과제]\n  - 1차시 풀이")
                     mat_add_submit = st.form_submit_button("선택한 학생에게 과제 추가", type="primary")
                     if mat_add_submit:
                         if mat_hw_text.strip():
