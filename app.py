@@ -567,7 +567,6 @@ def get_student_monthly_logs(student_name, year, month):
         log_map[(str(r_id), l_date)] = bool(val)
     return log_map
 
-# [에러 해결을 위해 추가된 일일 로그 조회 함수]
 def get_student_daily_logs(student_name, days=1):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -951,7 +950,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [수정된 모바일 최적화 월간 캘린더 뷰]
+            # [수정된 모바일/PC 완벽 호환 CSS Grid 월간 캘린더 뷰]
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 캘린더")
             st.info("💡 이번 달 루틴 실천 현황을 달력 격자 형태로 한눈에 확인할 수 있어요!")
@@ -973,17 +972,13 @@ if url_student and url_student in student_list:
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    # CSS Grid를 이용한 완벽한 7열 달력 레이아웃
                     calendar_html = """
                     <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
                     """
-                    
-                    # 요일 헤더 추가
                     for idx, w_name in enumerate(weekdays_kr):
                         color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
                         calendar_html += f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>"
                     
-                    # 날짜 셀 추가
                     for week in cal_matrix:
                         for idx, day_num in enumerate(week):
                             if day_num == 0:
@@ -1005,7 +1000,6 @@ if url_student and url_student in student_list:
                     calendar_html += "</div>"
                     st.markdown(calendar_html, unsafe_allow_html=True)
                     
-                    # 하위 루틴이 있는 경우 동일하게 CSS Grid 적용
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
@@ -1653,21 +1647,16 @@ else:
                     
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
-                        t_header_cols = st.columns(7)
-                        for idx, w_name in enumerate(weekdays_kr):
-                            color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                            t_header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                         
-                        # [수정 후 적용 코드]
-                        t_header_cols = st.columns(7)
+                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더]
+                        t_calendar_html = """
+                        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
+                        """
                         for idx, w_name in enumerate(weekdays_kr):
                             color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                            t_header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
+                            t_calendar_html += f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>"
                         
                         for week in t_cal_matrix:
-                            t_calendar_html = """
-                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px;">
-                            """
                             for idx, day_num in enumerate(week):
                                 if day_num == 0:
                                     t_calendar_html += "<div style='padding:8px;'></div>"
@@ -1680,16 +1669,16 @@ else:
                                         <div style='font-size:14px;'>{'✅' if t_is_done else '❌'}</div>
                                     </div>
                                     """
-                            t_calendar_html += "</div>"
-                            st.markdown(t_calendar_html, unsafe_allow_html=True)
+                        t_calendar_html += "</div>"
+                        st.markdown(t_calendar_html, unsafe_allow_html=True)
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                            t_sub_calendar_html = """
+                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
+                            """
                             for week in t_cal_matrix:
-                                t_sub_calendar_html = """
-                                <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 3px;">
-                                """
                                 for idx, day_num in enumerate(week):
                                     if day_num == 0:
                                         t_sub_calendar_html += "<div style='padding:6px;'></div>"
@@ -1702,28 +1691,8 @@ else:
                                             <div style='font-size:12px;'>{'✅' if t_sub_is_done else '❌'}</div>
                                         </div>
                                         """
-                                t_sub_calendar_html += "</div>"
-                                st.markdown(t_sub_calendar_html, unsafe_allow_html=True)
-                        st.divider()
-                        
-                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                        for sr_id, sr_title in r_subs:
-                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            for week in t_cal_matrix:
-                                t_sub_week_cols = st.columns(7)
-                                for idx, day_num in enumerate(week):
-                                    if day_num == 0:
-                                        t_sub_week_cols[idx].markdown("<div style='text-align:center; padding:6px;'></div>", unsafe_allow_html=True)
-                                    else:
-                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
-                                        t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                        t_sub_week_cols[idx].markdown(
-                                            f"<div style='border:1px solid #334155; border-radius:6px; padding:3px 1px; text-align:center; background-color:#0F172A; font-size:11px; margin-bottom:3px;'>"
-                                            f"<div style='color:#94A3B8; font-size:10px;'>{day_num}</div>"
-                                            f"<div style='font-size:12px;'>{'✅' if t_sub_is_done else '❌'}</div>"
-                                            f"</div>",
-                                            unsafe_allow_html=True
-                                        )
+                            t_sub_calendar_html += "</div>"
+                            st.markdown(t_sub_calendar_html, unsafe_allow_html=True)
                         st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
