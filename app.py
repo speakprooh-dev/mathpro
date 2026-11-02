@@ -931,7 +931,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [신규] 모바일 가독성을 극대화한 카드형 리스트 히스토리 뷰
+            # [신규] 펼쳐보기(st.expander)를 적용하여 공간을 차지하지 않고 깔끔하게 확인하는 7일 실천 요약 뷰
             st.markdown("---")
             st.markdown("### 📊 나의 매일 루틴 실천 히스토리 & 누적 통계")
             st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 한눈에 확인할 수 있어요!")
@@ -942,9 +942,8 @@ if url_student and url_student in student_list:
             total_checked_count = sum(1 for k, v in past_logs.items() if v)
             st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
             
-            st.markdown("##### 🗓️ 최근 7일 실천 요약")
-            for r_id, r_title in daily_parents:
-                with st.container(border=True):
+            with st.expander("📅 최근 7일 실천 히스토리 펼쳐보기 / 접기"):
+                for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(r_id), d), False) else '❌'}`" for d in recent_dates])
                     st.markdown(f"<div style='font-size:13px; overflow-x:auto; padding:4px 0;'>{status_line}</div>", unsafe_allow_html=True)
@@ -954,6 +953,7 @@ if url_student and url_student in student_list:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
                         sub_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(sr_id), d), False) else '❌'}`" for d in recent_dates])
                         st.markdown(f"<div style='font-size:12px; color:#64748B; overflow-x:auto; padding:2px 0;'>&nbsp;&nbsp;&nbsp;&nbsp;{sub_status_line}</div>", unsafe_allow_html=True)
+                    st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
 
