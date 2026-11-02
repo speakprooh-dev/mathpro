@@ -846,7 +846,7 @@ if url_student and url_student in student_list:
         * 체크가 끝나면 맨 아래 **[💾 내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
-        * 매일 실천하는 **[매일 루틴 과제]**를 체크한 뒤 **[매일 루틴 상태 저장하기]**를 누르면 실천 기록이 누적됩니다!
+        * 매일 실천하는 **[매일 루틴 과제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         * 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**도 체크 후 저장하세요.
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
@@ -930,7 +930,7 @@ if url_student and url_student in student_list:
 
     with tab2:
         st.markdown("### 🔥 매일 반복 루틴 과제 (학생 맞춤)")
-        st.caption("💡 날짜와 상관없이 매일매일 꾸준히 풀고 실천해야 하는 루틴 과제입니다!")
+        st.success("💡 **자동 저장 기능 적용:** 매일 루틴 과제는 체크박스를 누르는 즉시 자동으로 안전하게 저장됩니다!")
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
@@ -952,8 +952,15 @@ if url_student and url_student in student_list:
                         h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             
-            save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
-            
+            # --- 실시간 자동 저장 처리 ---
+            daily_routine_checked_dict = {}
+            for k, v in h_checked_results.items():
+                if str(k).startswith("daily_"):
+                    daily_key_id = str(k).replace("daily_", "")
+                    daily_routine_checked_dict[daily_key_id] = v
+            if daily_routine_checked_dict:
+                save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
+
             # [학생 모드: 처음에는 접힌 상태(expanded=False)인 월간 기록 리스트 뷰]
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 기록 뷰")
@@ -1108,11 +1115,10 @@ if url_student and url_student in student_list:
 
     # 각 탭의 버튼 변수들을 안전하게 가져오기
     s_btn1 = locals().get("save_btn_tab1", False)
-    s_btn_daily = locals().get("save_daily_btn", False)
     s_btn2 = locals().get("save_btn_tab2", False)
     s_btn3 = locals().get("save_btn_tab3", False)
 
-    if s_btn1 or s_btn_daily or s_btn2 or s_btn3:
+    if s_btn1 or s_btn2 or s_btn3:
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
             key = f"s_milestone_{m_id}"
@@ -1124,16 +1130,8 @@ if url_student and url_student in student_list:
             key = f"s_hw_{h_id}"
             if key in st.session_state:
                 final_h_checked[h_id] = st.session_state[key]
-                
-        daily_routine_checked_dict = {}
-        for k, v in h_checked_results.items():
-            if str(k).startswith("daily_"):
-                daily_key_id = str(k).replace("daily_", "")
-                daily_routine_checked_dict[daily_key_id] = v
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
-        if s_btn_daily and daily_routine_checked_dict:
-            save_daily_routine_logs(selected_student, str(date.today()), daily_routine_checked_dict)
         
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
