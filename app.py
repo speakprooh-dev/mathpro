@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 from datetime import date, timedelta
+import calendar
 import re
 import pandas as pd
 import io
@@ -548,11 +549,16 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn.commit()
     conn.close()
 
-def get_student_daily_logs(student_name, days=7):
+def get_student_monthly_logs(student_name, year, month):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    start_date = str(date.today() - timedelta(days=days-1))
-    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ?", (student_name, start_date))
+    start_date = f"{year}-{month:02d}-01"
+    if month == 12:
+        end_date = f"{year+1}-01-01"
+    else:
+        end_date = f"{year}-{month+1:02d}-01"
+        
+    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date < ?", (student_name, start_date, end_date))
     rows = c.fetchall()
     conn.close()
     
@@ -931,49 +937,76 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [신규 적용] 캘린더(달력) 형태의 컴팩트 실천 현황 뷰 (펼쳐보기/접기 적용)
+            # [신규 적용] 스마트폰 화면에 딱 맞는 진짜 월간 달력(Calendar Grid) 뷰
             st.markdown("---")
-            st.markdown("### 📊 나의 매일 루틴 실천 캘린더 & 누적 통계")
-            st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 달력 형태로 한눈에 확인할 수 있어요!")
+            st.markdown("### 📅 나의 매일 루틴 실천 월간 캘린더")
+            st.info("💡 이번 달 루틴 실천 현황을 달력 격자 형태로 한눈에 확인할 수 있어요!")
             
-            past_logs = get_student_daily_logs(selected_student, days=7)
-            recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
+            curr_year = date.today().year
+            curr_month = date.today().month
             
-            total_checked_count = sum(1 for k, v in past_logs.items() if v)
-            st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
+            # 연도/월 선택 셀렉트박스
+            col_y, col_m = st.columns(2)
+            with col_y:
+                sel_year = st.selectbox("연도 선택", [curr_year - 1, curr_year, curr_year + 1], index=1, key="cal_year")
+            with col_m:
+                sel_month = st.selectbox("월 선택", list(range(1, 13)), index=curr_month - 1, format_func=lambda x: f"{x}월", key="cal_month")
             
-            with st.expander("📅 7일 실천 캘린더 보기 (펼치기 / 접기)", expanded=True):
+            monthly_logs = get_student_monthly_logs(selected_student, sel_year, sel_month)
+            cal_matrix = calendar.monthcalendar(sel_year, sel_month)
+            weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+            
+            with st.expander(f"🗓️ [{sel_year}년 {sel_month}월] 루틴 실천 캘린더 보기 (펼치기 / 접기)", expanded=True):
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    # 달력 형태의 7일 그리드 렌더링
-                    cal_cols = st.columns(7)
-                    for idx, d_str in enumerate(recent_dates):
-                        is_done = past_logs.get((str(r_id), d_str), False)
-                        d_obj = date.fromisoformat(d_str)
-                        day_label = f"{d_obj.month}/{d_obj.day}({get_weekday_kr(d_str)[0]})"
-                        with cal_cols[idx]:
-                            st.markdown(
-                                f"<div style='border:1px solid #334155; border-radius:6px; padding:6px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>"
-                                f"<div style='color:#94A3B8; margin-bottom:2px;'>{day_label}</div>"
-                                f"<div style='font-size:16px;'>{'✅' if is_done else '❌'}</div>"
-                                f"</div>",
-                                unsafe_allow_html=True
-                            )
+                    # 달력 헤더 (요일)
+                    header_cols = st.columns(7)
+                    for idx, w_name in enumerate(weekdays_kr):
+                        color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
+                        header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                     
-                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                    for sr_id, sr_title in r_subs:
-                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        sub_cal_cols = st.columns(7)
-                        for idx, d_str in enumerate(recent_dates):
-                            sub_is_done = past_logs.get((str(sr_id), d_str), False)
-                            with sub_cal_cols[idx]:
-                                st.markdown(
-                                    f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>"
-                                    f"<div style='font-size:14px;'>{'✅' if sub_is_done else '❌'}</div>"
+                    # 달력 날짜 격자 렌더링
+                    for week in cal_matrix:
+                        week_cols = st.columns(7)
+                        for idx, day_num in enumerate(week):
+                            if day_num == 0:
+                                week_cols[idx].markdown("<div style='text-align:center; padding:8px;'></div>", unsafe_allow_html=True)
+                            else:
+                                d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
+                                is_done = monthly_logs.get((str(r_id), d_str), False)
+                                is_today = (d_str == str(date.today()))
+                                
+                                bg_color = "#1E3A8A" if is_today else "#1E293B"
+                                border_color = "#60A5FA" if is_today else "#334155"
+                                
+                                week_cols[idx].markdown(
+                                    f"<div style='border:1px solid {border_color}; border-radius:6px; padding:4px 1px; text-align:center; background-color:{bg_color}; font-size:11px; margin-bottom:4px;'>"
+                                    f"<div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>"
+                                    f"<div style='font-size:14px;'>{'✅' if is_done else '❌'}</div>"
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
+                    
+                    # 하위 루틴 달력 렌더링
+                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    for sr_id, sr_title in r_subs:
+                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                        for week in cal_matrix:
+                            sub_week_cols = st.columns(7)
+                            for idx, day_num in enumerate(week):
+                                if day_num == 0:
+                                    sub_week_cols[idx].markdown("<div style='text-align:center; padding:6px;'></div>", unsafe_allow_html=True)
+                                else:
+                                    d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
+                                    sub_is_done = monthly_logs.get((str(sr_id), d_str), False)
+                                    sub_week_cols[idx].markdown(
+                                        f"<div style='border:1px solid #334155; border-radius:6px; padding:3px 1px; text-align:center; background-color:#0F172A; font-size:11px; margin-bottom:3px;'>"
+                                        f"<div style='color:#94A3B8; font-size:10px;'>{day_num}</div>"
+                                        f"<div style='font-size:12px;'>{'✅' if sub_is_done else '❌'}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
                     st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
@@ -1582,44 +1615,63 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 실천 캘린더 확인", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 캘린더 형태의 7일 실천 현황**을 확인하실 수 있습니다.")
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 캘린더 확인", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 월간 캘린더 형태의 실천 현황**을 확인하실 수 있습니다.")
                 
-                st.markdown("##### 📊 [실천 리포트] 최근 7일간 매일 루틴 캘린더 뷰")
+                st.markdown("##### 📊 [실천 리포트] 월간 캘린더 실천 뷰")
                 t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
                 if t_routines:
-                    t_past_logs = get_student_daily_logs(selected_student, days=7)
-                    t_recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
+                    curr_year = date.today().year
+                    curr_month = date.today().month
+                    
+                    t_sel_year = st.selectbox("선생님 조회 연도", [curr_year - 1, curr_year, curr_year + 1], index=1, key="t_cal_year")
+                    t_sel_month = st.selectbox("선생님 조회 월", list(range(1, 13)), index=curr_month - 1, format_func=lambda x: f"{x}월", key="t_cal_month")
+                    
+                    t_monthly_logs = get_student_monthly_logs(selected_student, t_sel_year, t_sel_month)
+                    t_cal_matrix = calendar.monthcalendar(t_sel_year, t_sel_month)
+                    weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
                     
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
-                        t_cal_cols = st.columns(7)
-                        for idx, d_str in enumerate(t_recent_dates):
-                            t_is_done = t_past_logs.get((str(r_id), d_str), False)
-                            t_d_obj = date.fromisoformat(d_str)
-                            t_day_label = f"{t_d_obj.month}/{t_d_obj.day}({get_weekday_kr(d_str)[0]})"
-                            with t_cal_cols[idx]:
-                                st.markdown(
-                                    f"<div style='border:1px solid #334155; border-radius:6px; padding:6px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>"
-                                    f"<div style='color:#94A3B8; margin-bottom:2px;'>{t_day_label}</div>"
-                                    f"<div style='font-size:16px;'>{'✅' if t_is_done else '❌'}</div>"
-                                    f"</div>",
-                                    unsafe_allow_html=True
-                                )
+                        t_header_cols = st.columns(7)
+                        for idx, w_name in enumerate(weekdays_kr):
+                            color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
+                            t_header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
+                        
+                        for week in t_cal_matrix:
+                            t_week_cols = st.columns(7)
+                            for idx, day_num in enumerate(week):
+                                if day_num == 0:
+                                    t_week_cols[idx].markdown("<div style='text-align:center; padding:8px;'></div>", unsafe_allow_html=True)
+                                else:
+                                    d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
+                                    t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
+                                    t_week_cols[idx].markdown(
+                                        f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 1px; text-align:center; background-color:#1E293B; font-size:11px; margin-bottom:4px;'>"
+                                        f"<div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>"
+                                        f"<div style='font-size:14px;'>{'✅' if t_is_done else '❌'}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            t_sub_cal_cols = st.columns(7)
-                            for idx, d_str in enumerate(t_recent_dates):
-                                t_sub_is_done = t_past_logs.get((str(sr_id), d_str), False)
-                                with t_sub_cal_cols[idx]:
-                                    st.markdown(
-                                        f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>"
-                                        f"<div style='font-size:14px;'>{'✅' if t_sub_is_done else '❌'}</div>"
-                                        f"</div>",
-                                        unsafe_allow_html=True
-                                    )
+                            for week in t_cal_matrix:
+                                t_sub_week_cols = st.columns(7)
+                                for idx, day_num in enumerate(week):
+                                    if day_num == 0:
+                                        t_sub_week_cols[idx].markdown("<div style='text-align:center; padding:6px;'></div>", unsafe_allow_html=True)
+                                    else:
+                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
+                                        t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
+                                        t_sub_week_cols[idx].markdown(
+                                            f"<div style='border:1px solid #334155; border-radius:6px; padding:3px 1px; text-align:center; background-color:#0F172A; font-size:11px; margin-bottom:3px;'>"
+                                            f"<div style='color:#94A3B8; font-size:10px;'>{day_num}</div>"
+                                            f"<div style='font-size:12px;'>{'✅' if t_sub_is_done else '❌'}</div>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                         st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
