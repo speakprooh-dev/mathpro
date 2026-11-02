@@ -1657,10 +1657,10 @@ else:
             else:
                 st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내 각 과제 항목마다 [수정] 팝업 버튼 내장 버전)
+    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내 각 과제 항목마다 [수정] 팝업 버튼이 정확히 내장된 최종 버전)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 과제별 [수정] 버튼**까지 한눈에 바로 처리할 수 있습니다.")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 과제별 [수정] 버튼**까지 한곳에서 바로 처리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1683,6 +1683,7 @@ else:
                     matrix_hw_checked = {}
                     matrix_hw_delete = {}
                     
+                    # 1) 체크박스 및 삭제 상태를 처리하는 폼 (과제 내용 표시 줄)
                     with st.form("matrix_unified_manage_form"):
                         for s_name in students_with_hw:
                             with st.container(border=True):
@@ -1693,7 +1694,6 @@ else:
                                 for h_id, title in s_hws:
                                     is_done = s_hw_prog.get(h_id, False)
                                     
-                                    # 각 과제 줄마다 [완료] 체크, [삭제] 체크, 과제 내용 배치
                                     col_chk, col_del, col_ttl = st.columns([1, 1, 8])
                                     with col_chk:
                                         matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
@@ -1740,13 +1740,13 @@ else:
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # [핵심 수정] 과제 검사 보드 바로 아래에 각 과제별 [수정] 버튼과 팝업창을 직관적으로 내장
-                    st.markdown("##### 🛠️ 검사 보드 내 각 과제별 개별 수정")
+                    # 2) [핵심 해결] 각 학생 카드 내 과제 항목마다 곧바로 [수정] 팝업 버튼을 배치 (별도의 아래쪽 창 없이 보드 안에서 바로 수정 가능)
+                    st.markdown("##### 🛠️ 검사 보드 내 각 과제별 바로 수정")
                     for s_name in students_with_hw:
                         s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
                         if s_hws:
                             with st.container(border=True):
-                                st.markdown(f"**👤 {s_name} 학생 과제 편집**")
+                                st.markdown(f"**👤 {s_name} 학생 과제 수정**")
                                 for h_id, title in s_hws:
                                     col_item_view, col_item_pop = st.columns([5, 1])
                                     with col_item_view:
