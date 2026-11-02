@@ -17,7 +17,7 @@ def create_excel_backup():
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
-            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
+            "milestone_progress", "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
         ]
         for table in tables:
             try:
@@ -1509,13 +1509,12 @@ else:
                             st.write(f"📅 **{h_date}** | 📌 {h_title}")
                         with col_pop:
                             with st.popover("수정"):
-                                with st.form(f"edit_shw_form_{h_id}"):
-                                    ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
-                                    ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
-                                    if st.form_submit_button("변경사항 저장"):
-                                        update_student_homework(h_id, str(ed_date), ed_title.strip())
-                                        st.success("수정되었습니다!")
-                                        st.rerun()
+                                ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
+                                ed_title = st.text_area("과제 내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
+                                if st.button("변경사항 저장", key=f"save_shw_{h_id}", type="primary"):
+                                    update_student_homework(h_id, str(ed_date), ed_title.strip())
+                                    st.success("수정되었습니다!")
+                                    st.rerun()
         else:
             st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
 
@@ -1552,13 +1551,11 @@ else:
                                 st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(최종 수정: {u_date if u_date else '날짜 기록 없음'})</span>", unsafe_allow_html=True)
                                 
                                 with st.popover("⚙️ 오답 번호 편집하기"):
-                                    with st.form(f"edit_wrong_form_{u_code}"):
-                                        st.caption(f"'{chk_student}' 학생의 '{u_code}' 단원 오답 번호를 직접 수정합니다.")
-                                        new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
-                                        if st.form_submit_button("저장하기", type="primary"):
-                                            save_student_wrong_entry(chk_student, u_code, new_nums_input)
-                                            st.success("수정되었습니다!")
-                                            st.rerun()
+                                    new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
+                                    if st.button("저장하기", key=f"save_w_{u_code}", type="primary"):
+                                        save_student_wrong_entry(chk_student, u_code, new_nums_input)
+                                        st.success("수정되었습니다!")
+                                        st.rerun()
 
                                 col_w1, col_w2 = st.columns([3, 1])
                                 with col_w1:
@@ -1695,24 +1692,13 @@ else:
                                 
                                 for h_id, title in s_hws:
                                     is_done = s_hw_prog.get(h_id, False)
-                                    # [완료] 체크박스, [삭제] 체크박스, [과제 내용 및 수정 버튼] 배치
                                     col_chk, col_del, col_ttl = st.columns([1, 1, 6])
                                     with col_chk:
                                         matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
                                     with col_del:
                                         matrix_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"mat_del_{h_id}")
                                     with col_ttl:
-                                        sub_c1, sub_c2 = st.columns([5, 1])
-                                        with sub_c1:
-                                            st.write(f"📌 {title}")
-                                        with sub_c2:
-                                            with st.popover("수정", key=f"mat_pop_edit_{h_id}"):
-                                                ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
-                                                ed_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
-                                                if st.button("수정 내용 저장", key=f"mat_save_btn_{h_id}", type="primary"):
-                                                    update_student_homework(h_id, str(ed_d), ed_t.strip())
-                                                    st.success("수정되었습니다!")
-                                                    st.rerun()
+                                        st.write(f"📌 {title}")
                                     st.divider()
                         
                         col_m_btn1, col_m_btn2 = st.columns(2)
@@ -1751,6 +1737,24 @@ else:
                                 st.rerun()
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
+
+                    # 매트릭스 보드 각 항목별 개별 수정 팝업 (팝업 안에 폼 없이 버튼만 배치하여 에러 원인 완벽 차단)
+                    st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
+                    for s_name in students_with_hw:
+                        s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
+                        for h_id, title in s_hws:
+                            with st.container(border=True):
+                                col_info, col_pop = st.columns([5, 1])
+                                with col_info:
+                                    st.write(f"👤 **{s_name}** | 📌 {title}")
+                                with col_pop:
+                                    with st.popover("수정", key=f"mat_pop_edit_{h_id}"):
+                                        ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
+                                        ed_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
+                                        if st.button("수정 내용 저장", key=f"mat_save_btn_{h_id}", type="primary"):
+                                            update_student_homework(h_id, str(ed_d), ed_t.strip())
+                                            st.success("수정되었습니다!")
+                                            st.rerun()
                 else:
                     st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생들 중 등록된 내용이 없습니다.")
 
