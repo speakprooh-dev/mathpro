@@ -786,7 +786,7 @@ if url_student and url_student in student_list:
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
         * 매일 실천하는 **[매일 루틴 과제]**와 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**를 체크하세요.
-        * 하단의 **[💾 내 학습 상태 저장하기]**를 눌러야 선생님에게 완료가 전달됩니다.
+        * 각 영역별로 준비된 **저장하기** 버튼을 눌러야 선생님에게 완료가 전달됩니다.
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
@@ -887,12 +887,15 @@ if url_student and url_student in student_list:
                     else:
                         h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
+            
+            # [신규] 매일 루틴 전용 독립 저장 버튼
+            save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
 
         st.markdown("---")
         st.markdown("### 📝 날짜별 부여된 숙제 목록")
-        st.info("💡 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
+        st.info("💡 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[날짜별 숙제 상태 저장하기]** 버튼을 눌러주세요!")
         if hw_dates:
             selected_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
@@ -914,7 +917,7 @@ if url_student and url_student in student_list:
             st.info("등록된 날짜별 숙제가 없습니다.")
             
         st.markdown("---")
-        save_btn_tab2 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t2", use_container_width=True)
+        save_btn_tab2 = st.button("💾 날짜별 숙제 상태 저장하기", type="primary", key="save_t2", use_container_width=True)
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
@@ -932,7 +935,7 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
 
-        save_btn_tab3 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t3", use_container_width=True)
+        save_btn_tab3 = st.button("💾 오답 목록 저장하기", type="primary", key="save_t3", use_container_width=True)
         st.markdown("---")
 
         saved_text = get_student_wrong_entry(selected_student, current_unit)
@@ -996,7 +999,7 @@ if url_student and url_student in student_list:
                 else:
                     st.info(f"'{search_prob_input}' 단원에 등록된 해설 링크가 없습니다.")
 
-    if save_btn_tab1 or save_btn_tab2 or save_btn_tab3:
+    if save_btn_tab1 or save_daily_btn or save_btn_tab2 or save_btn_tab3:
         final_m_checked = {}
         for m_id, _, _, _, _ in milestones:
             key = f"s_milestone_{m_id}"
@@ -1020,7 +1023,7 @@ if url_student and url_student in student_list:
         del_txt = locals().get("del_input_text", "")
         cur_code = locals().get("current_unit", "B1353")
         
-        if cur_code:
+        if cur_code and save_btn_tab3:
             saved_text_pre = get_student_wrong_entry(selected_student, cur_code)
             saved_nums_pre = parse_numbers(saved_text_pre)
             nums_to_add = parse_numbers(add_txt)
@@ -1495,7 +1498,6 @@ else:
             with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 완료 기록 확인", expanded=True):
                 st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록**을 확인하실 수 있습니다.")
                 
-                # [신규 추가] 학생의 실시간 완료 기록 확인 영역
                 st.markdown("##### 📊 [실시간] 현재 매일 루틴 과제 학생 완료 현황")
                 cur_routines_check = get_student_daily_routines_parent(selected_student, parent_id=None)
                 current_h_prog = get_student_homework_progress(selected_student)
