@@ -972,17 +972,15 @@ if url_student and url_student in student_list:
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    calendar_html = """
-                    <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
-                    """
+                    cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                     for idx, w_name in enumerate(weekdays_kr):
                         color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                        calendar_html += f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>"
+                        cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
                     
                     for week in cal_matrix:
                         for idx, day_num in enumerate(week):
                             if day_num == 0:
-                                calendar_html += "<div style='padding:8px;'></div>"
+                                cal_parts.append("<div style='padding:8px;'></div>")
                             else:
                                 d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
                                 is_done = monthly_logs.get((str(r_id), d_str), False)
@@ -991,36 +989,34 @@ if url_student and url_student in student_list:
                                 bg_color = "#1E3A8A" if is_today else "#1E293B"
                                 border_color = "#60A5FA" if is_today else "#334155"
                                 
-                                calendar_html += f"""
+                                cal_parts.append(f"""
                                 <div style='border:1px solid {border_color}; border-radius:6px; padding:4px 2px; text-align:center; background-color:{bg_color}; font-size:11px;'>
                                     <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                    <div style='font-size:14px;'>{'✅' if is_done else '❌'}</div>
+                                    <div style='font-size:14px;'>{"✅" if is_done else "❌"}</div>
                                 </div>
-                                """
-                    calendar_html += "</div>"
-                    st.markdown(calendar_html, unsafe_allow_html=True)
+                                """)
+                    cal_parts.append("</div>")
+                    st.markdown("".join(cal_parts), unsafe_allow_html=True)
                     
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        sub_calendar_html = """
-                        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
-                        """
+                        sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                         for week in cal_matrix:
                             for idx, day_num in enumerate(week):
                                 if day_num == 0:
-                                    sub_calendar_html += "<div style='padding:6px;'></div>"
+                                    sub_parts.append("<div style='padding:6px;'></div>")
                                 else:
                                     d_str = f"{sel_year}-{sel_month:02d}-{day_num:02d}"
                                     sub_is_done = monthly_logs.get((str(sr_id), d_str), False)
-                                    sub_calendar_html += f"""
+                                    sub_parts.append(f"""
                                     <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
                                         <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                        <div style='font-size:12px;'>{'✅' if sub_is_done else '❌'}</div>
+                                        <div style='font-size:12px;'>{"✅" if sub_is_done else "❌"}</div>
                                     </div>
-                                    """
-                        sub_calendar_html += "</div>"
-                        st.markdown(sub_calendar_html, unsafe_allow_html=True)
+                                    """)
+                        sub_parts.append("</div>")
+                        st.markdown("".join(sub_parts), unsafe_allow_html=True)
                     st.divider()
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
@@ -1648,51 +1644,47 @@ else:
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
                         
-                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (unsafe_allow_html=True 적용)]
-                        t_calendar_html = """
-                        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
-                        """
+                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (안전 결합 적용)]
+                        t_cal_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                         for idx, w_name in enumerate(weekdays_kr):
                             color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
-                            t_calendar_html += f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>"
+                            t_cal_parts.append(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px; padding:4px 0;'>{w_name}</div>")
                         
                         for week in t_cal_matrix:
                             for idx, day_num in enumerate(week):
                                 if day_num == 0:
-                                    t_calendar_html += "<div style='padding:8px;'></div>"
+                                    t_cal_parts.append("<div style='padding:8px;'></div>")
                                 else:
                                     d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
                                     t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                    t_calendar_html += f"""
+                                    t_cal_parts.append(f"""
                                     <div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>
                                         <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
-                                        <div style='font-size:14px;'>{'✅' if t_is_done else '❌'}</div>
+                                        <div style='font-size:14px;'>{"✅" if t_is_done else "❌"}</div>
                                     </div>
-                                    """
-                        t_calendar_html += "</div>"
-                        st.markdown(t_calendar_html, unsafe_allow_html=True)
+                                    """)
+                        t_cal_parts.append("</div>")
+                        st.markdown("".join(t_cal_parts), unsafe_allow_html=True)
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            t_sub_calendar_html = """
-                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
-                            """
+                            t_sub_parts = ['<div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">']
                             for week in t_cal_matrix:
                                 for idx, day_num in enumerate(week):
                                     if day_num == 0:
-                                        t_sub_calendar_html += "<div style='padding:6px;'></div>"
+                                        t_sub_parts.append("<div style='padding:6px;'></div>")
                                     else:
                                         d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
                                         t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                        t_sub_calendar_html += f"""
+                                        t_sub_parts.append(f"""
                                         <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
                                             <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
-                                            <div style='font-size:12px;'>{'✅' if t_sub_is_done else '❌'}</div>
+                                            <div style='font-size:12px;'>{"✅" if t_sub_is_done else "❌"}</div>
                                         </div>
-                                        """
-                            t_sub_calendar_html += "</div>"
-                            st.markdown(t_sub_calendar_html, unsafe_allow_html=True)
+                                        """)
+                            t_sub_parts.append("</div>")
+                            st.markdown("".join(t_sub_parts), unsafe_allow_html=True)
                         st.divider()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
