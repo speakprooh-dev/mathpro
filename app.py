@@ -1,6 +1,6 @@
 import streamlit as st
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 import re
 import pandas as pd
 import io
@@ -150,6 +150,18 @@ def init_db():
             PRIMARY KEY (student_name, student_hw_id)
         )
     ''')
+    
+    # [신규] 매일 루틴 날짜별 실천 기록 테이블 (누적 히스토리용)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS daily_routine_logs (
+            student_name TEXT,
+            routine_id TEXT,
+            log_date TEXT,
+            is_checked INTEGER,
+            PRIMARY KEY (student_name, routine_id, log_date)
+        )
+    ''')
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS student_wrong_entries (
             student_name TEXT,
@@ -239,6 +251,7 @@ def delete_student(name):
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
@@ -520,8 +533,34 @@ def delete_daily_routine(r_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
+    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
     conn.commit()
     conn.close()
+
+def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    for routine_id_str, val in routine_checked_dict.items():
+        c.execute('''
+            INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
+        ''', (student_name, str(routine_id_str), log_date, int(val), int(val)))
+    conn.commit()
+    conn.close()
+
+def get_student_daily_logs(student_name, days=7):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    start_date = str(date.today() - timedelta(days=days-1))
+    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ?", (student_name, start_date))
+    rows = c.fetchall()
+    conn.close()
+    
+    log_map = {}
+    for r_id, l_date, val in rows:
+        log_map[(str(r_id), l_date)] = bool(val)
+    return log_map
 
 # --- 과제 템플릿 관리 함수들 ---
 def get_homework_templates():
@@ -785,8 +824,8 @@ if url_student and url_student in student_list:
         * 체크가 끝나면 맨 아래 **[💾 내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
-        * 매일 실천하는 **[매일 루틴 과제]**와 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**를 체크하세요.
-        * 각 영역별로 준비된 **저장하기** 버튼을 눌러야 선생님에게 완료가 전달됩니다.
+        * 매일 실천하는 **[매일 루틴 과제]**를 체크한 뒤 **[매일 루틴 상태 저장하기]**를 누르면 실천 기록이 누적됩니다!
+        * 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**도 체크 후 저장하세요.
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
@@ -873,23 +912,57 @@ if url_student and url_student in student_list:
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
+            today_str = str(date.today())
+            current_day_logs = get_student_daily_logs(selected_student, days=1)
+            
             with st.container(border=True):
                 for r_id, r_title in daily_parents:
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                    default_val = h_progress.get(f"daily_{r_id}", False)
+                    default_val = current_day_logs.get((str(r_id), today_str), False)
                     
                     if r_subs:
                         st.markdown(f"**📌 {r_title}**")
                         h_checked_results[f"daily_{r_id}"] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
                         for sr_id, sr_title in r_subs:
-                            s_default_val = h_progress.get(f"daily_{sr_id}", False)
+                            s_default_val = current_day_logs.get((str(sr_id), today_str), False)
                             h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
                     else:
                         h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             
-            # [신규] 매일 루틴 전용 독립 저장 버튼
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
+            
+            # [신규] 매일 루틴 실천 누적 통계 및 최근 히스토리 표
+            st.markdown("---")
+            st.markdown("### 📊 나의 매일 루틴 실천 히스토리 & 누적 통계")
+            st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 한눈에 확인할 수 있어요!")
+            
+            past_logs = get_student_daily_logs(selected_student, days=7)
+            recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
+            
+            total_checked_count = sum(1 for k, v in past_logs.items() if v)
+            st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
+            
+            # 히스토리 표 구성
+            history_data = []
+            for r_id, r_title in daily_parents:
+                row_dict = {"루틴 항목": r_title}
+                for d_str in recent_dates:
+                    is_done = past_logs.get((str(r_id), d_str), False)
+                    row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
+                history_data.append(row_dict)
+                
+                r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                for sr_id, sr_title in r_subs:
+                    sub_row_dict = {"루틴 항목": f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}"}
+                    for d_str in recent_dates:
+                        is_done = past_logs.get((str(sr_id), d_str), False)
+                        sub_row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
+                    history_data.append(sub_row_dict)
+            
+            if history_data:
+                df_history = pd.DataFrame(history_data)
+                st.markdown(df_history.to_markdown(index=False), unsafe_allow_html=True)
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
 
@@ -1012,12 +1085,15 @@ if url_student and url_student in student_list:
             if key in st.session_state:
                 final_h_checked[h_id] = st.session_state[key]
                 
+        daily_routine_checked_dict = {}
         for k, v in h_checked_results.items():
             if str(k).startswith("daily_"):
                 daily_key_id = str(k).replace("daily_", "")
-                final_h_checked[f"daily_{daily_key_id}"] = v
+                daily_routine_checked_dict[daily_key_id] = v
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
+        if save_daily_btn and daily_routine_checked_dict:
+            save_daily_routine_logs(selected_student, str(date.today()), daily_routine_checked_dict)
         
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
@@ -1494,25 +1570,35 @@ else:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            # [신규] 매일 루틴 설정 및 학생 완료 기록 확인 코너
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 완료 기록 확인", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록**을 확인하실 수 있습니다.")
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 실천 히스토리 확인", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 7일간 실천 히스토리**를 확인하실 수 있습니다.")
                 
-                st.markdown("##### 📊 [실시간] 현재 매일 루틴 과제 학생 완료 현황")
-                cur_routines_check = get_student_daily_routines_parent(selected_student, parent_id=None)
-                current_h_prog = get_student_homework_progress(selected_student)
-                
-                if cur_routines_check:
-                    for r_id, r_title in cur_routines_check:
-                        r_done = current_h_prog.get(f"daily_{r_id}", False)
-                        status_str = "✅ 완료함" if r_done else "⬜ 미완료"
-                        st.write(f"- {status_str} : **{r_title}**")
+                # [신규] 선생님 관리 화면에서도 학생의 7일 실천 히스토리 표 제공 (공유/점검용)
+                st.markdown("##### 📊 [실천 리포트] 최근 7일간 매일 루틴 실천 히스토리")
+                t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
+                if t_routines:
+                    t_past_logs = get_student_daily_logs(selected_student, days=7)
+                    t_recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
+                    
+                    t_history_data = []
+                    for r_id, r_title in t_routines:
+                        row_dict = {"루틴 항목": r_title}
+                        for d_str in t_recent_dates:
+                            is_done = t_past_logs.get((str(r_id), d_str), False)
+                            row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
+                        t_history_data.append(row_dict)
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
-                            sr_done = current_h_prog.get(f"daily_{sr_id}", False)
-                            sub_status_str = "✅ 완료함" if sr_done else "⬜ 미완료"
-                            st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sub_status_str} : {sr_title}")
+                            sub_row_dict = {"루틴 항목": f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}"}
+                            for d_str in t_recent_dates:
+                                is_done = t_past_logs.get((str(sr_id), d_str), False)
+                                sub_row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
+                            t_history_data.append(sub_row_dict)
+                    
+                    if t_history_data:
+                        df_t_history = pd.DataFrame(t_history_data)
+                        st.markdown(df_t_history.to_markdown(index=False), unsafe_allow_html=True)
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
