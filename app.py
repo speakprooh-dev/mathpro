@@ -950,7 +950,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [수정된 모바일/PC 완벽 호환 CSS Grid 월간 캘린더 뷰]
+            # [학생 모드: 모바일/PC 호환 CSS Grid 월간 캘린더]
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 캘린더")
             st.info("💡 이번 달 루틴 실천 현황을 달력 격자 형태로 한눈에 확인할 수 있어요!")
@@ -1648,7 +1648,7 @@ else:
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
                         
-                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (unsafe_allow_html=True 적용)]
+                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (unsafe_allow_html=True 적용 완료)]
                         t_calendar_html = """
                         <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
                         """
