@@ -41,7 +41,7 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 초기화 (매일 루틴 테이블 추가)
+# 1. 데이터베이스 초기화
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -111,7 +111,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # 매일 루틴 과제 테이블
     c.execute('''
         CREATE TABLE IF NOT EXISTS daily_routines (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -869,7 +868,6 @@ if url_student and url_student in student_list:
         save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
-        # [신규] 학생 맞춤 매일 루틴 과제 코너 상단 고정
         st.markdown("### 🔥 매일 반복 루틴 과제 (학생 맞춤)")
         st.caption("💡 날짜와 상관없이 매일매일 꾸준히 풀고 실천해야 하는 루틴 과제입니다!")
         
@@ -1011,7 +1009,6 @@ if url_student and url_student in student_list:
             if key in st.session_state:
                 final_h_checked[h_id] = st.session_state[key]
                 
-        # 매일 루틴 체크 상태 저장
         for k, v in h_checked_results.items():
             if str(k).startswith("daily_"):
                 daily_key_id = str(k).replace("daily_", "")
@@ -1489,18 +1486,39 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 부여 및 매일 루틴 설정
+    # [탭 3] 선택학생 개별 과제 및 매일 루틴 관리
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            # [신규] 매일 루틴 과제 설정 폼
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정", expanded=True):
-                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 입력해 주세요. (들여쓰기로 하위 카테고리 구성 가능)")
+            # [신규] 매일 루틴 설정 및 학생 완료 기록 확인 코너
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 완료 기록 확인", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록**을 확인하실 수 있습니다.")
+                
+                # [신규 추가] 학생의 실시간 완료 기록 확인 영역
+                st.markdown("##### 📊 [실시간] 현재 매일 루틴 과제 학생 완료 현황")
+                cur_routines_check = get_student_daily_routines_parent(selected_student, parent_id=None)
+                current_h_prog = get_student_homework_progress(selected_student)
+                
+                if cur_routines_check:
+                    for r_id, r_title in cur_routines_check:
+                        r_done = current_h_prog.get(f"daily_{r_id}", False)
+                        status_str = "✅ 완료함" if r_done else "⬜ 미완료"
+                        st.write(f"- {status_str} : **{r_title}**")
+                        
+                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                        for sr_id, sr_title in r_subs:
+                            sr_done = current_h_prog.get(f"daily_{sr_id}", False)
+                            sub_status_str = "✅ 완료함" if sr_done else "⬜ 미완료"
+                            st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sub_status_str} : {sr_title}")
+                else:
+                    st.caption("설정된 매일 루틴 과제가 없습니다.")
+
+                st.markdown("---")
+                st.markdown("##### ⚙️ 매일 루틴 과제 등록 및 삭제 관리")
                 
                 cur_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
                 if cur_routines:
-                    st.markdown("##### 📋 현재 설정된 매일 루틴 과제 목록")
                     for r_id, r_title in cur_routines:
                         col_rt, col_rd = st.columns([5, 1])
                         with col_rt:
