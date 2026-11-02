@@ -1648,7 +1648,7 @@ else:
                     for r_id, r_title in t_routines:
                         st.markdown(f"📌 **{r_title}**")
                         
-                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (unsafe_allow_html=True 적용 완료)]
+                        # [선생님 모드: 모바일/PC 호환 CSS Grid 월간 캘린더 (unsafe_allow_html=True 적용)]
                         t_calendar_html = """
                         <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 10px;">
                         """
