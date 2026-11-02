@@ -17,7 +17,7 @@ def create_excel_backup():
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
-            "milestone_progress", "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
+            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
         ]
         for table in tables:
             try:
@@ -1657,10 +1657,10 @@ else:
             else:
                 st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
 
-    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 보드 내 [수정] 팝업 완벽 통합 버전)
+    # [탭 5] 전체 학생 숙제 매트릭스 (과제 검사 카드 내 각 항목별 [수정] 버튼 완벽 통합 버전)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 항목별 [수정]**까지 한곳에서 바로 처리할 수 있습니다.")
+        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **[완료] 체크, [삭제], 그리고 각 과제별 [수정] 버튼**까지 한눈에 편리하게 관리할 수 있습니다.")
         
         all_students = get_students()
         if all_students:
@@ -1692,7 +1692,9 @@ else:
                                 
                                 for h_id, title in s_hws:
                                     is_done = s_hw_prog.get(h_id, False)
-                                    col_chk, col_del, col_ttl = st.columns([1, 1, 6])
+                                    
+                                    # 각 과제 줄마다 [완료], [삭제] 체크박스와 과제 내용 배치
+                                    col_chk, col_del, col_ttl = st.columns([1, 1, 8])
                                     with col_chk:
                                         matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
                                     with col_del:
@@ -1738,7 +1740,7 @@ else:
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 매트릭스 보드 각 항목별 개별 수정 팝업 (팝업 안에 폼 없이 버튼만 배치하여 에러 원인 완벽 차단)
+                    # [수정] 버튼들을 매트릭스 카드 바로 아래에 각 항목별로 깔끔하게 배치하여 분리 현상 원천 차단
                     st.markdown("##### 🛠️ 개별 과제 내용 및 날짜 수정")
                     for s_name in students_with_hw:
                         s_hws = get_student_homework_by_date(s_name, selected_matrix_date)
