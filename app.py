@@ -19,7 +19,7 @@ def create_excel_backup():
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
             "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates",
-            "daily_routines"
+            "daily_routines", "daily_routine_logs"
         ]
         for table in tables:
             try:
@@ -567,6 +567,20 @@ def get_student_monthly_logs(student_name, year, month):
         log_map[(str(r_id), l_date)] = bool(val)
     return log_map
 
+# [에러 해결을 위해 추가된 일일 로그 조회 함수]
+def get_student_daily_logs(student_name, days=1):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    target_date = str(date.today())
+    c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date))
+    rows = c.fetchall()
+    conn.close()
+    
+    log_map = {}
+    for r_id, val in rows:
+        log_map[(str(r_id), target_date)] = bool(val)
+    return log_map
+
 # --- 과제 템플릿 관리 함수들 ---
 def get_homework_templates():
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -945,7 +959,6 @@ if url_student and url_student in student_list:
             curr_year = date.today().year
             curr_month = date.today().month
             
-            # 연도/월 선택 셀렉트박스
             col_y, col_m = st.columns(2)
             with col_y:
                 sel_year = st.selectbox("연도 선택", [curr_year - 1, curr_year, curr_year + 1], index=1, key="cal_year")
@@ -960,13 +973,11 @@ if url_student and url_student in student_list:
                 for r_id, r_title in daily_parents:
                     st.markdown(f"📌 **{r_title}**")
                     
-                    # 달력 헤더 (요일)
                     header_cols = st.columns(7)
                     for idx, w_name in enumerate(weekdays_kr):
                         color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
                         header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                     
-                    # 달력 날짜 격자 렌더링
                     for week in cal_matrix:
                         week_cols = st.columns(7)
                         for idx, day_num in enumerate(week):
@@ -988,7 +999,6 @@ if url_student and url_student in student_list:
                                     unsafe_allow_html=True
                                 )
                     
-                    # 하위 루틴 달력 렌더링
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     for sr_id, sr_title in r_subs:
                         st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
@@ -2097,7 +2107,6 @@ else:
                             else:
                                 st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    # 수정 영역
                     st.markdown("##### 🛠️ 검사 보드 내 각 과제별 바로 수정")
                     for s_name in students_with_hw:
                         parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
