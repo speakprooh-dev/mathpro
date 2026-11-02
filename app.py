@@ -931,6 +931,7 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
+            # [신규] 모바일 가독성을 극대화한 카드형 리스트 히스토리 뷰
             st.markdown("---")
             st.markdown("### 📊 나의 매일 루틴 실천 히스토리 & 누적 통계")
             st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 한눈에 확인할 수 있어요!")
@@ -941,25 +942,18 @@ if url_student and url_student in student_list:
             total_checked_count = sum(1 for k, v in past_logs.items() if v)
             st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
             
-            history_data = []
+            st.markdown("##### 🗓️ 최근 7일 실천 요약")
             for r_id, r_title in daily_parents:
-                row_dict = {"루틴 항목": r_title}
-                for d_str in recent_dates:
-                    is_done = past_logs.get((str(r_id), d_str), False)
-                    row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
-                history_data.append(row_dict)
-                
-                r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                for sr_id, sr_title in r_subs:
-                    sub_row_dict = {"루틴 항목": f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}"}
-                    for d_str in recent_dates:
-                        is_done = past_logs.get((str(sr_id), d_str), False)
-                        sub_row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
-                    history_data.append(sub_row_dict)
-            
-            if history_data:
-                df_history = pd.DataFrame(history_data)
-                st.dataframe(df_history, use_container_width=True, hide_index=True)
+                with st.container(border=True):
+                    st.markdown(f"📌 **{r_title}**")
+                    status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(r_id), d), False) else '❌'}`" for d in recent_dates])
+                    st.markdown(f"<div style='font-size:13px; overflow-x:auto; padding:4px 0;'>{status_line}</div>", unsafe_allow_html=True)
+                    
+                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    for sr_id, sr_title in r_subs:
+                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                        sub_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if past_logs.get((str(sr_id), d), False) else '❌'}`" for d in recent_dates])
+                        st.markdown(f"<div style='font-size:12px; color:#64748B; overflow-x:auto; padding:2px 0;'>&nbsp;&nbsp;&nbsp;&nbsp;{sub_status_line}</div>", unsafe_allow_html=True)
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
 
@@ -1576,25 +1570,17 @@ else:
                     t_past_logs = get_student_daily_logs(selected_student, days=7)
                     t_recent_dates = [str(date.today() - timedelta(days=i)) for i in range(6, -1, -1)]
                     
-                    t_history_data = []
                     for r_id, r_title in t_routines:
-                        row_dict = {"루틴 항목": r_title}
-                        for d_str in t_recent_dates:
-                            is_done = t_past_logs.get((str(r_id), d_str), False)
-                            row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
-                        t_history_data.append(row_dict)
-                        
-                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                        for sr_id, sr_title in r_subs:
-                            sub_row_dict = {"루틴 항목": f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}"}
-                            for d_str in t_recent_dates:
-                                is_done = t_past_logs.get((str(sr_id), d_str), False)
-                                sub_row_dict[f"{d_str[5:]}({get_weekday_kr(d_str)[0]})"] = "✅" if is_done else "❌"
-                            t_history_data.append(sub_row_dict)
-                    
-                    if t_history_data:
-                        df_t_history = pd.DataFrame(t_history_data)
-                        st.dataframe(df_t_history, use_container_width=True, hide_index=True)
+                        with st.container(border=True):
+                            st.markdown(f"📌 **{r_title}**")
+                            t_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if t_past_logs.get((str(r_id), d), False) else '❌'}`" for d in t_recent_dates])
+                            st.markdown(f"<div style='font-size:13px; overflow-x:auto; padding:4px 0;'>{t_status_line}</div>", unsafe_allow_html=True)
+                            
+                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                            for sr_id, sr_title in r_subs:
+                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                                t_sub_status_line = " | ".join([f"{d[5:]}({get_weekday_kr(d)[0]}): `{'✅' if t_past_logs.get((str(sr_id), d), False) else '❌'}`" for d in t_recent_dates])
+                                st.markdown(f"<div style='font-size:12px; color:#64748B; overflow-x:auto; padding:2px 0;'>&nbsp;&nbsp;&nbsp;&nbsp;{t_sub_status_line}</div>", unsafe_allow_html=True)
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
