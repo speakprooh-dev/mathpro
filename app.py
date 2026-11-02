@@ -151,7 +151,6 @@ def init_db():
         )
     ''')
     
-    # [신규] 매일 루틴 날짜별 실천 기록 테이블 (누적 히스토리용)
     c.execute('''
         CREATE TABLE IF NOT EXISTS daily_routine_logs (
             student_name TEXT,
@@ -932,7 +931,6 @@ if url_student and url_student in student_list:
             
             save_daily_btn = st.button("💾 매일 루틴 상태 저장하기", type="primary", key="save_daily_routine", use_container_width=True)
             
-            # [신규] 매일 루틴 실천 누적 통계 및 최근 히스토리 표
             st.markdown("---")
             st.markdown("### 📊 나의 매일 루틴 실천 히스토리 & 누적 통계")
             st.info("💡 최근 7일 동안 매일 루틴을 얼마나 꾸준히 실천했는지 한눈에 확인할 수 있어요!")
@@ -943,7 +941,6 @@ if url_student and url_student in student_list:
             total_checked_count = sum(1 for k, v in past_logs.items() if v)
             st.metric(label="🔥 최근 7일간 루틴 총 실천 횟수", value=f"{total_checked_count}회 완료")
             
-            # 히스토리 표 구성
             history_data = []
             for r_id, r_title in daily_parents:
                 row_dict = {"루틴 항목": r_title}
@@ -962,7 +959,7 @@ if url_student and url_student in student_list:
             
             if history_data:
                 df_history = pd.DataFrame(history_data)
-                st.markdown(df_history.to_markdown(index=False), unsafe_allow_html=True)
+                st.dataframe(df_history, use_container_width=True, hide_index=True)
         else:
             st.info("현재 등록된 매일 루틴 과제가 없습니다.")
 
@@ -1573,7 +1570,6 @@ else:
             with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 실천 히스토리 확인", expanded=True):
                 st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 설정하고, 학생들이 체크한 **실시간 완료 기록 및 7일간 실천 히스토리**를 확인하실 수 있습니다.")
                 
-                # [신규] 선생님 관리 화면에서도 학생의 7일 실천 히스토리 표 제공 (공유/점검용)
                 st.markdown("##### 📊 [실천 리포트] 최근 7일간 매일 루틴 실천 히스토리")
                 t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
                 if t_routines:
@@ -1598,7 +1594,7 @@ else:
                     
                     if t_history_data:
                         df_t_history = pd.DataFrame(t_history_data)
-                        st.markdown(df_t_history.to_markdown(index=False), unsafe_allow_html=True)
+                        st.dataframe(df_t_history, use_container_width=True, hide_index=True)
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
