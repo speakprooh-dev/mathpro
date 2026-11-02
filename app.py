@@ -17,7 +17,8 @@ def create_excel_backup():
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
-            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates"
+            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates",
+            "daily_routines"
         ]
         for table in tables:
             try:
@@ -40,7 +41,7 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 초기화 및 하위 과제(parent_id) 컬럼 추가
+# 1. 데이터베이스 초기화 (매일 루틴 테이블 추가)
 def init_db():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -109,6 +110,16 @@ def init_db():
         c.execute("ALTER TABLE student_homework ADD COLUMN parent_id INTEGER DEFAULT NULL")
     except sqlite3.OperationalError:
         pass
+
+    # 매일 루틴 과제 테이블
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS daily_routines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT NOT NULL,
+            title TEXT NOT NULL,
+            parent_id INTEGER DEFAULT NULL
+        )
+    ''')
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS homework_templates (
@@ -228,6 +239,7 @@ def delete_student(name):
     c.execute("DELETE FROM student_homework WHERE student_name = ?", (name,))
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
@@ -465,6 +477,53 @@ def delete_problem_link(link_id):
     conn.commit()
     conn.close()
 
+# --- 매일 루틴 과제 관리 함수들 ---
+def get_student_daily_routines_parent(student_name, parent_id=None):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    if parent_id is None:
+        c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND (parent_id IS NULL) ORDER BY id", (student_name,))
+    else:
+        c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND parent_id = ? ORDER BY id", (student_name, parent_id))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def bulk_insert_daily_routines(student_name, text_data):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    lines = text_data.strip().split('\n')
+    added_count = 0
+    current_parent_id = None
+    
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        
+        is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
+        title = line_str.lstrip('-•*└\t ').strip()
+        if not title:
+            continue
+            
+        if is_sub and current_parent_id is not None:
+            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, ?)", (student_name, title, current_parent_id))
+        else:
+            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, NULL)", (student_name, title))
+            current_parent_id = c.lastrowid
+        added_count += 1
+        
+    conn.commit()
+    conn.close()
+    return added_count
+
+def delete_daily_routine(r_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
+    conn.commit()
+    conn.close()
+
 # --- 과제 템플릿 관리 함수들 ---
 def get_homework_templates():
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -594,7 +653,6 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
         if not line_str:
             continue
         
-        # 들여쓰기나 부호로 시작하면 하위 과제로 판정
         is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
         title = line_str.lstrip('-•*└\t ').strip()
         if not title:
@@ -728,8 +786,8 @@ if url_student and url_student in student_list:
         * 체크가 끝나면 맨 아래 **[💾 내 학습 상태 저장하기]** 버튼을 꼭 눌러주세요!
         
         **3️⃣ 📚 2. 날짜별 숙제 확인하기**
-        * 상단 날짜를 선택해 오늘 해야 할 숙제를 확인하고 완료 시 체크박스(☑️)를 체크하세요.
-        * 마찬가지로 하단의 **[💾 내 학습 상태 저장하기]**를 눌러야 선생님에게 완료가 전달됩니다.
+        * 매일 실천하는 **[매일 루틴 과제]**와 상단 날짜를 선택해 확인하는 **[날짜별 숙제]**를 체크하세요.
+        * 하단의 **[💾 내 학습 상태 저장하기]**를 눌러야 선생님에게 완료가 전달됩니다.
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
@@ -811,8 +869,32 @@ if url_student and url_student in student_list:
         save_btn_tab1 = st.button("💾 내 학습 상태 저장하기", type="primary", key="save_t1", use_container_width=True)
 
     with tab2:
-        st.markdown("### 📝 날짜별 숙제 목록")
-        st.info("💡 **안내:** 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
+        # [신규] 학생 맞춤 매일 루틴 과제 코너 상단 고정
+        st.markdown("### 🔥 매일 반복 루틴 과제 (학생 맞춤)")
+        st.caption("💡 날짜와 상관없이 매일매일 꾸준히 풀고 실천해야 하는 루틴 과제입니다!")
+        
+        daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
+        if daily_parents:
+            with st.container(border=True):
+                for r_id, r_title in daily_parents:
+                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    default_val = h_progress.get(f"daily_{r_id}", False)
+                    
+                    if r_subs:
+                        st.markdown(f"**📌 {r_title}**")
+                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
+                        for sr_id, sr_title in r_subs:
+                            s_default_val = h_progress.get(f"daily_{sr_id}", False)
+                            h_checked_results[f"daily_{sr_id}"] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=s_default_val, key=f"s_daily_{sr_id}")
+                    else:
+                        h_checked_results[f"daily_{r_id}"] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                    st.divider()
+        else:
+            st.info("현재 등록된 매일 루틴 과제가 없습니다.")
+
+        st.markdown("---")
+        st.markdown("### 📝 날짜별 부여된 숙제 목록")
+        st.info("💡 완료한 숙제 항목의 체크박스에 체크하신 후, 하단의 **[내 학습 상태 저장하기]** 버튼을 눌러주세요!")
         if hw_dates:
             selected_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             st.markdown(f"#### 📌 [{selected_date} ({get_weekday_kr(selected_date)})] 부여된 숙제")
@@ -928,6 +1010,12 @@ if url_student and url_student in student_list:
             key = f"s_hw_{h_id}"
             if key in st.session_state:
                 final_h_checked[h_id] = st.session_state[key]
+                
+        # 매일 루틴 체크 상태 저장
+        for k, v in h_checked_results.items():
+            if str(k).startswith("daily_"):
+                daily_key_id = str(k).replace("daily_", "")
+                final_h_checked[f"daily_{daily_key_id}"] = v
 
         save_student_progress(selected_student, final_m_checked, final_h_checked)
         
@@ -1401,11 +1489,48 @@ else:
             else:
                 st.info("배정할 단원 데이터가 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 부여 및 통합 관리
+    # [탭 3] 선택학생 개별 과제 부여 및 매일 루틴 설정
     with t_cfg_hw:
         if selected_student:
-            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 부여 및 관리")
+            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
+            # [신규] 매일 루틴 과제 설정 폼
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정", expanded=True):
+                st.info("💡 학생이 매일 접속해 실천해야 하는 반복 과제를 입력해 주세요. (들여쓰기로 하위 카테고리 구성 가능)")
+                
+                cur_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
+                if cur_routines:
+                    st.markdown("##### 📋 현재 설정된 매일 루틴 과제 목록")
+                    for r_id, r_title in cur_routines:
+                        col_rt, col_rd = st.columns([5, 1])
+                        with col_rt:
+                            st.write(f"📌 **{r_title}**")
+                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                            for sr_id, sr_title in r_subs:
+                                st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                        with col_rd:
+                            if st.button("🗑️ 삭제", key=f"del_routine_{r_id}"):
+                                delete_daily_routine(r_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+                        st.divider()
+
+                with st.form("add_daily_routine_form"):
+                    routine_text_area = st.text_area(
+                        "새 매일 루틴 과제 입력",
+                        placeholder="[매일 수학 30분 연습]\n  - 일일 연산 프린트 1장 풀기\n  - 오답 2문제 재풀이"
+                    )
+                    routine_submit = st.form_submit_button("🔥 매일 루틴 과제 추가하기", type="primary")
+                    if routine_submit:
+                        if routine_text_area.strip():
+                            added_r = bulk_insert_daily_routines(selected_student, routine_text_area)
+                            st.success(f"총 {added_r}개의 매일 루틴 항목이 등록되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("내용을 입력해주세요.")
+
+            st.markdown("---")
+
             with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
                 st.info("💡 등록된 과제 문구 옆의 복사 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
                 
@@ -1441,10 +1566,10 @@ else:
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
                 hw_text_area = st.text_area(
-                    "과제 내용 입력 (들여쓰기나 '-'로 하위 항목 생성 가능)", 
+                    "날짜별 과제 내용 입력 (들여쓰기나 '-'로 하위 항목 생성 가능)", 
                     placeholder="[온라인 과제 풀어오기]\n  - 1차시: 개념 정리 및 예제 풀이\n  - 2차시: 실전 문제 적용"
                 )
-                hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 과제 등록하기", type="primary")
+                hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 날짜별 과제 등록하기", type="primary")
                 if hw_submit:
                     if hw_text_area.strip():
                         date_str = str(hw_date_input)
