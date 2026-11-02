@@ -1658,21 +1658,53 @@ else:
                             color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
                             t_header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
                         
+                        # [수정 후 적용 코드]
+                        t_header_cols = st.columns(7)
+                        for idx, w_name in enumerate(weekdays_kr):
+                            color = "#38BDF8" if idx == 0 else ("#F87171" if idx == 6 else "#94A3B8")
+                            t_header_cols[idx].markdown(f"<div style='text-align:center; font-weight:bold; color:{color}; font-size:12px;'>{w_name}</div>", unsafe_allow_html=True)
+                        
                         for week in t_cal_matrix:
-                            t_week_cols = st.columns(7)
+                            t_calendar_html = """
+                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px;">
+                            """
                             for idx, day_num in enumerate(week):
                                 if day_num == 0:
-                                    t_week_cols[idx].markdown("<div style='text-align:center; padding:8px;'></div>", unsafe_allow_html=True)
+                                    t_calendar_html += "<div style='padding:8px;'></div>"
                                 else:
                                     d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
                                     t_is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                    t_week_cols[idx].markdown(
-                                        f"<div style='border:1px solid #334155; border-radius:6px; padding:4px 1px; text-align:center; background-color:#1E293B; font-size:11px; margin-bottom:4px;'>"
-                                        f"<div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>"
-                                        f"<div style='font-size:14px;'>{'✅' if t_is_done else '❌'}</div>"
-                                        f"</div>",
-                                        unsafe_allow_html=True
-                                    )
+                                    t_calendar_html += f"""
+                                    <div style='border:1px solid #334155; border-radius:6px; padding:4px 2px; text-align:center; background-color:#1E293B; font-size:11px;'>
+                                        <div style='color:#F8FAFC; font-weight:bold; margin-bottom:2px;'>{day_num}</div>
+                                        <div style='font-size:14px;'>{'✅' if t_is_done else '❌'}</div>
+                                    </div>
+                                    """
+                            t_calendar_html += "</div>"
+                            st.markdown(t_calendar_html, unsafe_allow_html=True)
+                        
+                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                        for sr_id, sr_title in r_subs:
+                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                            for week in t_cal_matrix:
+                                t_sub_calendar_html = """
+                                <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 3px;">
+                                """
+                                for idx, day_num in enumerate(week):
+                                    if day_num == 0:
+                                        t_sub_calendar_html += "<div style='padding:6px;'></div>"
+                                    else:
+                                        d_str = f"{t_sel_year}-{t_sel_month:02d}-{day_num:02d}"
+                                        t_sub_is_done = t_monthly_logs.get((str(sr_id), d_str), False)
+                                        t_sub_calendar_html += f"""
+                                        <div style='border:1px solid #334155; border-radius:6px; padding:3px 2px; text-align:center; background-color:#0F172A; font-size:11px;'>
+                                            <div style='color:#94A3B8; font-size:10px;'>{day_num}</div>
+                                            <div style='font-size:12px;'>{'✅' if t_sub_is_done else '❌'}</div>
+                                        </div>
+                                        """
+                                t_sub_calendar_html += "</div>"
+                                st.markdown(t_sub_calendar_html, unsafe_allow_html=True)
+                        st.divider()
                         
                         r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                         for sr_id, sr_title in r_subs:
