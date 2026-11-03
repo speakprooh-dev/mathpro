@@ -957,7 +957,6 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-            # 월간 기록 리스트 뷰 (학생 모드에서는 보기 전용)
             st.markdown("---")
             st.markdown("### 📅 나의 매일 루틴 실천 월간 기록 뷰")
             
@@ -1136,7 +1135,6 @@ else:
     with st.sidebar:
         st.markdown("### 🛠️ 선생님 전용 도구")
         
-        # 비밀번호 인증 로직
         if not st.session_state["teacher_authenticated"]:
             st.markdown("🔒 **선생님 모드 잠금 상태**")
             with st.form("teacher_login_form"):
@@ -2143,12 +2141,12 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 6] 문제별 해설 링크 관리 (선생님 전용)
+    # [탭 6] 문제별 해설 링크 관리 (선생님 전용 - [개선 완료])
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
         st.info("💡 개별 등록뿐만 아니라, **아래 일괄 등록 칸에 여러 줄을 복사·붙여넣기** 하시면 수십 개도 순식간에 등록됩니다!")
 
-        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기 (클릭하여 열기)", expanded=True):
+        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기 (클릭하여 열기)", expanded=False):
             st.caption("예시 형식 (줄바꿈으로 여러 개 입력):\nB1353015 https://cafe.naver.com/...\nB1353035 https://cafe.naver.com/...")
             with st.form("bulk_add_problem_links_form"):
                 bulk_input_text = st.text_area("문제번호와 URL 목록 붙여넣기", placeholder="B1353015 https://naver.me/...\nB1353035 https://naver.me/...")
@@ -2182,32 +2180,57 @@ else:
                     st.warning("문제 번호와 영상 주소를 모두 입력해주세요.")
 
         st.markdown("---")
-        st.markdown("##### 📋 등록된 문제 해설 링크 목록")
-        st.caption("💡 아래 문제 번호를 클릭하시면 해당 해설 영상으로 바로 연결됩니다!")
+        st.markdown("##### 📋 단원코드별 등록된 문제 해설 링크 목록 (컴팩트 뷰)")
+        st.caption("💡 각 단원별로 묶여서 표시되며, 문제 번호를 누르면 해설 영상으로 바로 이동합니다. 수정 및 삭제는 아래에서 단원별로 간편하게 처리하세요!")
         
         all_links = get_all_problem_links()
         if all_links:
-            with st.form("manage_problem_links_form"):
-                link_del_checks = {}
-                for l_id, f_code, v_url in all_links:
-                    col_l_chk, col_l_code, col_l_url = st.columns([1, 3, 8])
-                    with col_l_chk:
-                        link_del_checks[l_id] = st.checkbox("삭제", value=False, key=f"del_link_{l_id}")
-                    with col_l_code:
-                        st.markdown(f'<a href="{v_url}" target="_blank" style="font-weight:bold; color:#38BDF8; text-decoration:none;">📌 {f_code} 🔗</a>', unsafe_allow_html=True)
-                    with col_l_url:
-                        st.write(f"`{v_url}`")
-                    st.divider()
+            # 단원코드별로 그룹화
+            grouped_links = {}
+            for l_id, f_code, v_url in all_links:
+                if len(f_code) >= 4:
+                    u_code = f_code[:-3]
+                    p_num = f_code[-3:]
+                else:
+                    u_code = "기타"
+                    p_num = f_code
                 
-                del_links_submit = st.form_submit_button("🗑️ 선택한 해설 링크 삭제하기", type="secondary")
-                if del_links_submit:
-                    ids_to_del = [l_id for l_id, val in link_del_checks.items() if val]
-                    if ids_to_del:
-                        for l_id in ids_to_del:
-                            delete_problem_link(l_id)
-                        st.success(f"선택한 {len(ids_to_del)}개의 링크가 삭제되었습니다!")
-                        st.rerun()
-                    else:
-                        st.warning("삭제할 항목의 체크박스를 하나 이상 선택해주세요.")
+                if u_code not in grouped_links:
+                    grouped_links[u_code] = []
+                grouped_links[u_code].append((l_id, f_code, p_num, v_url))
+
+            for u_code, items in sorted(grouped_links.items()):
+                with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제: {len(items)}개)", expanded=True):
+                    # 1. 칩(배지) 스타일로 깔끔하게 문제 번호들 모아보기
+                    badge_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;'>"
+                    for l_id, f_code, p_num, v_url in items:
+                        badge_html += f'<a href="{v_url}" target="_blank" style="background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:6px 12px; border-radius:6px; font-size:14px; font-weight:bold; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,0.1);">📌 {f_code} 🔗</a>'
+                    badge_html += "</div>"
+                    st.markdown(badge_html, unsafe_allow_html=True)
+
+                    # 2. 해당 단원의 개별 링크 URL 확인 및 삭제/관리 폼
+                    with st.form(f"manage_unit_links_{u_code}"):
+                        st.caption(f"🔧 `{u_code}` 단원 세부 링크 및 삭제 관리")
+                        unit_link_del_checks = {}
+                        
+                        for l_id, f_code, p_num, v_url in items:
+                            col_chk, col_code, col_url = st.columns([1, 3, 8])
+                            with col_chk:
+                                unit_link_del_checks[l_id] = st.checkbox("삭제", value=False, key=f"del_link_{l_id}")
+                            with col_code:
+                                st.markdown(f"**{f_code}**")
+                            with col_url:
+                                st.write(f"`{v_url}`")
+                            st.divider()
+                        
+                        if st.form_submit_button(f"🗑️ 선택한 `{u_code}` 단원 해설 링크 삭제하기", type="secondary"):
+                            ids_to_del = [l_id for l_id, val in unit_link_del_checks.items() if val]
+                            if ids_to_del:
+                                for l_id in ids_to_del:
+                                    delete_problem_link(l_id)
+                                st.success(f"선택한 {len(ids_to_del)}개의 링크가 삭제되었습니다!")
+                                st.rerun()
+                            else:
+                                st.warning("삭제할 항목의 체크박스를 하나 이상 선택해주세요.")
         else:
             st.info("등록된 문제 해설 링크가 없습니다. 위에서 문제 번호와 링크를 등록해 주세요!")
