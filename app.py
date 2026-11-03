@@ -860,7 +860,7 @@ if url_student and url_student in student_list:
         * 매일 실천하는 **[매일 루틴 과제]** 및 **[날짜별 숙제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
-        * **[📂 내가 저장한 오답 단원 확인하기]**에서 단원을 고르면 바로 아래에 저장된 오답 목록과 해설 영상이 바로 나타납니다.
+        * **[📂 내가 저장한 오답 단원 확인하기]**에서 단원을 선택하면 해당 단원의 오답과 해설 영상이 바로 나타납니다.
         * 새로운 단원의 오답을 등록할 때는 하단의 **[새로운 오답/질문 번호 등록 및 수정]** 칸을 이용해 주세요!
         """)
 
@@ -1041,7 +1041,7 @@ if url_student and url_student in student_list:
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
         
-        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션 (최상단 배치)
+        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션 (index=None을 주어 처음엔 아무것도 선택 안 된 상태로 설정)
         st.markdown("##### 📂 내가 저장한 오답 단원 확인하기")
         conn_w = sqlite3.connect("mathpro_roadmap.db")
         c_w = conn_w.cursor()
@@ -1052,48 +1052,58 @@ if url_student and url_student in student_list:
         saved_units_list = [r[0] for r in saved_units_rows]
         
         if saved_units_list:
-            selected_unit_from_box = st.selectbox("확인할 단원 선택", saved_units_list, key="view_saved_unit_box")
+            selected_unit_from_box = st.selectbox(
+                "확인할 단원 선택", 
+                saved_units_list, 
+                index=None, 
+                placeholder="-- 확인하실 단원을 선택해 주세요 --", 
+                key="view_saved_unit_box"
+            )
             current_unit = selected_unit_from_box
-            st.info(f"💡 현재 **`{current_unit}`** 단원의 저장된 오답 목록을 보고 계십니다.")
         else:
-            current_unit = "B1353"
+            current_unit = None
             st.info("💡 아직 저장된 오답 단원이 없습니다. 아래에서 새로운 단원코드를 입력해 첫 오답을 등록해 보세요!")
 
-        # ✅ [2] 선택된 단원의 저장된 오답 목록 및 해설 링크를 '바로 아래'에 출력
-        view_target_unit = current_unit
-        saved_text = get_student_wrong_entry(selected_student, view_target_unit)
-        saved_nums = parse_numbers(saved_text)
+        # ✅ [2] 단원을 선택했을 때만 해당 단원의 오답 목록과 해설 링크를 출력
+        if current_unit:
+            st.info(f"💡 현재 **`{current_unit}`** 단원의 저장된 오답 목록을 보고 계십니다.")
+            saved_text = get_student_wrong_entry(selected_student, current_unit)
+            saved_nums = parse_numbers(saved_text)
 
-        st.markdown(f"### 📋 [{view_target_unit}] 저장된 오답 목록 및 풀이영상 바로가기")
-        if saved_nums:
-            st.caption("💡 **문제 번호를 클릭**하면 해당 해설 영상으로 바로 연결됩니다!")
-            
-            linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(view_target_unit)}
+            st.markdown(f"### 📋 [{current_unit}] 저장된 오답 목록 및 풀이영상 바로가기")
+            if saved_nums:
+                st.caption("💡 **문제 번호를 클릭**하면 해당 해설 영상으로 바로 연결됩니다!")
+                
+                linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
 
-            sorted_nums_list = sorted(list(saved_nums))
-            for num_int in sorted_nums_list:
-                full_code = f"{view_target_unit}{num_int:03d}"
-                video_url = linked_problems_dict.get(full_code, "")
+                sorted_nums_list = sorted(list(saved_nums))
+                for num_int in sorted_nums_list:
+                    full_code = f"{current_unit}{num_int:03d}"
+                    video_url = linked_problems_dict.get(full_code, "")
 
-                if video_url and video_url.strip() != "":
-                    st.markdown(
-                        f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown(
-                        f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B; font-size:13px; font-weight:normal;">🔍 네이버 카페에서 검색하기 ➔</span></a>',
-                        unsafe_allow_html=True
-                    )
+                    if video_url and video_url.strip() != "":
+                        st.markdown(
+                            f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B; font-size:13px; font-weight:normal;">🔍 네이버 카페에서 검색하기 ➔</span></a>',
+                            unsafe_allow_html=True
+                        )
+            else:
+                st.info(f"📋 '{current_unit}' 단원에 현재 저장된 오답 번호가 없습니다.")
         else:
-            st.info(f"📋 '{view_target_unit}' 단원에 현재 저장된 오답 번호가 없습니다.")
+            if saved_units_list:
+                st.info("👆 상단의 **'확인할 단원 선택'** 박스를 누르면 해당 단원의 저장된 오답 목록이 나타납니다.")
 
         st.markdown("---")
 
         # ✅ [3] 신규 등록 및 수정 입력 섹션 (하단 배치)
         st.markdown("##### ➕ 새로운 오답/질문 번호 등록 및 수정")
-        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=current_unit).strip().upper()
-        target_unit_code = entered_unit_code if entered_unit_code else current_unit
+        default_input_code = current_unit if current_unit else ""
+        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=default_input_code, placeholder="예: B1353").strip().upper()
+        target_unit_code = entered_unit_code if entered_unit_code else "B1353"
 
         col_add, col_del = st.columns(2)
         with col_add:
