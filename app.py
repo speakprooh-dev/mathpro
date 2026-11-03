@@ -1220,8 +1220,8 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황", expanded=True):
-                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 이번 달 실천 현황을 점검합니다.")
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황 (날짜별 완료 체크 가능)", expanded=True):
+                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 특정 날짜의 실천 현황을 직접 체크하거나 수정할 수 있습니다.")
                 
                 with st.form("add_teacher_routine_form"):
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
@@ -1248,7 +1248,7 @@ else:
                                 st.rerun()
 
                     st.markdown("---")
-                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 (O/X 리스트)")
+                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 및 선생님 완료 체크")
                     today_obj = get_korean_today()
                     t_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="teacher_routine_year")
                     t_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="teacher_routine_month")
@@ -1256,31 +1256,86 @@ else:
                     t_monthly_logs = get_student_monthly_logs(selected_hw_student, t_year, t_month)
                     _, t_last_day = calendar.monthrange(t_year, t_month)
                     
+                    # 💡 [요청사항 반영] 선생님이 월간 목록에서 특정 날짜를 선택해 과거/미래 날짜 루틴도 완료 체크할 수 있는 기능
+                    teacher_chk_day = st.selectbox("📝 완료 체크/수정할 날짜 선택", list(range(1, t_last_day + 1)), format_func=lambda d: f"{t_month}월 {d}일 ({get_weekday_kr(f'{t_year}-{t_month:02d}-{d:02d}')})", key="teacher_chk_day_select")
+                    target_chk_date_str = f"{t_year}-{t_month:02d}-{teacher_chk_day:02d}"
+                    
                     with st.container(border=True):
-                        for day in range(1, t_last_day + 1):
-                            d_str = f"{t_year}-{t_month:02d}-{day:02d}"
-                            w_name = get_weekday_kr(d_str)[:1]
-                            is_today = (d_str == str(today_obj))
-                            
-                            day_checked_count = sum(1 for r_id, _ in current_routines if t_monthly_logs.get((str(r_id), d_str), False))
-                            total_r_count = len(current_routines)
-                            
-                            status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                            
-                            highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
-                            today_tag = " (오늘)" if is_today else ""
-                            
-                            st.markdown(
-                                f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
-                                f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                                f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
-                                f"</div>",
-                                unsafe_allow_html=True
-                            )
+                        st.markdown(f"**📌 {target_chk_date_str} 루틴 완료 여부 직접 체크하기**")
+                        day_logs_current = get_student_daily_logs_by_date(selected_hw_student, target_chk_date_str)
+                        teacher_routine_checked_dict = {}
+                        for r_id, r_title in current_routines:
+                            r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
+                            default_val = day_logs_current.get((str(r_id), target_chk_date_str), False)
+                            if r_subs:
+                                st.markdown(f"**{r_title}**")
+                                teacher_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"t_daily_{r_id}_{target_chk_date_str}")
+                                for sr_id, sr_title in r_subs:
+                                    teacher_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=day_logs_current.get((str(sr_id), target_chk_date_str), False), key=f"t_daily_{sr_id}_{target_chk_date_str}")
+                            else:
+                                teacher_routine_checked_dict[str(r_id)] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"t_daily_{r_id}_{target_chk_date_str}")
+                            st.divider()
+                        if st.button("💾 선택한 날짜의 루틴 체크 저장", type="primary", use_container_width=True):
+                            save_daily_routine_logs(selected_hw_student, target_chk_date_str, teacher_routine_checked_dict)
+                            st.success(f"{target_chk_date_str} 루틴 완료 상태가 저장되었습니다!")
+                            st.rerun()
+
+                    st.markdown("---")
+                    st.markdown(f"**📋 {t_year}년 {t_month}월 전체 실천 요약**")
+                    for day in range(1, t_last_day + 1):
+                        d_str = f"{t_year}-{t_month:02d}-{day:02d}"
+                        w_name = get_weekday_kr(d_str)[:1]
+                        is_today = (d_str == str(today_obj))
+                        
+                        day_checked_count = sum(1 for r_id, _ in current_routines if t_monthly_logs.get((str(r_id), d_str), False))
+                        total_r_count = len(current_routines)
+                        
+                        status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
+                        
+                        highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
+                        today_tag = " (오늘)" if is_today else ""
+                        
+                        st.markdown(
+                            f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
+                            f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
+                            f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
 
             st.markdown("---")
-            st.markdown("##### 📝 날짜별 과제 부여")
+            st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
             
+            # 💡 [요청사항 반영] 등록된 과제 수정/삭제 기능 추가
+            existing_hws_for_edit = get_all_student_homework(selected_hw_student)
+            if existing_hws_for_edit:
+                with st.expander("✏️ 등록된 기존 숙제 내용 수정 및 삭제하기", expanded=False):
+                    edit_hw_options = {f"[{h[1]}] {h[2]} (ID: {h[0]})": h for h in existing_hws_for_edit if h[3] is None} # 부모 과제만 선택
+                    if edit_hw_options:
+                        chosen_edit_label = st.selectbox("수정/삭제할 숙제 선택", list(edit_hw_options.keys()), key="select_hw_to_edit")
+                        target_hw_tuple = edit_hw_options[chosen_edit_label]
+                        target_hw_id, target_hw_date, target_hw_title = target_hw_tuple[0], target_hw_tuple[1], target_hw_tuple[2]
+                        
+                        with st.form(f"edit_hw_form_{target_hw_id}"):
+                            new_date_val = st.date_input("제출일 수정", value=date.fromisoformat(target_hw_date))
+                            new_title_val = st.text_input("과제 내용 수정", value=target_hw_title)
+                            
+                            col_e1, col_e2 = st.columns(2)
+                            with col_e1:
+                                do_update = st.form_submit_button("💾 수정 사항 저장", type="primary")
+                            with col_e2:
+                                do_delete = st.form_submit_button("🗑️ 이 숙제 삭제")
+                                
+                            if do_update:
+                                if new_title_val.strip():
+                                    update_student_homework(target_hw_id, str(new_date_val), new_title_val.strip())
+                                    st.success("숙제가 성공적으로 수정되었습니다!")
+                                    st.rerun()
+                            if do_delete:
+                                delete_student_homework(target_hw_id)
+                                st.success("숙제가 삭제되었습니다!")
+                                st.rerun()
+
             templates = get_homework_templates()
             selected_template_title = ""
             if templates:
@@ -1460,7 +1515,7 @@ else:
 
     # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
-        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리 (수정/삭제 가능)")
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
@@ -1468,17 +1523,38 @@ else:
         conn.close()
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+            
             for s_name in student_list:
                 parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
                 if parent_hws:
                     with st.container(border=True):
                         st.markdown(f"**👤 {s_name} 학생**")
                         s_hw_prog = get_student_homework_progress(s_name)
+                        
                         for h_id, title in parent_hws:
                             is_done = s_hw_prog.get(h_id, False)
-                            if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{h_id}") != is_done:
-                                save_single_homework_progress(s_name, h_id, st.session_state[f"mat_chk_{h_id}"])
-                                st.rerun()
+                            col_m1, col_m2 = st.columns([5, 1])
+                            with col_m1:
+                                if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{h_id}") != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[f"mat_chk_{h_id}"])
+                                    st.rerun()
+                            with col_m2:
+                                # 💡 [요청사항 반영] 매트릭스 화면에서 바로 과제를 수정/삭제할 수 있는 expander 토글
+                                with st.popover("⚙️ 수정"):
+                                    with st.form(f"matrix_edit_form_{h_id}"):
+                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{h_id}")
+                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{h_id}")
+                                        m_save = st.form_submit_button("저장", type="primary")
+                                        m_del = st.form_submit_button("삭제")
+                                        if m_save:
+                                            if m_new_title.strip():
+                                                update_student_homework(h_id, str(m_new_date), m_new_title.strip())
+                                                st.success("수정 완료!")
+                                                st.rerun()
+                                        if m_del:
+                                            delete_student_homework(h_id)
+                                            st.success("삭제 완료!")
+                                            st.rerun()
 
     # [탭 7] 해설 링크 관리
     with t_cfg_links:
