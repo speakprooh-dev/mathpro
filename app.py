@@ -1301,9 +1301,10 @@ else:
                     st.success("저장되었습니다!")
                     st.rerun()
 
+        # 💡 [기능 복원] 학생별 전용 링크 바로가기 및 클립보드 복사 기능
         if student_list:
             st.divider()
-            st.markdown("##### 🔗 학생별 전용 페이지 링크 복사")
+            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 시 이동 및 복사)")
             try:
                 base_url = st.context.headers.get("Host", "")
                 base_url = f"https://{base_url}" if base_url else "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
@@ -1312,7 +1313,14 @@ else:
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
-                st.text_input(f"👤 {s} 학생 링크", value=personal_link, key=f"link_txt_{s}", disabled=True)
+                
+                # 각 학생 카드 형태로 깔끔하게 배치
+                with st.container(border=True):
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none; font-size:16px; font-weight:bold;'>{s} 학생 페이지 바로가기 ➔</a>**", unsafe_allow_html=True)
+                    st.text_input(f"{s} 링크 주소", value=personal_link, key=f"link_txt_{s}", label_visibility="collapsed")
+                    
+                    # Streamlit 내장 클립보드 복사 버튼 지원 (최신 Streamlit 버전 호환)
+                    st.code(personal_link, language="text")
 
     st.divider()
 
@@ -1529,7 +1537,7 @@ else:
                             st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
                             st.code(bundled_str, language="text")
 
-    # [탭 6] 전체 숙제 매트릭스 (💡 [가독성 대폭 개선] 학생별 카드 내부에서 콤팩트하게 체크하고 수정은 우측 버튼으로 통합)
+    # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         st.info("💡 체크박스를 누르는 즉시 실시간으로 자동 저장되며, **[✏️ 수정·삭제]** 버튼을 통해 내용을 깔끔하게 관리할 수 있습니다!")
@@ -1549,7 +1557,6 @@ else:
                 if students_with_hw:
                     for s_name in students_with_hw:
                         with st.container(border=True):
-                            # 학생 이름과 해당 학생의 숙제 관리 익스팬더를 깔끔한 한 줄로 배치
                             col_s_title, col_s_edit = st.columns([4, 1])
                             with col_s_title:
                                 st.markdown(f"**👤 {s_name} 학생**")
@@ -1563,7 +1570,6 @@ else:
                                 is_done = s_hw_prog.get(h_id, False)
                                 sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                                 
-                                # 체크박스와 과제 제목을 한 줄로 정돈
                                 col_chk, col_ttl = st.columns([1, 11])
                                 with col_chk:
                                     mat_chk_val = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}", label_visibility="collapsed")
@@ -1585,7 +1591,6 @@ else:
                                         with col_s_ttl:
                                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
 
-                                # ✏️ 수정·삭제 토글이 켜졌을 때만 나타나는 깔끔한 수정 영역
                                 if edit_mode:
                                     with st.container(border=True):
                                         st.caption(f"🔧 '{title}' 과제 수정 및 삭제")
