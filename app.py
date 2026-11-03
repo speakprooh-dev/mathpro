@@ -1063,7 +1063,7 @@ if url_student and url_student in student_list:
                             full_code = f"{view_target_code}{n:03d}"
                             v_url = get_problem_link_by_full(full_code)
                             if v_url:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True, unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                             else:
                                 st.markdown(f'<div style="background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:#64748B;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
                 else:
@@ -1137,7 +1137,7 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True, unsafe_allow_html=True)
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
                     st.code(personal_link, language="text")
 
     st.divider()
@@ -1421,7 +1421,6 @@ else:
                                 parsed_s = parse_numbers(nums_txt)
                                 if parsed_s:
                                     student_link = f"{base_url}/?student={s_name}"
-                                    # 💡 [핵심 수정] unsafe_allow_html=True 추가하여 HTML 링크가 정상 렌더링되도록 수정함
                                     name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`", unsafe_allow_html=True)
                                     
