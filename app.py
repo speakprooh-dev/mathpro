@@ -1225,7 +1225,7 @@ if url_student and url_student in student_list:
             st.success("오답 목록이 안전하게 저장되었습니다!")
             st.rerun()
 
-# 2. [선생님 전용 관리 모드 - UI/UX 슬림화 적용]
+# 2. [선생님 전용 관리 모드]
 else:
     with st.sidebar:
         st.markdown("### 🛠️ 선생님 전용 도구")
@@ -1263,14 +1263,12 @@ else:
 
     st.subheader("👥 학생 선택 및 관리")
     
-    # 상단 학생 선택 셀렉트박스를 눈에 띄게 배치
     if student_list:
         selected_student = st.selectbox("확인할 학생을 선택하세요", student_list)
     else:
         selected_student = None
         st.warning("등록된 학생이 없습니다. 아래 '학생 관리 설정'에서 학생을 먼저 추가해 주세요!")
 
-    # 💡 [개선 포인트] 자주 쓰지 않는 설정 및 관리를 하나의 깔끔한 접기 메뉴로 압축
     with st.expander("⚙️ 학생 관리 및 링크 설정 (학생 추가/삭제, 구글 드라이브, 링크 복사)", expanded=False):
         col_s2, col_s3 = st.columns(2)
         with col_s2:
@@ -1320,7 +1318,6 @@ else:
 
     st.markdown("### ⚙️ 통합 관리 대시보드")
     
-    # 💡 [개선 포인트] 사용 빈도가 높은 핵심 탭을 앞으로 배치하고 사용성을 정돈
     t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
         f"👤 1. [개별] {selected_student if selected_student else '학생없음'}", 
         "📢 2. 공지사항 관리",
@@ -1331,7 +1328,7 @@ else:
         "🎥 7. 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (지표 3단 가로 배치 적용)
+    # [탭 1] 선택한 학생 개별 관리
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 및 진도 관리")
@@ -1355,7 +1352,6 @@ else:
             conn_w.close()
             total_wrong_cnt = w_count_row[0] if w_count_row and w_count_row[0] else 0
 
-            # 💡 [개선 포인트] 요약 지표(메트릭)를 3단 컬럼으로 나란히 압축 배치하여 모바일 스크롤 최소화
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
                 st.metric(label="🎯 개념 진도", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m}")
@@ -1404,71 +1400,18 @@ else:
                                 save_single_milestone_progress(selected_student, m_id, val)
                                 st.rerun()
                             st.divider()
-
-                st.markdown("##### 🗑️ 진도 항목 삭제 관리")
-                with st.expander("📂 단원 전체 다중 삭제 (클릭하여 열기)"):
-                    existing_chapters_in_milestones = sorted(list({m[2] for m in s_milestones}))
-                    if existing_chapters_in_milestones:
-                        with st.form("chapter_bulk_del_form"):
-                            chapter_delete_checks = {}
-                            for ch_name in existing_chapters_in_milestones:
-                                col_c_chk, col_c_txt = st.columns([1, 9])
-                                with col_c_chk:
-                                    chapter_delete_checks[ch_name] = st.checkbox("단원선택", value=False, key=f"del_chk_ch_{ch_name}", label_visibility="collapsed")
-                                with col_c_txt:
-                                    st.write(f"📁 **{ch_name}**")
-                                st.divider()
-                            
-                            if st.form_submit_button("🗑️ 선택한 단원들 일괄 삭제하기", type="primary", use_container_width=True):
-                                chapters_to_del = [ch for ch, to_del in chapter_delete_checks.items() if to_del]
-                                if chapters_to_del:
-                                    total_del_cnt = delete_student_milestones_by_chapters(selected_student, chapters_to_del)
-                                    st.success(f"총 {total_del_cnt}개의 유형이 삭제되었습니다!")
-                                    st.rerun()
-                                else:
-                                    st.warning("삭제할 단원을 선택해주세요.")
-
-                with st.expander("☑️ 개별 유형 다중 선택 삭제 (클릭하여 열기)"):
-                    with st.form("teacher_milestone_bulk_del_form"):
-                        milestone_delete_checks = {}
-                        for m_id, sub, ch, t_name, v_url in s_milestones:
-                            col_del_chk, col_del_txt = st.columns([1, 9])
-                            with col_del_chk:
-                                milestone_delete_checks[m_id] = st.checkbox("선택", value=False, key=f"del_chk_m_{m_id}", label_visibility="collapsed")
-                            with col_del_txt:
-                                st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
-                            st.divider()
-                        
-                        if st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True):
-                            ids_to_del = [m_id for m_id, to_del in milestone_delete_checks.items() if to_del]
-                            if ids_to_del:
-                                for m_id in ids_to_del:
-                                    delete_student_milestone(m_id)
-                                st.success("삭제되었습니다!")
-                                st.rerun()
-                            else:
-                                st.warning("항목을 선택해주세요.")
             else:
-                st.info("이 학생에게 배정된 진도가 없습니다. '커리큘럼 진도 배정' 탭에서 배정해 주세요.")
+                st.info("이 학생에게 배정된 진도가 없습니다.")
         else:
             st.warning("상단에서 관리할 학생을 선택해 주세요.")
 
-    # [탭 2] 공지사항 관리 (앞으로 이동)
+    # [탭 2] 공지사항 관리
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록 및 관리")
-        st.info("💡 **전체 공지**는 모든 학생 페이지 상단에 노출되며, **특정 학생**을 지정하면 해당 학생 페이지에만 맞춤 공지가 표시됩니다!")
-
         with st.form("add_notice_form"):
             notice_target_type = st.radio("공지 대상 선택", ["🌐 전체 공지 (모든 학생에게 표시)", "👤 특정 학생 지정 공지"], horizontal=True)
-            
-            target_student_name = ""
-            if notice_target_type == "👤 특정 학생 지정 공지":
-                if student_list:
-                    target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student")
-                else:
-                    st.warning("등록된 학생이 없습니다.")
-
-            notice_title = st.text_input("공지사항 제목", placeholder="예: 이번 주 토요일 보충 수업 안내")
+            target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student") if notice_target_type == "👤 특정 학생 지정 공지" and student_list else ""
+            notice_title = st.text_input("공지사항 제목", placeholder="예: 이번 주 보충 수업 안내")
             notice_content = st.text_area("공지사항 내용", placeholder="상세 내용을 입력하세요...")
             
             if st.form_submit_button("📢 공지사항 등록하기", type="primary"):
@@ -1477,11 +1420,8 @@ else:
                     add_notice(final_target, notice_title.strip(), notice_content.strip())
                     st.success("등록되었습니다!")
                     st.rerun()
-                else:
-                    st.warning("제목과 내용을 입력해주세요.")
 
         st.markdown("---")
-        st.markdown("##### 📋 등록된 공지사항 목록 및 삭제")
         all_notices = get_all_notices()
         if all_notices:
             for n_id, n_target, n_title, n_content, n_date in all_notices:
@@ -1492,103 +1432,18 @@ else:
                         st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#64748B;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
                         st.caption(n_content)
                     with col_n_del:
-                        st.write("")
-                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}", use_container_width=True):
+                        if st.button("🗑️", key=f"del_notice_{n_id}"):
                             delete_notice(n_id)
-                            st.success("삭제되었습니다!")
                             st.rerun()
-        else:
-            st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 선택학생 개별 과제 및 매일 루틴 관리
+    # [탭 3] 개별 과제 관리
     with t_cfg_hw:
         if selected_student:
-            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
-            
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 리포트", expanded=False):
-                curr_year = date.today().year
-                curr_month = date.today().month
-                
-                col_ty, col_tm = st.columns(2)
-                with col_ty:
-                    t_sel_year = st.selectbox("선생님 조회 연도", [curr_year - 1, curr_year, curr_year + 1], index=1, key="t_cal_year")
-                with col_tm:
-                    t_sel_month = st.selectbox("선생님 조회 월", list(range(1, 13)), index=curr_month - 1, format_func=lambda x: f"{x}월", key="t_cal_month")
-                
-                t_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
-                t_monthly_logs = get_student_monthly_logs(selected_student, t_sel_year, t_sel_month)
-                _, t_last_day = calendar.monthrange(t_sel_year, t_sel_month)
-                
-                if t_routines:
-                    with st.form("teacher_monthly_routine_edit_form"):
-                        teacher_monthly_checked = {}
-                        for r_id, r_title in t_routines:
-                            st.markdown(f"📌 **{r_title}**")
-                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                            
-                            for d_num in range(1, t_last_day + 1):
-                                d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
-                                w_kr = get_weekday_kr(d_str)[:1]
-                                is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                teacher_monthly_checked[(str(r_id), d_str)] = st.checkbox(f"{d_num}일 ({w_kr}) - {r_title}", value=is_done, key=f"t_mon_{r_id}_{d_str}")
-                            
-                            for sr_id, sr_title in r_subs:
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ 세부항목: **{sr_title}**")
-                                for d_num in range(1, t_last_day + 1):
-                                    d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
-                                    w_kr = get_weekday_kr(d_str)[:1]
-                                    sub_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                    teacher_monthly_checked[(str(sr_id), d_str)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;{d_num}일 ({w_kr}) - {sr_title}", value=sub_done, key=f"t_mon_{sr_id}_{d_str}")
-                            st.divider()
-                        
-                        if st.form_submit_button("💾 월간 루틴 변경사항 저장하기", type="primary", use_container_width=True):
-                            conn = sqlite3.connect("mathpro_roadmap.db")
-                            c = conn.cursor()
-                            for (r_key_id, l_date_str), val in teacher_monthly_checked.items():
-                                c.execute('''
-                                    INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked)
-                                    VALUES (?, ?, ?, ?)
-                                    ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
-                                ''', (selected_student, str(r_key_id), l_date_str, int(val), int(val)))
-                            conn.commit()
-                            conn.close()
-                            st.success("저장되었습니다!")
-                            st.rerun()
-                else:
-                    st.caption("설정된 매일 루틴 과제가 없습니다.")
-
-                with st.form("add_daily_routine_form"):
-                    routine_text_area = st.text_area("새 매일 루틴 과제 입력", placeholder="[매일 수학 30분 연습]\n  - 연산 프린트 1장")
-                    if st.form_submit_button("🔥 매일 루틴 추가", type="primary"):
-                        if routine_text_area.strip():
-                            bulk_insert_daily_routines(selected_student, routine_text_area)
-                            st.success("추가되었습니다!")
-                            st.rerun()
-
-            st.markdown("---")
-            with st.expander("📌 자주 쓰는 과제 템플릿 관리"):
-                templates = get_homework_templates()
-                with st.form("add_template_form"):
-                    new_tpl_text = st.text_input("새 템플릿 문구", placeholder="쎈 수학(상) p.45~48 풀이")
-                    if st.form_submit_button("➕ 템플릿 저장"):
-                        if new_tpl_text.strip():
-                            add_homework_template(new_tpl_text.strip())
-                            st.success("저장되었습니다!")
-                            st.rerun()
-                if templates:
-                    for t_id, t_title in templates:
-                        col_t_txt, col_t_del = st.columns([5, 1])
-                        with col_t_txt:
-                            st.code(t_title, language="text")
-                        with col_t_del:
-                            if st.button("🗑️", key=f"del_tpl_{t_id}"):
-                                delete_homework_template(t_id)
-                                st.rerun()
-
+            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 관리")
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=date.today())
                 hw_text_area = st.text_area("날짜별 과제 내용 입력", placeholder="[온라인 과제]\n  - 1차시 개념 정리")
-                if st.form_submit_button(f"'{selected_student}' 학생에게 날짜별 과제 등록", type="primary"):
+                if st.form_submit_button(f"과제 등록", type="primary"):
                     if hw_text_area.strip():
                         bulk_insert_student_homework(selected_student, str(hw_date_input), hw_text_area)
                         st.success("등록되었습니다!")
@@ -1603,92 +1458,40 @@ else:
                 parent_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=None)
                 
                 if parent_hws:
-                    teacher_hw_checked = {}
-                    teacher_hw_delete = {}
-                    with st.form(f"teacher_hw_unified_form_{selected_hw_date}"):
-                        for h_id, title in parent_hws:
-                            is_checked_default = hw_progress_map.get(h_id, False)
-                            sub_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=h_id)
-                            
-                            col_chk, col_del, col_ttl = st.columns([1, 1, 6])
+                    for h_id, title in parent_hws:
+                        is_done = hw_progress_map.get(h_id, False)
+                        with st.container(border=True):
+                            col_chk, col_ttl = st.columns([1, 11])
                             with col_chk:
-                                teacher_hw_checked[h_id] = st.checkbox("완료", value=is_checked_default, key=f"t_hw_chk_{h_id}")
-                            with col_del:
-                                teacher_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"t_hw_del_{h_id}")
-                            with col_ttl:
-                                st.write(f"📌 **{title}**")
-                            st.divider()
-                        
-                        col_btn_save, col_btn_del = st.columns(2)
-                        with col_btn_save:
-                            if st.form_submit_button("💾 완료 상태 저장", type="primary", use_container_width=True):
-                                conn = sqlite3.connect("mathpro_roadmap.db")
-                                c = conn.cursor()
-                                for h_id, val in teacher_hw_checked.items():
-                                    c.execute('UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?', (int(val), h_id))
-                                    c.execute('INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked) SELECT student_name, id, ? FROM student_homework WHERE id = ?', (int(val), h_id))
-                                conn.commit()
-                                conn.close()
-                                st.success("저장되었습니다!")
-                                st.rerun()
-                        with col_btn_del:
-                            if st.form_submit_button("🗑️ 선택 항목 삭제", type="secondary", use_container_width=True):
-                                del_ids = [h_id for h_id, to_del in teacher_hw_delete.items() if to_del]
-                                if del_ids:
-                                    conn = sqlite3.connect("mathpro_roadmap.db")
-                                    c = conn.cursor()
-                                    for h_id in del_ids:
-                                        c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
-                                    conn.commit()
-                                    conn.close()
-                                    st.success("삭제되었습니다!")
+                                chk_val = st.checkbox("완료", value=is_done, key=f"t_hw_chk_{h_id}", label_visibility="collapsed")
+                                if chk_val != is_done:
+                                    save_single_homework_progress(selected_student, h_id, chk_val)
                                     st.rerun()
+                            with col_ttl:
+                                st.markdown(f"📌 **{title}**")
+                            
+                            with st.expander("🛠️ 숙제 내용 수정 / 삭제"):
+                                ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_hw_date), key=f"ed_shw_d_{h_id}")
+                                ed_t = st.text_area("내용 변경", value=title, key=f"ed_shw_t_{h_id}")
+                                col_ed1, col_ed2 = st.columns(2)
+                                with col_ed1:
+                                    if st.button("수정 저장", key=f"save_shw_{h_id}", type="primary"):
+                                        update_student_homework(h_id, str(ed_d), ed_t.strip())
+                                        st.success("수정되었습니다!")
+                                        st.rerun()
+                                with col_ed2:
+                                    if st.button("숙제 삭제", key=f"del_shw_{h_id}", type="secondary"):
+                                        delete_student_homework(h_id)
+                                        st.success("삭제되었습니다!")
+                                        st.rerun()
         else:
             st.warning("학생을 선택해 주세요.")
 
-    # [탭 4] 커리큘럼 및 진도 배정
+    # [탭 4] 커리큘럼 진도 배정
     with t_cfg_curriculum:
         subjects_data = get_subjects()
-        st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
-
-        with st.form("unified_sub_form"):
-            col_u1, col_u2 = st.columns([3, 1])
-            with col_u1:
-                new_sub_input = st.text_input("새 과목 추가 (예: 수능 특강)")
-            with col_u2:
-                if st.form_submit_button("과목 등록"):
-                    if new_sub_input.strip() and add_subject(new_sub_input.strip()):
-                        st.success("등록되었습니다!")
-                        st.rerun()
-
-        if subjects_data:
-            for sub_id, sub_name in subjects_data:
-                with st.expander(f"📚 [과목] {sub_name}", expanded=False):
-                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
-                    with st.form(f"add_ch_form_{sub_id}"):
-                        new_ch_name = st.text_input(f"새 단원명 입력", key=f"ch_input_{sub_id}")
-                        if st.form_submit_button("단원 추가"):
-                            if new_ch_name.strip():
-                                add_chapter(sub_name, new_ch_name.strip())
-                                st.rerun()
-
-                    if chapters_data:
-                        for ch_id, ch_sub, ch_name in chapters_data:
-                            with st.container(border=True):
-                                st.write(f"▫️ **{ch_name}**")
-                                types_list = get_chapter_types(ch_id)
-                                with st.expander(f"📂 세부 유형 관리 ({len(types_list)}개)"):
-                                    with st.form(f"unified_type_manage_form_{ch_id}"):
-                                        type_del_checks = {}
-                                        for t_id, t_name, t_url in types_list:
-                                            type_del_checks[t_id] = st.checkbox(f"{t_name}", value=False, key=f"t_del_chk_{t_id}")
-                                        if st.form_submit_button("🗑️ 체크한 유형 삭제", type="secondary"):
-                                            for t_id, val in type_del_checks.items():
-                                                if val: delete_chapter_type(t_id)
-                                            st.rerun()
-
+        st.markdown("#### 📂 커리큘럼 및 진도 배정")
         if selected_student:
-            st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 배정")
             all_chapters = get_chapters()
             if all_chapters and subjects_data:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
@@ -1705,34 +1508,32 @@ else:
                             st.success("배정되었습니다!")
                             st.rerun()
 
-    # [탭 5] 학생 오답노트 취합 및 모아보기
+    # [탭 5] 오답노트 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
-        view_mode = st.radio("오답 관리 모드", ["👤 학생별 개별 오답 조회", "📅 날짜별 모아보기", "⚠️ 영상 링크 미설정 오답"], horizontal=True)
-        st.markdown("---")
+        all_students = get_students()
+        if all_students:
+            chk_student = st.selectbox("조회할 학생", all_students, key="chk_wrong_student")
+            conn = sqlite3.connect("mathpro_roadmap.db")
+            c = conn.cursor()
+            c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
+            wrong_rows = c.fetchall()
+            conn.close()
+            
+            if wrong_rows:
+                for u_code, nums_txt, u_date in wrong_rows:
+                    with st.container(border=True):
+                        parsed_s = parse_numbers(nums_txt)
+                        if parsed_s:
+                            bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
+                            st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
+                            st.code(bundled_str, language="text")
 
-        if view_mode == "👤 학생별 개별 오답 조회":
-            all_students = get_students()
-            if all_students:
-                chk_student = st.selectbox("조회할 학생", all_students, key="chk_wrong_student")
-                conn = sqlite3.connect("mathpro_roadmap.db")
-                c = conn.cursor()
-                c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
-                wrong_rows = c.fetchall()
-                conn.close()
-                
-                if wrong_rows:
-                    for u_code, nums_txt, u_date in wrong_rows:
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
-                                st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                st.code(bundled_str, language="text")
-
-    # [탭 6] 전체 학생 숙제 매트릭스
+    # [탭 6] 전체 숙제 매트릭스 (💡 [개선 완료] 체크 즉시 자동 저장 + 다이렉트 수정/삭제 기능 추가)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        st.info("💡 체크박스를 누르는 즉시 실시간으로 자동 저장되며, 하단의 **[🛠️ 숙제 내용 수정 / 삭제]**를 통해 언제든 내용을 고칠 수 있습니다!")
+        
         all_students = get_students()
         if all_students:
             conn = sqlite3.connect("mathpro_roadmap.db")
@@ -1742,34 +1543,75 @@ else:
             conn.close()
             
             if all_hw_dates:
-                selected_matrix_date = st.selectbox("숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
+                selected_matrix_date = st.selectbox("조회 및 관리할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
                 students_with_hw = [s for s in all_students if get_student_homework_by_date_parent(s, selected_matrix_date, parent_id=None)]
                 
                 if students_with_hw:
-                    with st.form("matrix_unified_manage_form"):
-                        for s_name in students_with_hw:
-                            with st.container(border=True):
-                                st.markdown(f"**👤 {s_name} 학생**")
-                                parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
-                                s_hw_prog = get_student_homework_progress(s_name)
-                                for h_id, title in parent_hws:
-                                    st.checkbox(f"{title}", value=s_hw_prog.get(h_id, False), key=f"mat_chk_{h_id}")
-                        if st.form_submit_button("💾 전체 체크 상태 저장", type="primary", use_container_width=True):
-                            st.success("저장되었습니다!")
+                    for s_name in students_with_hw:
+                        with st.container(border=True):
+                            st.markdown(f"**👤 {s_name} 학생**")
+                            parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
+                            s_hw_prog = get_student_homework_progress(s_name)
+                            
+                            for h_id, title in parent_hws:
+                                is_done = s_hw_prog.get(h_id, False)
+                                sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
+                                
+                                col_chk, col_ttl = st.columns([1, 11])
+                                with col_chk:
+                                    mat_chk_val = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}", label_visibility="collapsed")
+                                    if mat_chk_val != is_done:
+                                        save_single_homework_progress(s_name, h_id, mat_chk_val)
+                                        st.rerun()
+                                with col_ttl:
+                                    st.markdown(f"📌 **{title}**")
+                                
+                                # 하위 과제 체크박스 처리
+                                if sub_hws:
+                                    for s_id, s_title in sub_hws:
+                                        s_done = s_hw_prog.get(s_id, False)
+                                        col_s_chk, col_s_ttl = st.columns([1, 11])
+                                        with col_s_chk:
+                                            mat_s_chk_val = st.checkbox("완료", value=s_done, key=f"mat_chk_{s_id}", label_visibility="collapsed")
+                                            if mat_s_chk_val != s_done:
+                                                save_single_homework_progress(s_name, s_id, mat_s_chk_val)
+                                                st.rerun()
+                                        with col_s_ttl:
+                                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
+
+                                # 다이렉트 수정 및 삭제 익스팬더
+                                with st.expander(f"🛠️ [{title}] 내용 수정 / 삭제"):
+                                    ed_mat_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
+                                    ed_mat_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
+                                    col_m_btn1, col_m_btn2 = st.columns(2)
+                                    with col_m_btn1:
+                                        if st.button("수정 저장", key=f"mat_save_btn_{h_id}", type="primary"):
+                                            update_student_homework(h_id, str(ed_mat_d), ed_mat_t.strip())
+                                            st.success("수정되었습니다!")
+                                            st.rerun()
+                                    with col_m_btn2:
+                                        if st.button("숙제 삭제", key=f"mat_del_btn_{h_id}", type="secondary"):
+                                            delete_student_homework(h_id)
+                                            st.success("삭제되었습니다!")
+                                            st.rerun()
+                                st.divider()
+                else:
+                    st.info("선택한 날짜에 등록된 과제가 없습니다.")
+
+                st.markdown("---")
+                st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
+                with st.form("matrix_add_hw_form"):
+                    target_student_add = st.selectbox("과제를 받을 학생 선택", all_students, key="mat_add_stu")
+                    mat_hw_text = st.text_area("추가할 과제 내용", key="mat_add_txt", placeholder="[온라인 과제]\n  - 1차시 풀이")
+                    if st.form_submit_button("선택한 학생에게 과제 추가", type="primary"):
+                        if mat_hw_text.strip():
+                            bulk_insert_student_homework(target_student_add, selected_matrix_date, mat_hw_text)
+                            st.success("추가되었습니다!")
                             st.rerun()
 
-    # [탭 7] 문제별 해설 링크 관리
+    # [탭 7] 해설 링크 관리
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
-        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기"):
-            with st.form("bulk_add_problem_links_form"):
-                bulk_input_text = st.text_area("형식: B1353015 https://...", placeholder="B1353015 https://...")
-                if st.form_submit_button("🚀 일괄 등록 실행", type="primary"):
-                    if bulk_input_text.strip():
-                        s_cnt, f_cnt = bulk_save_problem_links(bulk_input_text)
-                        st.success(f"총 {s_cnt}개 등록 성공!")
-                        st.rerun()
-
         with st.form("add_problem_link_form"):
             col_pl1, col_pl2 = st.columns([1, 2])
             with col_pl1: input_full_code = st.text_input("문제 번호 (예: B1353015)")
