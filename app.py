@@ -1261,15 +1261,8 @@ else:
             )
         st.divider()
 
-    st.subheader("👥 학생 선택 및 관리")
-    
-    if student_list:
-        selected_student = st.selectbox("확인할 학생을 선택하세요", student_list)
-    else:
-        selected_student = None
-        st.warning("등록된 학생이 없습니다. 아래 '학생 관리 설정'에서 학생을 먼저 추가해 주세요!")
-
-    with st.expander("⚙️ 학생 관리 및 링크 설정 (학생 추가/삭제, 구글 드라이브, 링크 복사)", expanded=False):
+    # 💡 [UI 개선 반영] 맨 위에 불필요한 학생 선택 박스를 없애고 접이식 설정 메뉴로 배치
+    with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정 (학생 추가/삭제, 드라이브 링크)", expanded=False):
         col_s2, col_s3 = st.columns(2)
         with col_s2:
             with st.form("add_student_inline_form"):
@@ -1284,27 +1277,16 @@ else:
                     else:
                         st.error("이름을 입력하세요.")
         with col_s3:
-            if selected_student:
-                st.write(f"현재 선택: **{selected_student}**")
+            if student_list:
+                del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
                 if st.button("🗑️ 선택 학생 삭제", type="secondary"):
-                    delete_student(selected_student)
+                    delete_student(del_target_student)
                     st.success("삭제되었습니다!")
                     st.rerun()
 
-        if selected_student:
-            st.divider()
-            current_url = get_student_drive_url(selected_student)
-            with st.form(f"drive_url_form_{selected_student}"):
-                new_drive_url = st.text_input("구글 드라이브 폴더 공유 URL 입력", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
-                if st.form_submit_button("💾 드라이브 링크 저장"):
-                    update_student_drive_url(selected_student, new_drive_url.strip())
-                    st.success(" 저장되었습니다!")
-                    st.rerun()
-
-        # 💡 [요청 반영] 학생 이름만 깔끔하게 노출하고 클립보드 복사가 가능한 링크 박스 배치
         if student_list:
             st.divider()
-            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 이동 및 클립보드 복사)")
+            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클립보드 복사 가능)")
             try:
                 base_url = st.context.headers.get("Host", "")
                 base_url = f"https://{base_url}" if base_url else "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
@@ -1322,7 +1304,7 @@ else:
     st.markdown("### ⚙️ 통합 관리 대시보드")
     
     t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
-        f"👤 1. [개별] {selected_student if selected_student else '학생없음'}", 
+        "👤 1. [개별] 학생 진도 관리", 
         "📢 2. 공지사항 관리",
         "📅 3. 개별 과제 관리", 
         "📚 4. 커리큘럼 진도 배정", 
@@ -1331,10 +1313,11 @@ else:
         "🎥 7. 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리
+    # [탭 1] 선택한 학생 개별 관리 (💡 각 탭 내부에서 학생 선택)
     with t_cfg_student:
-        if selected_student:
-            st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 및 진도 관리")
+        st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
+        if student_list:
+            selected_student = st.selectbox("조회할 학생 선택", student_list, key="tab1_stu_sel")
             
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
@@ -1362,6 +1345,17 @@ else:
                 st.metric(label="📚 숙제 완료", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h}")
             with col_m3:
                 st.metric(label="💬 오답 문항", value=f"{int(total_wrong_cnt)}개")
+
+            st.divider()
+            
+            # 구글 드라이브 링크 설정 관리 추가
+            current_url = get_student_drive_url(selected_student)
+            with st.form(f"drive_url_form_{selected_student}"):
+                new_drive_url = st.text_input(f"'{selected_student}' 구글 드라이브 폴더 URL", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
+                if st.form_submit_button("💾 드라이브 링크 저장"):
+                    update_student_drive_url(selected_student, new_drive_url.strip())
+                    st.success("저장되었습니다!")
+                    st.rerun()
 
             st.divider()
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
@@ -1406,7 +1400,7 @@ else:
             else:
                 st.info("이 학생에게 배정된 진도가 없습니다.")
         else:
-            st.warning("상단에서 관리할 학생을 선택해 주세요.")
+            st.warning("등록된 학생이 없습니다. 상단 설정에서 학생을 먼저 추가해 주세요.")
 
     # [탭 2] 공지사항 관리
     with t_cfg_notice:
@@ -1439,26 +1433,28 @@ else:
                             delete_notice(n_id)
                             st.rerun()
 
-    # [탭 3] 개별 과제 관리
+    # [탭 3] 개별 과제 관리 (💡 이 안에서 과제를 줄 학생을 선택)
     with t_cfg_hw:
-        if selected_student:
-            st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 관리")
+        st.markdown("#### 📅 학생 개별 과제 관리")
+        if student_list:
+            selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
+            
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=date.today())
                 hw_text_area = st.text_area("날짜별 과제 내용 입력", placeholder="[온라인 과제]\n  - 1차시 개념 정리")
-                if st.form_submit_button(f"과제 등록", type="primary"):
+                if st.form_submit_button("과제 등록", type="primary"):
                     if hw_text_area.strip():
-                        bulk_insert_student_homework(selected_student, str(hw_date_input), hw_text_area)
+                        bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area)
                         st.success("등록되었습니다!")
                         st.rerun()
 
             st.markdown("---")
-            hw_dates = get_student_homework_dates(selected_student)
-            hw_progress_map = get_student_homework_progress(selected_student)
+            hw_dates = get_student_homework_dates(selected_hw_student)
+            hw_progress_map = get_student_homework_progress(selected_hw_student)
             
             if hw_dates:
                 selected_hw_date = st.selectbox("확인할 숙제 날짜", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
-                parent_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=None)
+                parent_hws = get_student_homework_by_date_parent(selected_hw_student, selected_hw_date, parent_id=None)
                 
                 if parent_hws:
                     for h_id, title in parent_hws:
@@ -1468,7 +1464,7 @@ else:
                             with col_chk:
                                 chk_val = st.checkbox("완료", value=is_done, key=f"t_hw_chk_{h_id}", label_visibility="collapsed")
                                 if chk_val != is_done:
-                                    save_single_homework_progress(selected_student, h_id, chk_val)
+                                    save_single_homework_progress(selected_hw_student, h_id, chk_val)
                                     st.rerun()
                             with col_ttl:
                                 st.markdown(f"📌 **{title}**")
@@ -1488,9 +1484,9 @@ else:
                                         st.success("삭제되었습니다!")
                                         st.rerun()
         else:
-            st.warning("학생을 선택해 주세요.")
+            st.warning("등록된 학생이 없습니다.")
 
-    # [탭 4] 커리큘럼 진도 배정 (💡 [가독성 대폭 개선] 과목별 단원이 한눈에 보이지 않도록 익스팬더 폴더 구조로 깔끔하게 정리)
+    # [탭 4] 커리큘럼 진도 배정
     with t_cfg_curriculum:
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
 
@@ -1555,13 +1551,13 @@ else:
                                                     st.rerun()
 
         st.divider()
-        if selected_student:
-            st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 단원 진도 배정")
+        st.markdown("#### 🎯 학생 맞춤 단원 진도 배정")
+        if student_list:
+            selected_assign_student = st.selectbox("진도를 배정할 학생 선택", student_list, key="tab4_stu_sel")
             all_chapters = get_chapters()
             if all_chapters and subjects_data:
-                assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
+                assigned_chapters = {m[2] for m in get_student_milestones(selected_assign_student)}
                 
-                # 💡 [요청 반영] 과목별 폴더로 묶어서 단원 진도 배정 목록의 가독성을 대폭 개선
                 with st.form("assign_chapters_form"):
                     selected_ch_ids = []
                     for sub_id, sub_name in subjects_data:
@@ -1576,18 +1572,17 @@ else:
                     st.markdown("")
                     if st.form_submit_button("선택한 단원 일괄 배정하기", type="primary"):
                         if selected_ch_ids:
-                            assign_chapters_to_student(selected_student, selected_ch_ids)
+                            assign_chapters_to_student(selected_assign_student, selected_ch_ids)
                             st.success("배정되었습니다!")
                             st.rerun()
         else:
-            st.warning("상단에서 진도를 배정할 학생을 선택해 주세요.")
+            st.warning("등록된 학생이 없습니다.")
 
     # [탭 5] 오답노트 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
-        all_students = get_students()
-        if all_students:
-            chk_student = st.selectbox("조회할 학생", all_students, key="chk_wrong_student")
+        if student_list:
+            chk_student = st.selectbox("조회할 학생", student_list, key="chk_wrong_student")
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
             c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
@@ -1602,14 +1597,17 @@ else:
                             bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
                             st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
                             st.code(bundled_str, language="text")
+            else:
+                st.info("저장된 오답이 없습니다.")
+        else:
+            st.warning("등록된 학생이 없습니다.")
 
     # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         st.info("💡 체크박스를 누르는 즉시 실시간으로 자동 저장되며, **[✏️ 수정·삭제]** 버튼을 통해 내용을 깔끔하게 관리할 수 있습니다!")
         
-        all_students = get_students()
-        if all_students:
+        if student_list:
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
             c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
@@ -1618,7 +1616,7 @@ else:
             
             if all_hw_dates:
                 selected_matrix_date = st.selectbox("조회 및 관리할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
-                students_with_hw = [s for s in all_students if get_student_homework_by_date_parent(s, selected_matrix_date, parent_id=None)]
+                students_with_hw = [s for s in student_list if get_student_homework_by_date_parent(s, selected_matrix_date, parent_id=None)]
                 
                 if students_with_hw:
                     for s_name in students_with_hw:
@@ -1679,13 +1677,15 @@ else:
                 st.markdown("---")
                 st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
                 with st.form("matrix_add_hw_form"):
-                    target_student_add = st.selectbox("과제를 받을 학생 선택", all_students, key="mat_add_stu")
+                    target_student_add = st.selectbox("과제를 받을 학생 선택", student_list, key="mat_add_stu")
                     mat_hw_text = st.text_area("추가할 과제 내용", key="mat_add_txt", placeholder="[온라인 과제]\n  - 1차시 풀이")
                     if st.form_submit_button("선택한 학생에게 과제 추가", type="primary"):
                         if mat_hw_text.strip():
                             bulk_insert_student_homework(target_student_add, selected_matrix_date, mat_hw_text)
                             st.success("추가되었습니다!")
                             st.rerun()
+        else:
+            st.warning("등록된 학생이 없습니다.")
 
     # [탭 7] 해설 링크 관리
     with t_cfg_links:
