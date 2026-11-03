@@ -829,7 +829,6 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # ✅ 상단 환영 메시지와 드라이브 버튼을 세련된 카드 형태로 통합 배치
     st.markdown(
         f'<div style="background-color:#1E293B; border:1px solid #334155; padding:16px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">'
         f'<div style="font-size:17px; font-weight:bold; color:#F8FAFC; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#38BDF8;">{selected_student}</span> 학생!</div>'
@@ -879,7 +878,6 @@ if url_student and url_student in student_list:
     completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
-    # ✅ 학습 현황을 좌우 2분할 대시보드 카드 형태로 세련되게 표현
     st.markdown("##### 📊 나의 학습 성취도 대시보드")
     col_dash1, col_dash2 = st.columns(2)
     with col_dash1:
@@ -895,7 +893,6 @@ if url_student and url_student in student_list:
 
     st.divider()
 
-    # ✅ 모바일에 최적화된 직관적이고 짧은 탭 메뉴 이름 적용
     tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
     with tab1:
@@ -1074,6 +1071,7 @@ if url_student and url_student in student_list:
                 full_code = f"{current_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
 
+                # ✅ 링크가 등록된 문제는 해설 영상으로, 없으면 네이버 카페 검색으로 분기 처리
                 if video_url and video_url.strip() != "":
                     st.markdown(
                         f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
