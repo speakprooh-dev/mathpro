@@ -1298,13 +1298,13 @@ else:
                 new_drive_url = st.text_input("구글 드라이브 폴더 공유 URL 입력", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
                 if st.form_submit_button("💾 드라이브 링크 저장"):
                     update_student_drive_url(selected_student, new_drive_url.strip())
-                    st.success("저장되었습니다!")
+                    st.success(" 저장되었습니다!")
                     st.rerun()
 
-        # 💡 [링크 UI 개선] 중복을 없애고 이름 클릭 + 텍스트 상자 하나로 깔끔하게 통합
+        # 💡 [요청 반영] 학생 이름만 깔끔하게 노출하고 클립보드 복사가 가능한 링크 박스 배치
         if student_list:
             st.divider()
-            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 시 이동)")
+            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 이동 및 클립보드 복사)")
             try:
                 base_url = st.context.headers.get("Host", "")
                 base_url = f"https://{base_url}" if base_url else "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
@@ -1314,8 +1314,8 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none; font-size:16px; font-weight:bold;'>{s} 학생 페이지 바로가기 ➔</a>**", unsafe_allow_html=True)
-                    st.text_input(f"{s} 링크 주소", value=personal_link, key=f"link_txt_{s}", label_visibility="collapsed")
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none; font-size:16px; font-weight:bold;'>{s}</a>**", unsafe_allow_html=True)
+                    st.code(personal_link, language="text")
 
     st.divider()
 
@@ -1490,11 +1490,10 @@ else:
         else:
             st.warning("학생을 선택해 주세요.")
 
-    # [탭 4] 커리큘럼 진도 배정 (💡 [기능 복원] 과목/단원/유형 등록 및 폴더형 관리 기능 완벽 부활)
+    # [탭 4] 커리큘럼 진도 배정 (💡 [가독성 대폭 개선] 과목별 단원이 한눈에 보이지 않도록 익스팬더 폴더 구조로 깔끔하게 정리)
     with t_cfg_curriculum:
         st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
 
-        # 1. 과목 추가 관리
         with st.form("unified_sub_form"):
             col_u1, col_u2 = st.columns([3, 1])
             with col_u1:
@@ -1511,7 +1510,6 @@ else:
                 with st.expander(f"📚 [과목] {sub_name}", expanded=False):
                     chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
                     
-                    # 단원 추가 폼
                     with st.form(f"add_ch_form_{sub_id}"):
                         new_ch_name = st.text_input(f"'{sub_name}' 단원 추가", placeholder="예: 1. 다항식의 연산", key=f"ch_input_{sub_id}")
                         if st.form_submit_button("단원 등록"):
@@ -1533,7 +1531,6 @@ else:
 
                                 types_list = get_chapter_types(ch_id)
                                 
-                                # 세부 유형 일괄 등록 폼
                                 with st.form(f"bulk_type_form_{ch_id}"):
                                     bulk_type_text = st.text_area(f"'{ch_name}' 세부 유형 일괄 등록 (줄바꿈 입력)", placeholder="유형01. 다항식의 덧셈과 빼기\n유형02. 곱셈 공식", key=f"bulk_t_txt_{ch_id}")
                                     if st.form_submit_button("➕ 세부 유형 일괄 등록"):
@@ -1542,7 +1539,6 @@ else:
                                             st.success("등록되었습니다!")
                                             st.rerun()
 
-                                # 세부 유형 목록 및 개별 관리
                                 if types_list:
                                     with st.expander(f"📂 등록된 세부 유형 보기 및 관리 ({len(types_list)}개)"):
                                         for t_id, t_name, t_url in types_list:
@@ -1564,14 +1560,20 @@ else:
             all_chapters = get_chapters()
             if all_chapters and subjects_data:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
+                
+                # 💡 [요청 반영] 과목별 폴더로 묶어서 단원 진도 배정 목록의 가독성을 대폭 개선
                 with st.form("assign_chapters_form"):
                     selected_ch_ids = []
                     for sub_id, sub_name in subjects_data:
                         sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
-                        for ch_id, ch_sub, ch_name in sub_chapters:
-                            is_assigned = ch_name in assigned_chapters
-                            if st.checkbox(f"[{sub_name}] {ch_name}", value=is_assigned, key=f"assign_ch_chk_{ch_id}"):
-                                selected_ch_ids.append(ch_id)
+                        if sub_chapters:
+                            with st.expander(f"📚 [{sub_name}] 단원 목록 보기 ({len(sub_chapters)}개)", expanded=False):
+                                for ch_id, ch_sub, ch_name in sub_chapters:
+                                    is_assigned = ch_name in assigned_chapters
+                                    if st.checkbox(f"{ch_name}", value=is_assigned, key=f"assign_ch_chk_{ch_id}"):
+                                        selected_ch_ids.append(ch_id)
+                    
+                    st.markdown("")
                     if st.form_submit_button("선택한 단원 일괄 배정하기", type="primary"):
                         if selected_ch_ids:
                             assign_chapters_to_student(selected_student, selected_ch_ids)
