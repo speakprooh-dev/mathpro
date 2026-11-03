@@ -19,7 +19,7 @@ def create_excel_backup():
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
             "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates",
-            "daily_routines", "daily_routine_logs"
+            "daily_routines", "daily_routine_logs", "notices"
         ]
         for table in tables:
             try:
@@ -194,6 +194,17 @@ def init_db():
         )
     ''')
     
+    # 공지사항 테이블 생성
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS notices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_name TEXT DEFAULT '', -- 빈 값이면 전체 공지, 특정 이름이면 학생별 공지
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+    
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -256,6 +267,7 @@ def delete_student(name):
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
@@ -490,6 +502,38 @@ def delete_problem_link(link_id):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
     c.execute("DELETE FROM problem_links WHERE id = ?", (link_id,))
+    conn.commit()
+    conn.close()
+
+# --- 공지사항 관련 함수 ---
+def add_notice(student_name, title, content):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    today_str = str(date.today())
+    c.execute("INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
+    conn.commit()
+    conn.close()
+
+def get_notices_for_student(student_name):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def get_all_notices():
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def delete_notice(notice_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
     conn.close()
 
@@ -829,6 +873,27 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
+    # 📢 학생 화면 상단 눈에 띄는 공지사항 배너 출력
+    student_notices = get_notices_for_student(selected_student)
+    if student_notices:
+        st.markdown(
+            f'<div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border: 2px solid #38BDF8; padding: 18px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);">'
+            f'<div style="font-size: 18px; font-weight: bold; color: #38BDF8; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">'
+            f'📢 [중요 공지사항] 확인해 주세요!</div>',
+            unsafe_allow_html=True
+        )
+        for n_id, n_title, n_content, n_date, n_target in student_notices:
+            target_badge = "🌐 전체 공지" if not n_target else f"👤 {n_target} 학생 맞춤 공지"
+            st.markdown(
+                f'<div style="background-color: rgba(30, 41, 59, 0.7); border-left: 4px solid #38BDF8; padding: 12px; border-radius: 6px; margin-bottom: 10px;">'
+                f'<div style="font-size: 14px; color: #94A3B8; margin-bottom: 4px;">{target_badge} &nbsp;|&nbsp; 작성일: {n_date}</div>'
+                f'<div style="font-size: 16px; font-weight: bold; color: #F8FAFC; margin-bottom: 6px;">📌 {n_title}</div>'
+                f'<div style="font-size: 14px; color: #E2E8F0; white-space: pre-wrap; line-height: 1.5;">{n_content}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown(
         f'<div style="background-color:#1E293B; border:1px solid #334155; padding:16px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">'
         f'<div style="font-size:17px; font-weight:bold; color:#F8FAFC; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#38BDF8;">{selected_student}</span> 학생!</div>'
@@ -1041,7 +1106,6 @@ if url_student and url_student in student_list:
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
         
-        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션 (index=None을 주어 처음엔 아무것도 선택 안 된 상태로 설정)
         st.markdown("##### 📂 내가 저장한 오답 단원 확인하기")
         conn_w = sqlite3.connect("mathpro_roadmap.db")
         c_w = conn_w.cursor()
@@ -1064,7 +1128,6 @@ if url_student and url_student in student_list:
             current_unit = None
             st.info("💡 아직 저장된 오답 단원이 없습니다. 아래에서 새로운 단원코드를 입력해 첫 오답을 등록해 보세요!")
 
-        # ✅ [2] 단원을 선택했을 때만 해당 단원의 오답 목록과 해설 링크를 출력
         if current_unit:
             st.info(f"💡 현재 **`{current_unit}`** 단원의 저장된 오답 목록을 보고 계십니다.")
             saved_text = get_student_wrong_entry(selected_student, current_unit)
@@ -1099,7 +1162,6 @@ if url_student and url_student in student_list:
 
         st.markdown("---")
 
-        # ✅ [3] 신규 등록 및 수정 입력 섹션 (하단 배치)
         st.markdown("##### ➕ 새로운 오답/질문 번호 등록 및 수정")
         default_input_code = current_unit if current_unit else ""
         entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=default_input_code, placeholder="예: B1353").strip().upper()
@@ -1274,13 +1336,14 @@ else:
                     st.rerun()
 
     st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
-    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
+    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_notice = st.tabs([
         f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
         "📚 2. 커리큘럼 및 진도 배정", 
         "📅 3. 선택학생 개별 과제 관리", 
         "🔍 4. 학생 오답노트 취합 및 모아보기",
         "📊 5. 전체 학생 숙제 매트릭스",
-        "🎥 6. 문제별 해설 링크 관리"
+        "🎥 6. 문제별 해설 링크 관리",
+        "📢 7. 공지사항 관리"
     ])
 
     # [탭 1] 선택한 학생 개별 관리 (선생님 모드 진도 자동저장 적용)
@@ -2253,3 +2316,52 @@ else:
                                 st.warning("삭제할 항목의 체크박스를 하나 이상 선택해주세요.")
         else:
             st.info("등록된 문제 해설 링크가 없습니다. 위에서 문제 번호와 링크를 등록해 주세요!")
+
+    # [탭 7] 공지사항 관리
+    with t_cfg_notice:
+        st.markdown("#### 📢 전체 또는 학생별 공지사항 등록 및 관리")
+        st.info("💡 **전체 공지**를 등록하면 모든 학생 페이지 상단에 노출되며, **특정 학생**을 지정하면 해당 학생 페이지에만 맞춤 공지가 강력하게 표시됩니다!")
+
+        with st.form("add_notice_form"):
+            notice_target_type = st.radio("공지 대상 선택", ["🌐 전체 공지 (모든 학생에게 표시)", "👤 특정 학생 지정 공지"], horizontal=True)
+            
+            target_student_name = ""
+            if notice_target_type == "👤 특정 학생 지정 공지":
+                if student_list:
+                    target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student")
+                else:
+                    st.warning("등록된 학생이 없습니다.")
+
+            notice_title = st.text_input("공지사항 제목", placeholder="예: 이번 주 토요일 보충 수업 안내")
+            notice_content = st.text_area("공지사항 내용", placeholder="상세 내용을 입력하세요...")
+            
+            notice_submit = st.form_submit_button("📢 공지사항 등록하기", type="primary")
+            if notice_submit:
+                if notice_title.strip() and notice_content.strip():
+                    final_target = target_student_name if notice_target_type == "👤 특정 학생 지정 공지" else ""
+                    add_notice(final_target, notice_title.strip(), notice_content.strip())
+                    st.success("공지사항이 성공적으로 등록되었습니다!")
+                    st.rerun()
+                else:
+                    st.warning("제목과 내용을 모두 입력해주세요.")
+
+        st.markdown("---")
+        st.markdown("##### 📋 등록된 공지사항 목록 및 삭제 관리")
+        
+        all_notices = get_all_notices()
+        if all_notices:
+            for n_id, n_target, n_title, n_content, n_date in all_notices:
+                with st.container(border=True):
+                    badge_str = f"🌐 [전체 공지]" if not n_target else f"👤 [{n_target} 학생 맞춤]"
+                    col_n_info, col_n_del = st.columns([5, 1])
+                    with col_n_info:
+                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#64748B;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
+                        st.caption(n_content)
+                    with col_n_del:
+                        st.write("")
+                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}", use_container_width=True):
+                            delete_notice(n_id)
+                            st.success("공지사항이 삭제되었습니다!")
+                            st.rerun()
+        else:
+            st.info("등록된 공지사항이 없습니다.")
