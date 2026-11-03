@@ -878,42 +878,11 @@ if url_student and url_student in student_list:
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
+            # 💡 [요청 반영 3] 오늘 루틴 체크하기가 최상단으로 이동!
             today_obj = date.today()
-            current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
-            current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
-            
-            monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
-            
-            # 💡 [모바일 최적화] 찌그러지는 7열 달력 대신 보기 편한 날짜별 카드 리스트 뷰로 변경
-            st.markdown(f"##### 📋 {current_year}년 {current_month}월 루틴 실천 현황 (날짜별 리스트)")
-            
-            # 해당 월의 총 일수 계산
-            _, last_day = calendar.monthrange(current_year, current_month)
-            
-            # 스크롤 가능한 컨테이너 안에 날짜별 카드 리스트 배치
-            with st.container(border=True):
-                for day in range(1, last_day + 1):
-                    d_str = f"{current_year}-{current_month:02d}-{day:02d}"
-                    w_name = get_weekday_kr(d_str)[:1]  # 요일 첫 글자 (월, 화, 수...)
-                    is_today = (d_str == str(today_obj))
-                    
-                    day_checked_count = sum(1 for r_id, _ in daily_parents if monthly_logs.get((str(r_id), d_str), False))
-                    total_r_count = len(daily_parents)
-                    status_badge = "🟩 완료" if (total_r_count > 0 and day_checked_count == total_r_count) else ("🟧 진행중" if day_checked_count > 0 else "⬜ 미완료")
-                    
-                    highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
-                    today_tag = " (오늘)" if is_today else ""
-                    
-                    st.markdown(
-                        f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
-                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{current_month}월 {day}일 ({w_name}){today_tag}</span>"
-                        f"<span style='font-size: 13px; font-weight: bold;'>{status_badge} ({day_checked_count}/{total_r_count})</span>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
-
             today_str = str(today_obj)
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
+            
             with st.container(border=True):
                 st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
                 daily_routine_checked_dict = {}
@@ -931,7 +900,40 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
+            st.markdown("---")
+            
+            # 💡 [요청 반영 2 & 1] 접혀진 상태(아코디언)로 펼쳐보기 가능 + O / X 표기로 변경
+            current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
+            current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
+            
+            monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
+            _, last_day = calendar.monthrange(current_year, current_month)
+            
+            with st.expander(f"📅 {current_year}년 {current_month}월 루틴 실천 현황 펼쳐보기", expanded=False):
+                for day in range(1, last_day + 1):
+                    d_str = f"{current_year}-{current_month:02d}-{day:02d}"
+                    w_name = get_weekday_kr(d_str)[:1]
+                    is_today = (d_str == str(today_obj))
+                    
+                    day_checked_count = sum(1 for r_id, _ in daily_parents if monthly_logs.get((str(r_id), d_str), False))
+                    total_r_count = len(daily_parents)
+                    
+                    # 💡 완료 문구 대신 O / X 표기로 변경 (모두 완료 시 ⭕ O, 일부/미완료 시 ❌ X)
+                    status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
+                    
+                    highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
+                    today_tag = " (오늘)" if is_today else ""
+                    
+                    st.markdown(
+                        f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
+                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{current_month}월 {day}일 ({w_name}){today_tag}</span>"
+                        f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
         if hw_dates:
+            st.markdown("---")
             selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             parent_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=None)
             for h_id, title in parent_hws:
@@ -1139,7 +1141,7 @@ else:
         else:
             st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 개별 과제 관리 (루틴 과제, 월간 실천 현황 리스트, 숙제 템플릿 포함)
+    # [탭 3] 개별 과제 관리 (루틴 과제, 월간 실천 현황 O/X 리스트, 숙제 템플릿 포함)
     with t_cfg_hw:
         st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
         if student_list:
@@ -1173,7 +1175,7 @@ else:
                                 st.rerun()
 
                     st.markdown("---")
-                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 (날짜별 리스트)")
+                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 (O/X 리스트)")
                     today_obj = date.today()
                     t_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="teacher_routine_year")
                     t_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="teacher_routine_month")
@@ -1189,7 +1191,8 @@ else:
                             
                             day_checked_count = sum(1 for r_id, _ in current_routines if t_monthly_logs.get((str(r_id), d_str), False))
                             total_r_count = len(current_routines)
-                            status_badge = "🟩 완료" if (total_r_count > 0 and day_checked_count == total_r_count) else ("🟧 진행중" if day_checked_count > 0 else "⬜ 미완료")
+                            
+                            status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
                             
                             highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
                             today_tag = " (오늘)" if is_today else ""
@@ -1197,7 +1200,7 @@ else:
                             st.markdown(
                                 f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
                                 f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                                f"<span style='font-size: 13px; font-weight: bold;'>{status_badge} ({day_checked_count}/{total_r_count})</span>"
+                                f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                                 f"</div>",
                                 unsafe_allow_html=True
                             )
