@@ -1714,7 +1714,8 @@ else:
                 if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
                     if bulk_links_text.strip():
                         s_cnt, f_cnt = bulk_save_problem_links(bulk_links_text)
-                        st.success(f"성공 {s_cnt개 등록됨! (실패: {f_cnt}개)")
+                        st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
+
                         st.rerun()
 
         with col_link_tab2:
