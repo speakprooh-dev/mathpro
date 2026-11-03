@@ -509,6 +509,38 @@ def get_student_daily_routines_parent(student_name, parent_id=None):
     conn.close()
     return rows
 
+def bulk_insert_daily_routines(student_name, text_data):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    lines = text_data.strip().split('\n')
+    added_count = 0
+    current_parent_id = None
+    for line in lines:
+        line_str = line.strip()
+        if not line_str:
+            continue
+        is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
+        title = line_str.lstrip('-•*└\t ').strip()
+        if not title:
+            continue
+        if is_sub and current_parent_id is not None:
+            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, ?)", (student_name, title, current_parent_id))
+        else:
+            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, NULL)", (student_name, title))
+            current_parent_id = c.lastrowid
+        added_count += 1
+    conn.commit()
+    conn.close()
+    return added_count
+
+def delete_daily_routine(r_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
+    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
+    conn.commit()
+    conn.close()
+
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
@@ -544,6 +576,29 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
     for r_id, val in rows:
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
+
+# --- 숙제 템플릿 관련 함수 ---
+def get_homework_templates():
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("SELECT id, title FROM homework_templates ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def add_homework_template(title):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO homework_templates (title) VALUES (?)", (title,))
+    conn.commit()
+    conn.close()
+
+def delete_homework_template(t_id):
+    conn = sqlite3.connect("mathpro_roadmap.db")
+    c = conn.cursor()
+    c.execute("DELETE FROM homework_templates WHERE id = ?", (t_id,))
+    conn.commit()
+    conn.close()
 
 def get_student_milestones(student_name):
     conn = sqlite3.connect("mathpro_roadmap.db")
@@ -863,6 +918,28 @@ if url_student and url_student in student_list:
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
+        
+        # 💡 [복구됨] 단원코드 또는 문제번호로 해설영상 즉시 검색 기능
+        st.markdown("##### 🔍 해설 영상 즉시 검색하기")
+        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
+        if search_prob_input:
+            if len(search_prob_input) >= 7:
+                matched_url = get_problem_link_by_full(search_prob_input)
+                if matched_url:
+                    st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                    st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                else:
+                    st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+            else:
+                unit_results = get_problem_links_by_unit(search_prob_input)
+                if unit_results:
+                    st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                    for f_code, v_url in unit_results:
+                        st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                else:
+                    st.info("등록된 해설 링크가 없습니다.")
+
+        st.markdown("---")
         conn_w = sqlite3.connect("mathpro_roadmap.db")
         c_w = conn_w.cursor()
         c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
@@ -879,9 +956,9 @@ if url_student and url_student in student_list:
                 full_code = f"{current_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
                 if video_url:
-                    st.markdown(f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px;">🎥 해설 영상 바로가기 ➔</span></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B; font-size:13px;">🔍 네이버 카페 검색 ➔</span></a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:12px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B;">🔍 네이버 카페 검색 ➔</span></a>', unsafe_allow_html=True)
 
         st.markdown("---")
         entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", value=current_unit or "").strip().upper()
@@ -1027,19 +1104,89 @@ else:
         else:
             st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 개별 과제 관리
+    # [탭 3] 개별 과제 관리 (💡 루틴 과제, 월간 실천 현황, 숙제 템플릿 기능 완벽 부활)
     with t_cfg_hw:
-        st.markdown("#### 📅 학생 개별 과제 관리")
+        st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
+            
+            # --- 1. 매일 루틴 과제 설정 영역 ---
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 관리", expanded=False):
+                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제(예: 오답노트 작성, 연산 연습 등)를 설정합니다.")
+                
+                with st.form("add_teacher_routine_form"):
+                    new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
+                    if st.form_submit_button("➕ 루틴 과제 일괄 등록", type="primary"):
+                        if new_routine_txt.strip():
+                            bulk_insert_daily_routines(selected_hw_student, new_routine_txt)
+                            st.success("루틴 과제가 등록되었습니다!")
+                            st.rerun()
+                
+                current_routines = get_student_daily_routines_parent(selected_hw_student, parent_id=None)
+                if current_routines:
+                    st.markdown("##### 📋 현재 등록된 루틴 과제 목록")
+                    for r_id, r_title in current_routines:
+                        col_r1, col_r2 = st.columns([5, 1])
+                        with col_r1:
+                            st.markdown(f"📌 **{r_title}**")
+                            sub_r = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
+                            for sr_id, sr_title in sub_r:
+                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                        with col_r2:
+                            if st.button("🗑️ 삭제", key=f"del_routine_{r_id}"):
+                                delete_daily_routine(r_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+
+            # --- 2. 날짜별 과제 부여 및 템플릿 영역 ---
+            st.markdown("---")
+            st.markdown("##### 📝 날짜별 과제 부여")
+            
+            # 💡 자주 쓰는 숙제 템플릿 불러오기 기능 복구
+            templates = get_homework_templates()
+            selected_template_title = ""
+            if templates:
+                template_options = ["-- 자주 쓰는 숙제 템플릿 불러오기 --"] + [t[1] for t in templates]
+                chosen_tpl = st.selectbox("📌 템플릿 선택", template_options, key="select_hw_template_box")
+                if chosen_tpl != "-- 자주 쓰는 숙제 템플릿 불러오기 --":
+                    selected_template_title = chosen_tpl
+
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=date.today())
-                hw_text_area = st.text_area("날짜별 과제 내용 입력")
-                if st.form_submit_button("과제 등록", type="primary"):
+                hw_text_area = st.text_area("날짜별 과제 내용 입력", value=selected_template_title, placeholder="[진도 교재]\n  - p.12~15 문제 풀이")
+                
+                col_sub_btn1, col_sub_btn2 = st.columns(2)
+                with col_sub_btn1:
+                    submit_hw_btn = st.form_submit_button("과제 등록", type="primary")
+                with col_sub_btn2:
+                    save_as_tpl_btn = st.form_submit_button("💾 현재 내용을 템플릿으로 저장")
+                
+                if submit_hw_btn:
                     if hw_text_area.strip():
                         bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area)
-                        st.success("등록되었습니다!")
+                        st.success("과제가 등록되었습니다!")
                         st.rerun()
+                
+                if save_as_tpl_btn:
+                    if hw_text_area.strip():
+                        add_homework_template(hw_text_area.strip())
+                        st.success("새로운 숙제 템플릿으로 저장되었습니다!")
+                        st.rerun()
+
+            # 💡 템플릿 관리 및 삭제 아코디언 추가
+            if templates:
+                with st.expander("⚙️ 저장된 숙제 템플릿 관리 및 삭제", expanded=False):
+                    for t_id, t_title in templates:
+                        col_tpl_info, col_tpl_del = st.columns([5, 1])
+                        with col_tpl_info:
+                            st.text(t_title)
+                        with col_tpl_del:
+                            if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}"):
+                                delete_homework_template(t_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+        else:
+            st.warning("등록된 학생이 없습니다.")
 
     # [탭 4] 커리큘럼 진도 배정
     with t_cfg_curriculum:
@@ -1072,7 +1219,7 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기 (💡 날짜 선택 + 최근 날짜별 모두 보기 통합 및 학생 이름 링크 복원 완료)
+    # [탭 5] 오답노트 모아보기 (미연결 색상 강조 및 학생 이름 클릭 링크 포함)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
@@ -1140,7 +1287,6 @@ else:
                                     name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
                                     
-                                    # 미연결 색상 구분이 적용되면서도 복사가 편하도록 HTML 박스 및 색상 적용
                                     colored_num_tags = []
                                     for n in sorted(list(parsed_s)):
                                         f_code = f"{u_code}{n:03d}"
