@@ -829,19 +829,29 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
+    # ✅ 상단 환영 메시지와 드라이브 버튼을 세련된 카드 형태로 통합 배치
     st.markdown(
-        f'<div style="background-color:#F0FDF4; border-left:5px solid #10B981; padding:12px 16px; border-radius:6px; margin-bottom:15px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-        f'<span style="font-size:16px; font-weight:bold; color:#065F46;">✨ [{selected_student}] 학생만을 위한 1:1 맞춤 학습 공간입니다.</span>'
-        f'</div>',
+        f'<div style="background-color:#1E293B; border:1px solid #334155; padding:16px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">'
+        f'<div style="font-size:17px; font-weight:bold; color:#F8FAFC; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#38BDF8;">{selected_student}</span> 학생!</div>'
+        f'<div style="font-size:13px; color:#94A3B8; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
         unsafe_allow_html=True
     )
     
+    student_drive = get_student_drive_url(selected_student)
+    if student_drive and student_drive.strip() != "":
+        st.markdown(
+            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);">📁 개인 학습 자료실 및 과제 제출함 (Google Drive) 바로가기 ➔</a>',
+            unsafe_allow_html=True
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
     with st.expander("📖 [필독] 1분 만에 끝내는 MathPro 사용 설명서 보기"):
         st.markdown("""
         ### 📐 MathPro 1:1 맞춤 학습 공간 이용 가이드
         
         **1️⃣ 개인 학습 자료실 및 과제 제출함 (Google Drive)**
-        * 상단의 파란색 드라이브 버튼을 누르면 나만의 구글 드라이브 폴더로 바로 이동해 과제를 제출하거나 자료를 확인할 수 있어요!
+        * 파란색 드라이브 버튼을 누르면 나만의 구글 드라이브 폴더로 바로 이동해 과제를 제출하거나 자료를 확인할 수 있어요!
         
         **2️⃣ 🚩 1. 개념 학습 진도 체크하기**
         * 배정된 단원의 학습을 마친 후 체크박스(☑️)에 체크하세요. **체크하는 순간 자동으로 저장됩니다!**
@@ -854,13 +864,6 @@ if url_student and url_student in student_list:
         * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
         * 하단에 생성된 문제 번호를 누르면 **[🎥 해설 영상]**으로 바로 연결되어 오답 복습이 쉬워집니다!
         """)
-    
-    student_drive = get_student_drive_url(selected_student)
-    if student_drive and student_drive.strip() != "":
-        st.markdown(
-            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:14px 18px; border-radius:10px; font-size:16px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:20px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2); transition: all 0.3s;">📁 개인 학습 자료실 및 과제 제출함 (Google Drive) 바로가기 ➔</a>',
-            unsafe_allow_html=True
-        )
 
     milestones = get_student_milestones(selected_student)
     hw_dates = get_student_homework_dates(selected_student)
@@ -876,19 +879,24 @@ if url_student and url_student in student_list:
     completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
-    st.subheader(f"👋 {selected_student} 학생의 현재 학습 현황")
-    
-    col_stat1, col_stat2 = st.columns(2)
-    with col_stat1:
-        st.write(f"**🎯 진도 달성도: {m_percent}%** ({completed_m}/{total_m} 완료)")
-        st.progress(m_percent / 100 if total_m > 0 else 0)
-    with col_stat2:
-        st.write(f"**📚 숙제 달성도: {h_percent}%** ({completed_h}/{total_h} 완료)")
-        st.progress(h_percent / 100 if total_h > 0 else 0)
+    # ✅ 학습 현황을 좌우 2분할 대시보드 카드 형태로 세련되게 표현
+    st.markdown("##### 📊 나의 학습 성취도 대시보드")
+    col_dash1, col_dash2 = st.columns(2)
+    with col_dash1:
+        with st.container(border=True):
+            st.markdown(f"**🎯 개념 진도**")
+            st.metric(label="달성률", value=f"{m_percent}%", delta=f"{completed_m}/{total_m} 완료")
+            st.progress(m_percent / 100 if total_m > 0 else 0)
+    with col_dash2:
+        with st.container(border=True):
+            st.markdown(f"**📚 숙제 완료**")
+            st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
+            st.progress(h_percent / 100 if total_h > 0 else 0)
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["🚩 1. 개념 학습 진도", "📚 2. 날짜별 숙제", "💬 3. 오답 및 질문 관리"])
+    # ✅ 모바일에 최적화된 직관적이고 짧은 탭 메뉴 이름 적용
+    tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
     with tab1:
         st.markdown("### 📘 나의 개념 학습 목록")
