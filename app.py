@@ -1248,7 +1248,7 @@ else:
         "🎥 6. 문제별 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리
+    # [탭 1] 선택한 학생 개별 관리 (선생님 모드 진도 자동저장 적용)
     with t_cfg_student:
         if selected_student:
             st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 요약 및 진도 관리")
@@ -1282,11 +1282,10 @@ else:
             st.divider()
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
             
-            st.markdown("##### 📘 단원별 진도 현황 및 직접 체크")
-            st.info("💡 각 단원별 **[전체 선택]** 또는 **[전체 해제]** 버튼을 누르면 즉시 반영되며, 수정 후 하단의 **[선생님 진도 상태 저장하기]** 버튼을 꼭 눌러주세요!")
+            st.markdown("##### 📘 단원별 진도 현황 및 실시간 자동 저장")
+            st.success("💡 **자동 저장 적용 완료:** 체크박스를 누르는 즉시 실시간으로 자동 저장됩니다!")
 
             if s_milestones:
-                teacher_m_checked = {}
                 grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     key = (sub, ch)
@@ -1303,35 +1302,23 @@ else:
                         with col_btn1:
                             if st.button("☑️ 전체 선택", key=f"t_all_on_{sub}_{ch}"):
                                 for m_id, _, _ in items:
-                                    st.session_state[f"t_milestone_{m_id}"] = True
+                                    save_single_milestone_progress(selected_student, m_id, True)
                                 st.rerun()
                         with col_btn2:
                             if st.button("◻️ 전체 해제", key=f"t_all_off_{sub}_{ch}"):
                                 for m_id, _, _ in items:
-                                    st.session_state[f"t_milestone_{m_id}"] = False
+                                    save_single_milestone_progress(selected_student, m_id, False)
                                 st.rerun()
                         
                         st.markdown("---")
 
                         for m_id, t_name, v_url in items:
                             is_done = s_m_progress.get(m_id, False)
-                            teacher_m_checked[m_id] = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
+                            val = st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}")
+                            if val != is_done:
+                                save_single_milestone_progress(selected_student, m_id, val)
+                                st.rerun()
                             st.divider()
-
-                st.divider()
-                if st.button("선생님 진도 상태 저장하기", type="primary", key="teacher_save_btn"):
-                    conn = sqlite3.connect("mathpro_roadmap.db")
-                    c = conn.cursor()
-                    for m_id, val in teacher_m_checked.items():
-                        c.execute('''
-                            INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-                            VALUES (?, ?, ?)
-                            ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-                        ''', (selected_student, m_id, int(val), int(val)))
-                    conn.commit()
-                    conn.close()
-                    st.success("진도 상태가 성공적으로 저장되었습니다!")
-                    st.rerun()
 
                 st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원 다중 선택 및 개별 유형 다중 선택)")
                 
@@ -2185,7 +2172,6 @@ else:
         
         all_links = get_all_problem_links()
         if all_links:
-            # 단원코드별로 그룹화
             grouped_links = {}
             for l_id, f_code, v_url in all_links:
                 if len(f_code) >= 4:
@@ -2200,16 +2186,13 @@ else:
                 grouped_links[u_code].append((l_id, f_code, p_num, v_url))
 
             for u_code, items in sorted(grouped_links.items()):
-                # ✅ 처음 접속 시 닫혀있도록 expanded=False 설정
                 with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제: {len(items)}개)", expanded=False):
-                    # 1. 칩(배지) 스타일로 깔끔하게 문제 번호들 모아보기
                     badge_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;'>"
                     for l_id, f_code, p_num, v_url in items:
                         badge_html += f'<a href="{v_url}" target="_blank" style="background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:6px 12px; border-radius:6px; font-size:14px; font-weight:bold; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,0.1);">📌 {f_code} 🔗</a>'
                     badge_html += "</div>"
                     st.markdown(badge_html, unsafe_allow_html=True)
 
-                    # 2. 해당 단원의 개별 링크 URL 확인 및 삭제/관리 폼
                     with st.form(f"manage_unit_links_{u_code}"):
                         st.caption(f"🔧 `{u_code}` 단원 세부 링크 및 삭제 관리")
                         unit_link_del_checks = {}
