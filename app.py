@@ -960,8 +960,8 @@ if url_student and url_student in student_list:
         
         with st.container(border=True):
             st.markdown("##### 🔍 1. 해설 영상 즉시 검색하기")
-            st.caption("궁금한 문제 번호 전체를 입력하면 즉시 해설 영상으로 이동합니다.")
-            search_prob_input = st.text_input("문제 번호 입력 (예: B1353015)", placeholder="예: B1353015").strip().upper()
+            st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
+            search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
             if search_prob_input:
                 if len(search_prob_input) >= 7:
                     matched_url = get_problem_link_by_full(search_prob_input)
@@ -984,25 +984,7 @@ if url_student and url_student in student_list:
             st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
             st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
             
-            conn_w = sqlite3.connect("mathpro_roadmap.db")
-            c_w = conn_w.cursor()
-            c_w.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-            saved_rows = c_w.fetchall()
-            conn_w.close()
-            
-            saved_units_list = [r[0] for r in saved_rows]
-            
-            selected_existing_unit = st.selectbox(
-                "📂 내가 저장한 단원 선택해서 불러오기", 
-                ["-- 단원을 선택하거나 직접 아래에 입력하세요 --"] + saved_units_list,
-                key="saved_unit_select_box"
-            )
-            
-            default_unit_val = ""
-            if selected_existing_unit and selected_existing_unit != "-- 단원을 선택하거나 직접 아래에 입력하세요 --":
-                default_unit_val = selected_existing_unit
-
-            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", value=default_unit_val, placeholder="예: B1353").strip().upper()
+            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
             target_code = entered_unit_code if entered_unit_code else "B1353"
 
             col_add, col_del = st.columns(2)
@@ -1019,16 +1001,35 @@ if url_student and url_student in student_list:
                 else:
                     st.warning("단원코드를 먼저 입력해 주세요.")
 
-            # 💡 [요청 반영] 저장된 오답 및 해설 바로가기 목록을 맨 아래로 배치했습니다!
-            if entered_unit_code:
-                existing_wrong = get_student_wrong_entry(selected_student, entered_unit_code)
+            st.markdown("---")
+
+            # 💡 [요청 반영] 내가 저장한 단원 선택 셀렉트박스를 맨 아래로 독립적으로 배치했습니다!
+            conn_w = sqlite3.connect("mathpro_roadmap.db")
+            c_w = conn_w.cursor()
+            c_w.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+            saved_rows = c_w.fetchall()
+            conn_w.close()
+            
+            saved_units_list = [r[0] for r in saved_rows]
+            
+            selected_existing_unit = st.selectbox(
+                "📂 내가 저장한 단원 선택해서 보기", 
+                ["-- 저장된 단원을 선택하세요 --"] + saved_units_list,
+                key="saved_unit_select_box"
+            )
+            
+            view_target_code = ""
+            if selected_existing_unit and selected_existing_unit != "-- 저장된 단원을 선택하세요 --":
+                view_target_code = selected_existing_unit
+
+            if view_target_code:
+                existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
                 if existing_wrong:
-                    st.markdown("---")
-                    st.markdown(f"##### 📌 `{entered_unit_code}` 단원 오답 및 해설 바로가기")
+                    st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
                     parsed_nums = parse_numbers(existing_wrong)
                     if parsed_nums:
                         for n in sorted(list(parsed_nums)):
-                            full_code = f"{entered_unit_code}{n:03d}"
+                            full_code = f"{view_target_code}{n:03d}"
                             v_url = get_problem_link_by_full(full_code)
                             if v_url:
                                 st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
