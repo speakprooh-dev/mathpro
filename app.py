@@ -984,14 +984,15 @@ if url_student and url_student in student_list:
             st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
             st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
             
-            # 💡 [요청 반영] 저장된 단원 선택 셀렉트박스를 다시 깔끔하게 살렸습니다!
             conn_w = sqlite3.connect("mathpro_roadmap.db")
             c_w = conn_w.cursor()
-            c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-            saved_units_rows = c_w.fetchall()
+            c_w.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+            saved_rows = c_w.fetchall()
             conn_w.close()
-            saved_units_list = [r[0] for r in saved_units_rows]
             
+            saved_units_list = [r[0] for r in saved_rows]
+            
+            # 💡 [요청 반영] 저장된 번호를 검색했을 때, 해설링크가 있는 번호는 버튼형태로, 없는 번호는 번호만 깔끔하게 나열되도록 개선!
             selected_existing_unit = st.selectbox(
                 "📂 내가 저장한 단원 선택해서 불러오기", 
                 ["-- 단원을 선택하거나 직접 아래에 입력하세요 --"] + saved_units_list,
@@ -1008,7 +1009,17 @@ if url_student and url_student in student_list:
             if entered_unit_code:
                 existing_wrong = get_student_wrong_entry(selected_student, entered_unit_code)
                 if existing_wrong:
-                    st.info(f"현재 등록된 오답 번호: **{entered_unit_code}_({existing_wrong})**")
+                    st.markdown(f"##### 📌 `{entered_unit_code}` 단원 오답 및 해설 바로가기")
+                    parsed_nums = parse_numbers(existing_wrong)
+                    if parsed_nums:
+                        # 💡 해설 링크가 있는 것과 없는 것을 구분하여 적절한 위치에 배치
+                        for n in sorted(list(parsed_nums)):
+                            full_code = f"{entered_unit_code}{n:03d}"
+                            v_url = get_problem_link_by_full(full_code)
+                            if v_url:
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                            else:
+                                st.markdown(f'<div style="background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:#64748B;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
                 else:
                     st.info(f"현재 등록된 오답이 없습니다.")
 
