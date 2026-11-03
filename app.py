@@ -860,8 +860,8 @@ if url_student and url_student in student_list:
         * 매일 실천하는 **[매일 루틴 과제]** 및 **[날짜별 숙제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
-        * **[📂 내가 저장한 오답 단원 선택하기]**에서 단원을 골라 지금까지 저장한 오답과 해설 영상을 확인할 수 있어요.
-        * 새로운 단원의 오답을 저장할 때는 아래 **[단원코드 입력]** 칸에 직접 코드를 적고 번호를 추가하면 됩니다!
+        * **[📂 내가 저장한 오답 단원 확인하기]**에서 단원을 고르면 바로 아래에 저장된 오답 목록과 해설 영상이 바로 나타납니다.
+        * 새로운 단원의 오답을 등록할 때는 하단의 **[새로운 오답/질문 번호 등록 및 수정]** 칸을 이용해 주세요!
         """)
 
     milestones = get_student_milestones(selected_student)
@@ -1041,7 +1041,7 @@ if url_student and url_student in student_list:
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
         
-        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션
+        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션 (최상단 배치)
         st.markdown("##### 📂 내가 저장한 오답 단원 확인하기")
         conn_w = sqlite3.connect("mathpro_roadmap.db")
         c_w = conn_w.cursor()
@@ -1059,24 +1059,7 @@ if url_student and url_student in student_list:
             current_unit = "B1353"
             st.info("💡 아직 저장된 오답 단원이 없습니다. 아래에서 새로운 단원코드를 입력해 첫 오답을 등록해 보세요!")
 
-        st.markdown("---")
-
-        # ✅ [2] 신규 등록 및 수정 입력 섹션 (단원코드 직접 입력 유지)
-        st.markdown("##### ➕ 새로운 오답/질문 번호 등록 및 수정")
-        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=current_unit).strip().upper()
-        target_unit_code = entered_unit_code if entered_unit_code else current_unit
-
-        col_add, col_del = st.columns(2)
-        with col_add:
-            add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 15, 35, 37)", placeholder="예: 15, 35")
-        with col_del:
-            del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
-
-        st.markdown("---")
-        save_btn_tab3 = st.button("💾 오답 목록 저장하기", type="primary", key="save_t3", use_container_width=True)
-        st.markdown("---")
-
-        # ✅ [3] 현재 선택된(조회된) 단원의 저장된 오답 목록 및 해설 링크 출력
+        # ✅ [2] 선택된 단원의 저장된 오답 목록 및 해설 링크를 '바로 아래'에 출력
         view_target_unit = current_unit
         saved_text = get_student_wrong_entry(selected_student, view_target_unit)
         saved_nums = parse_numbers(saved_text)
@@ -1104,6 +1087,22 @@ if url_student and url_student in student_list:
                     )
         else:
             st.info(f"📋 '{view_target_unit}' 단원에 현재 저장된 오답 번호가 없습니다.")
+
+        st.markdown("---")
+
+        # ✅ [3] 신규 등록 및 수정 입력 섹션 (하단 배치)
+        st.markdown("##### ➕ 새로운 오답/질문 번호 등록 및 수정")
+        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=current_unit).strip().upper()
+        target_unit_code = entered_unit_code if entered_unit_code else current_unit
+
+        col_add, col_del = st.columns(2)
+        with col_add:
+            add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 15, 35, 37)", placeholder="예: 15, 35")
+        with col_del:
+            del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
+
+        st.markdown("---")
+        save_btn_tab3 = st.button("💾 오답 목록 저장하기", type="primary", key="save_t3", use_container_width=True)
 
         st.markdown("---")
         st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
