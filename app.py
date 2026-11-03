@@ -1,16 +1,15 @@
 import streamlit as st
 import sqlite3
-from datetime import datetime, date, timedelta
-import pytz
+from datetime import datetime, date, timedelta, timezone
 import calendar
 import re
 import pandas as pd
 import io
 
-# 한국 시간(KST) 기준 오늘 날짜 반환 함수
+# 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수 (외부 라이브러리 불필요)
 def get_korean_today():
     try:
-        kst = pytz.timezone('Asia/Seoul')
+        kst = timezone(timedelta(hours=9))
         return datetime.now(kst).date()
     except Exception:
         return date.today()
@@ -804,7 +803,7 @@ if url_student and url_student in student_list:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 📢 [요청 반영] 공지사항 위치를 환영 인사 바로 아래, 성취도 대시보드 위로 이동 및 크기 간소화
+    # 📢 공지사항 (성취도 대시보드 바로 위, 컴팩트한 아디언 형태)
     student_notices = get_notices_for_student(selected_student)
     if student_notices:
         with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -882,7 +881,6 @@ if url_student and url_student in student_list:
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
-            # 💡 [요청 반영] 한국 시간(KST) 오늘 날짜 적용
             today_obj = get_korean_today()
             today_str = str(today_obj)
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
