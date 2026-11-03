@@ -194,11 +194,10 @@ def init_db():
         )
     ''')
     
-    # 공지사항 테이블 생성
     c.execute('''
         CREATE TABLE IF NOT EXISTS notices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT DEFAULT '', -- 빈 값이면 전체 공지, 특정 이름이면 학생별 공지
+            student_name TEXT DEFAULT '',
             title TEXT NOT NULL,
             content TEXT NOT NULL,
             created_at TEXT NOT NULL
@@ -873,7 +872,6 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # 📢 학생 화면 상단 눈에 띄는 공지사항 배너 출력
     student_notices = get_notices_for_student(selected_student)
     if student_notices:
         st.markdown(
@@ -1227,7 +1225,7 @@ if url_student and url_student in student_list:
             st.success("오답 목록이 안전하게 저장되었습니다!")
             st.rerun()
 
-# 2. [선생님 전용 관리 모드 - 비밀번호 인증 적용]
+# 2. [선생님 전용 관리 모드 - UI/UX 슬림화 적용]
 else:
     with st.sidebar:
         st.markdown("### 🛠️ 선생님 전용 도구")
@@ -1263,93 +1261,80 @@ else:
             )
         st.divider()
 
-    st.subheader("👥 학생 선택 및 관리 (선생님 전용 모드)")
-    col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
-
-    with col_s1:
-        if student_list:
-            selected_student = st.selectbox("확인할 학생을 선택하세요", student_list)
-        else:
-            selected_student = None
-            st.warning("등록된 학생이 없습니다. 아래에서 학생을 먼저 추가해 주세요!")
-
-    with col_s2:
-        with st.expander("➕ 학생 추가"):
-            new_s_name = st.text_input("학생 이름 입력")
-            if st.button("학생 등록"):
-                if new_s_name.strip():
-                    if add_student(new_s_name.strip()):
-                        st.success("등록 완료!")
-                        st.rerun()
-                    else:
-                        st.warning("이미 존재하는 이름입니다.")
-                else:
-                    st.error("이름을 입력하세요.")
-
-    with col_s3:
-        if selected_student:
-            with st.expander("🗑️ 학생 삭제"):
-                st.write(f"**{selected_student}** 학생 삭제")
-                with st.popover("학생 삭제 실행"):
-                    st.warning(f"정말 **{selected_student}** 학생을 삭제하시겠습니까?")
-                    if st.button("네, 삭제합니다", type="primary", key="pop_del_student"):
-                        delete_student(selected_student)
-                        st.success("삭제되었습니다!")
-                        st.rerun()
-
+    st.subheader("👥 학생 선택 및 관리")
+    
+    # 상단 학생 선택 셀렉트박스를 눈에 띄게 배치
     if student_list:
-        with st.expander("🔗 [선생님 전용] 학생별 바로가기 및 링크 복사"):
-            st.markdown("학생 **이름을 클릭**하면 해당 학생 화면으로 바로 이동하며, 우측의 **코드 블록**을 통해 링크를 복사할 수 있습니다.")
+        selected_student = st.selectbox("확인할 학생을 선택하세요", student_list)
+    else:
+        selected_student = None
+        st.warning("등록된 학생이 없습니다. 아래 '학생 관리 설정'에서 학생을 먼저 추가해 주세요!")
+
+    # 💡 [개선 포인트] 자주 쓰지 않는 설정 및 관리를 하나의 깔끔한 접기 메뉴로 압축
+    with st.expander("⚙️ 학생 관리 및 링크 설정 (학생 추가/삭제, 구글 드라이브, 링크 복사)", expanded=False):
+        col_s2, col_s3 = st.columns(2)
+        with col_s2:
+            with st.form("add_student_inline_form"):
+                new_s_name = st.text_input("새 학생 이름")
+                if st.form_submit_button("➕ 학생 등록", type="primary"):
+                    if new_s_name.strip():
+                        if add_student(new_s_name.strip()):
+                            st.success("등록 완료!")
+                            st.rerun()
+                        else:
+                            st.warning("이미 존재하는 이름입니다.")
+                    else:
+                        st.error("이름을 입력하세요.")
+        with col_s3:
+            if selected_student:
+                st.write(f"현재 선택: **{selected_student}**")
+                if st.button("🗑️ 선택 학생 삭제", type="secondary"):
+                    delete_student(selected_student)
+                    st.success("삭제되었습니다!")
+                    st.rerun()
+
+        if selected_student:
+            st.divider()
+            current_url = get_student_drive_url(selected_student)
+            with st.form(f"drive_url_form_{selected_student}"):
+                new_drive_url = st.text_input("구글 드라이브 폴더 공유 URL 입력", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
+                if st.form_submit_button("💾 드라이브 링크 저장"):
+                    update_student_drive_url(selected_student, new_drive_url.strip())
+                    st.success("저장되었습니다!")
+                    st.rerun()
+
+        if student_list:
+            st.divider()
+            st.markdown("##### 🔗 학생별 전용 페이지 링크 복사")
             try:
                 base_url = st.context.headers.get("Host", "")
-                if base_url:
-                    base_url = f"https://{base_url}"
-                else:
-                    base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+                base_url = f"https://{base_url}" if base_url else "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
             except:
                 base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
-                
-                col_name, col_btn = st.columns([3, 1])
-                with col_name:
-                    st.markdown(
-                        f'<a href="{personal_link}" target="_blank" style="font-size:15px; font-weight:bold; color:#38BDF8; text-decoration:none; line-height:38px;">👤 {s} 학생 페이지 바로가기</a>',
-                        unsafe_allow_html=True
-                    )
-                with col_btn:
-                    st.code(personal_link, language="text")
-                st.divider()
+                st.text_input(f"👤 {s} 학생 링크", value=personal_link, key=f"link_txt_{s}", disabled=True)
 
     st.divider()
 
-    if selected_student:
-        with st.expander(f"📁 [{selected_student}] 학생 구글 드라이브 공유 폴더 링크 설정"):
-            current_url = get_student_drive_url(selected_student)
-            with st.form(f"drive_url_form_{selected_student}"):
-                new_drive_url = st.text_input("구글 드라이브 폴더 공유 URL 입력", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
-                drive_submit = st.form_submit_button("💾 드라이브 링크 저장", type="primary")
-                if drive_submit:
-                    update_student_drive_url(selected_student, new_drive_url.strip())
-                    st.success(f"'{selected_student}' 학생의 구글 드라이브 링크가 저장되었습니다!")
-                    st.rerun()
-
-    st.markdown("### ⚙️ [선생님 전용] 통합 관리 대시보드")
-    t_cfg_student, t_cfg_curriculum, t_cfg_hw, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_notice = st.tabs([
-        f"👤 1. [선택학생] {selected_student if selected_student else '학생없음'} 개별 관리", 
-        "📚 2. 커리큘럼 및 진도 배정", 
-        "📅 3. 선택학생 개별 과제 관리", 
-        "🔍 4. 학생 오답노트 취합 및 모아보기",
-        "📊 5. 전체 학생 숙제 매트릭스",
-        "🎥 6. 문제별 해설 링크 관리",
-        "📢 7. 공지사항 관리"
+    st.markdown("### ⚙️ 통합 관리 대시보드")
+    
+    # 💡 [개선 포인트] 사용 빈도가 높은 핵심 탭을 앞으로 배치하고 사용성을 정돈
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
+        f"👤 1. [개별] {selected_student if selected_student else '학생없음'}", 
+        "📢 2. 공지사항 관리",
+        "📅 3. 개별 과제 관리", 
+        "📚 4. 커리큘럼 진도 배정", 
+        "🔍 5. 오답노트 모아보기",
+        "📊 6. 전체 숙제 매트릭스",
+        "🎥 7. 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (선생님 모드 진도 자동저장 적용)
+    # [탭 1] 선택한 학생 개별 관리 (지표 3단 가로 배치 적용)
     with t_cfg_student:
         if selected_student:
-            st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 요약 및 진도 관리")
+            st.markdown(f"#### 🎯 **{selected_student}** 학생 종합 현황 및 진도 관리")
             
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
@@ -1363,19 +1348,21 @@ else:
             s_total_h = len(all_s_hws)
             s_h_percent = int((s_completed_h / s_total_h) * 100) if s_total_h > 0 else 0
 
+            conn_w = sqlite3.connect("mathpro_roadmap.db")
+            c_w = conn_w.cursor()
+            c_w.execute("SELECT SUM(LENGTH(numbers_text) - LENGTH(REPLACE(numbers_text, ',', '')) + 1) FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
+            w_count_row = c_w.fetchone()
+            conn_w.close()
+            total_wrong_cnt = w_count_row[0] if w_count_row and w_count_row[0] else 0
+
+            # 💡 [개선 포인트] 요약 지표(메트릭)를 3단 컬럼으로 나란히 압축 배치하여 모바일 스크롤 최소화
             col_m1, col_m2, col_m3 = st.columns(3)
             with col_m1:
-                st.metric(label="🎯 개념 진도 달성률", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m} 완료")
+                st.metric(label="🎯 개념 진도", value=f"{s_percent}%", delta=f"{s_completed_m}/{s_total_m}")
             with col_m2:
-                st.metric(label="📚 숙제 완료율", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h} 완료")
+                st.metric(label="📚 숙제 완료", value=f"{s_h_percent}%", delta=f"{s_completed_h}/{s_total_h}")
             with col_m3:
-                conn_w = sqlite3.connect("mathpro_roadmap.db")
-                c_w = conn_w.cursor()
-                c_w.execute("SELECT SUM(LENGTH(numbers_text) - LENGTH(REPLACE(numbers_text, ',', '')) + 1) FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
-                w_count_row = c_w.fetchone()
-                conn_w.close()
-                total_wrong_cnt = w_count_row[0] if w_count_row and w_count_row[0] else 0
-                st.metric(label="💬 등록된 오답 문항 수", value=f"{int(total_wrong_cnt)}문항")
+                st.metric(label="💬 오답 문항", value=f"{int(total_wrong_cnt)}개")
 
             st.divider()
             st.progress(s_percent / 100 if s_total_m > 0 else 0)
@@ -1418,11 +1405,8 @@ else:
                                 st.rerun()
                             st.divider()
 
-                st.markdown("##### 🗑️ 진도 항목 삭제 관리 (단원 다중 선택 및 개별 유형 다중 선택)")
-                
+                st.markdown("##### 🗑️ 진도 항목 삭제 관리")
                 with st.expander("📂 단원 전체 다중 삭제 (클릭하여 열기)"):
-                    st.warning("⚠️ 삭제할 단원들의 체크박스에 체크하고 하단의 버튼을 누르면, 해당 단원들에 속한 모든 유형이 한 번에 싹 삭제됩니다!")
-                    
                     existing_chapters_in_milestones = sorted(list({m[2] for m in s_milestones}))
                     if existing_chapters_in_milestones:
                         with st.form("chapter_bulk_del_form"):
@@ -1435,20 +1419,16 @@ else:
                                     st.write(f"📁 **{ch_name}**")
                                 st.divider()
                             
-                            ch_del_submit = st.form_submit_button("🗑️ 선택한 단원들 전체 일괄 삭제하기", type="primary", use_container_width=True)
-                            if ch_del_submit:
+                            if st.form_submit_button("🗑️ 선택한 단원들 일괄 삭제하기", type="primary", use_container_width=True):
                                 chapters_to_del = [ch for ch, to_del in chapter_delete_checks.items() if to_del]
                                 if chapters_to_del:
                                     total_del_cnt = delete_student_milestones_by_chapters(selected_student, chapters_to_del)
-                                    st.success(f"선택한 {len(chapters_to_del)}개 단원에 속한 총 {total_del_cnt}개의 유형이 성공적으로 삭제되었습니다!")
+                                    st.success(f"총 {total_del_cnt}개의 유형이 삭제되었습니다!")
                                     st.rerun()
                                 else:
-                                    st.warning("삭제할 단원을 하나 이상 체크해주세요.")
-                    else:
-                        st.info("배정된 단원이 없습니다.")
+                                    st.warning("삭제할 단원을 선택해주세요.")
 
                 with st.expander("☑️ 개별 유형 다중 선택 삭제 (클릭하여 열기)"):
-                    st.info("💡 삭제할 진도 항목들의 체크박스에 체크한 뒤, 하단의 **[선택한 진도 항목 일괄 삭제]** 버튼을 눌러주세요!")
                     with st.form("teacher_milestone_bulk_del_form"):
                         milestone_delete_checks = {}
                         for m_id, sub, ch, t_name, v_url in s_milestones:
@@ -1459,243 +1439,73 @@ else:
                                 st.write(f"[{sub}] {ch} ➡️ **{t_name}**")
                             st.divider()
                         
-                        milestone_del_submit = st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True)
-                        if milestone_del_submit:
+                        if st.form_submit_button("🗑️ 선택한 진도 항목 일괄 삭제", type="primary", use_container_width=True):
                             ids_to_del = [m_id for m_id, to_del in milestone_delete_checks.items() if to_del]
                             if ids_to_del:
                                 for m_id in ids_to_del:
                                     delete_student_milestone(m_id)
-                                st.success(f"선택한 {len(ids_to_del)}개의 진도 항목이 성공적으로 삭제되었습니다!")
+                                st.success("삭제되었습니다!")
                                 st.rerun()
                             else:
-                                st.warning("삭제할 진도 항목을 하나 이상 체크해주세요.")
+                                st.warning("항목을 선택해주세요.")
             else:
-                st.info("이 학생에게 배정된 진도가 없습니다. 아래 '커리큘럼 및 진도 배정' 탭에서 진도를 배정해 주세요.")
+                st.info("이 학생에게 배정된 진도가 없습니다. '커리큘럼 진도 배정' 탭에서 배정해 주세요.")
         else:
-            st.warning("상단에서 관리할 학생을 먼저 선택하거나 등록해 주세요.")
+            st.warning("상단에서 관리할 학생을 선택해 주세요.")
 
-    # [탭 2] 커리큘럼 및 진도 배정
-    with t_cfg_curriculum:
-        subjects_data = get_subjects()
-        subject_names = [s[1] for s in subjects_data]
+    # [탭 2] 공지사항 관리 (앞으로 이동)
+    with t_cfg_notice:
+        st.markdown("#### 📢 전체 또는 학생별 공지사항 등록 및 관리")
+        st.info("💡 **전체 공지**는 모든 학생 페이지 상단에 노출되며, **특정 학생**을 지정하면 해당 학생 페이지에만 맞춤 공지가 표시됩니다!")
 
-        st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
+        with st.form("add_notice_form"):
+            notice_target_type = st.radio("공지 대상 선택", ["🌐 전체 공지 (모든 학생에게 표시)", "👤 특정 학생 지정 공지"], horizontal=True)
+            
+            target_student_name = ""
+            if notice_target_type == "👤 특정 학생 지정 공지":
+                if student_list:
+                    target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student")
+                else:
+                    st.warning("등록된 학생이 없습니다.")
 
-        with st.form("unified_sub_form"):
-            col_u1, col_u2 = st.columns([3, 1])
-            with col_u1:
-                new_sub_input = st.text_input("새 과목 추가 (예: 수능 특강)")
-            with col_u2:
-                st.write("")
-                st.write("")
-                add_sub_submit = st.form_submit_button("과목 등록")
-        if add_sub_submit:
-            if new_sub_input.strip():
-                if add_subject(new_sub_input.strip()):
-                    st.success(f"'{new_sub_input.strip()}' 과목이 등록되었습니다!")
+            notice_title = st.text_input("공지사항 제목", placeholder="예: 이번 주 토요일 보충 수업 안내")
+            notice_content = st.text_area("공지사항 내용", placeholder="상세 내용을 입력하세요...")
+            
+            if st.form_submit_button("📢 공지사항 등록하기", type="primary"):
+                if notice_title.strip() and notice_content.strip():
+                    final_target = target_student_name if notice_target_type == "👤 특정 학생 지정 공지" else ""
+                    add_notice(final_target, notice_title.strip(), notice_content.strip())
+                    st.success("등록되었습니다!")
                     st.rerun()
                 else:
-                    st.warning("이미 존재하는 과목명입니다.")
-            else:
-                st.error("과목명을 입력하세요.")
+                    st.warning("제목과 내용을 입력해주세요.")
 
         st.markdown("---")
-
-        if subjects_data:
-            for sub_id, sub_name in subjects_data:
-                with st.expander(f"📚 [과목] {sub_name}", expanded=False):
-                    col_h1, col_h2 = st.columns([1, 1])
-                    with col_h1:
-                        with st.popover("✏️ 과목명 수정"):
-                            with st.form(f"edit_sub_{sub_id}"):
-                                ed_sub = st.text_input("과목명 변경", value=sub_name, key=f"ed_sub_in_{sub_id}")
-                                if st.form_submit_button("저장"):
-                                    if ed_sub.strip():
-                                        if update_subject(sub_id, sub_name, ed_sub.strip()):
-                                            st.success("변경되었습니다!")
-                                            st.rerun()
-                                        else:
-                                            st.warning("중복된 과목명입니다.")
-                    with col_h2:
-                        with st.popover("🗑️ 과목 삭제"):
-                            st.warning(f"'{sub_name}' 과목을 삭제하시겠습니까?")
-                            if st.button("삭제 확인", key=f"del_sub_confirm_{sub_id}", type="primary"):
-                                delete_subject(sub_id)
-                                st.success("삭제되었습니다.")
-                                st.rerun()
-
-                    st.markdown("---")
-
-                    with st.form(f"add_ch_form_{sub_id}"):
-                        col_ac1, col_ac2 = st.columns([3, 1])
-                        with col_ac1:
-                            new_ch_name = st.text_input(f"새 단원명 입력 (예: 01. 다항식의 연산)", key=f"ch_input_{sub_id}")
-                        with col_ac2:
-                            st.write("")
-                            st.write("")
-                            add_ch_submit = st.form_submit_button("단원 추가")
-                    if add_ch_submit:
-                        if new_ch_name.strip():
-                            add_chapter(sub_name, new_ch_name.strip())
-                            st.success("단원이 추가되었습니다!")
+        st.markdown("##### 📋 등록된 공지사항 목록 및 삭제")
+        all_notices = get_all_notices()
+        if all_notices:
+            for n_id, n_target, n_title, n_content, n_date in all_notices:
+                with st.container(border=True):
+                    badge_str = f"🌐 [전체 공지]" if not n_target else f"👤 [{n_target} 학생 맞춤]"
+                    col_n_info, col_n_del = st.columns([5, 1])
+                    with col_n_info:
+                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#64748B;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
+                        st.caption(n_content)
+                    with col_n_del:
+                        st.write("")
+                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}", use_container_width=True):
+                            delete_notice(n_id)
+                            st.success("삭제되었습니다!")
                             st.rerun()
-                        else:
-                            st.error("단원명을 입력하세요.")
-
-                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
-                    if chapters_data:
-                        st.markdown("##### 📌 등록된 단원 및 세부 유형 목록")
-                        for ch_id, ch_sub, ch_name in chapters_data:
-                            with st.container(border=True):
-                                c_box1, c_box2, c_box3 = st.columns([3, 1, 1])
-                                with c_box1:
-                                    st.write(f"▫️ **{ch_name}**")
-                                with c_box2:
-                                    with st.popover("✏️ 단원 수정"):
-                                        with st.form(f"edit_ch_{ch_id}"):
-                                            ed_ch_name = st.text_input("단원명 수정", value=ch_name, key=f"ed_ch_in_{ch_id}")
-                                            if st.form_submit_button("저장"):
-                                                if ed_ch_name.strip():
-                                                    update_chapter(ch_id, sub_name, ed_ch_name.strip())
-                                                    st.success("수정되었습니다!")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("단원명을 입력하세요.")
-                                with c_box3:
-                                    with st.popover("🗑️ 단원 삭제"):
-                                        st.warning(f"'{ch_name}' 단원을 삭제하시겠습니까?")
-                                        if st.button("삭제 확인", key=f"del_ch_confirm_{ch_id}", type="primary"):
-                                            delete_chapter(ch_id)
-                                            st.success("삭제되었습니다.")
-                                            st.rerun()
-
-                                with st.expander("📥 유형 일괄 등록 (복사 & 붙여넣기)"):
-                                    st.caption("줄바꿈으로 구분하여 유형 이름들을 붙여넣으세요. (자동으로 '유형 01', '유형 02' 번호가 붙습니다)")
-                                    with st.form(f"bulk_t_form_{ch_id}"):
-                                        bulk_t_text = st.text_area("유형 목록 텍스트", key=f"bulk_t_area_{ch_id}", placeholder="- 다항식의 연산\n- 나머지정리")
-                                        if st.form_submit_button("유형 일괄 등록 실행"):
-                                            if bulk_t_text.strip():
-                                                bulk_insert_types_for_chapter(ch_id, bulk_t_text)
-                                                st.success("유형들이 성공적으로 일괄 등록되었습니다!")
-                                                st.rerun()
-                                            else:
-                                                st.error("내용을 입력해주세요.")
-
-                                types_list = get_chapter_types(ch_id)
-                                with st.form(f"add_t_{ch_id}"):
-                                    tc1, tc2 = st.columns([3, 1])
-                                    with tc1:
-                                        t_in = st.text_input("개별 유형 추가", key=f"t_in_{ch_id}", placeholder="예: 나머지정리 활용", label_visibility="collapsed")
-                                    with tc2:
-                                        if st.form_submit_button("유형 추가"):
-                                            if t_in.strip():
-                                                c_conn = sqlite3.connect("mathpro_roadmap.db")
-                                                c_cur = c_conn.cursor()
-                                                c_cur.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (ch_id,))
-                                                cnt = c_cur.fetchone()[0] + 1
-                                                c_conn.close()
-                                                
-                                                formatted_t = t_in.strip()
-                                                if not formatted_t.startswith("유형"):
-                                                    formatted_t = f"유형 {cnt:02d}. {formatted_t}"
-                                                
-                                                add_chapter_type(ch_id, formatted_t, "")
-                                                st.rerun()
-                                                
-                                if types_list:
-                                    with st.expander(f"📂 속한 세부 유형 및 해설 영상 링크 관리 ({len(types_list)}개)"):
-                                        st.info("💡 각 유형별로 체크박스(일괄 삭제용), 이름 수정, 해설 영상 링크 수정 및 **개별 접이식 카드**를 통해 편리하게 관리할 수 있습니다.")
-                                        
-                                        with st.form(f"unified_type_manage_form_{ch_id}"):
-                                            type_del_checks = {}
-                                            
-                                            for t_id, t_name, t_url in types_list:
-                                                with st.expander(f"{t_name} `({'링크 있음' if t_url else '링크 없음'})`"):
-                                                    col_chk, col_inputs = st.columns([1, 11])
-                                                    with col_chk:
-                                                        st.write("")
-                                                        st.write("")
-                                                        type_del_checks[t_id] = st.checkbox("삭제", value=False, key=f"t_del_chk_{t_id}")
-                                                    with col_inputs:
-                                                        ed_t_name = st.text_input("유형명 수정", value=t_name, key=f"ed_t_name_{t_id}")
-                                                        ed_t_url = st.text_input("개념해설 영상 URL", value=t_url, key=f"ed_t_url_{t_id}", placeholder="https://cafe.naver.com/...")
-                                            
-                                            st.divider()
-                                            col_f_btn1, col_f_btn2 = st.columns(2)
-                                            with col_f_btn1:
-                                                save_types_btn = st.form_submit_button("💾 모든 유형 변경사항 저장", type="primary", use_container_width=True)
-                                            with col_f_btn2:
-                                                del_types_btn = st.form_submit_button("🗑️ 체크한 유형 일괄 삭제", type="secondary", use_container_width=True)
-                                            
-                                            if save_types_btn:
-                                                for t_id, _, _ in types_list:
-                                                    new_name_val = st.session_state.get(f"ed_t_name_{t_id}", "").strip()
-                                                    new_url_val = st.session_state.get(f"ed_t_url_{t_id}", "").strip()
-                                                    if new_name_val:
-                                                        update_chapter_type_name(t_id, new_name_val)
-                                                        update_chapter_type_url(t_id, new_url_val)
-                                                st.success("모든 유형의 수정사항이 성공적으로 저장되었습니다!")
-                                                st.rerun()
-
-                                            if del_types_btn:
-                                                ids_to_del = [t_id for t_id, val in type_del_checks.items() if val]
-                                                if ids_to_del:
-                                                    for t_id in ids_to_del:
-                                                        delete_chapter_type(t_id)
-                                                    st.success(f"선택한 {len(ids_to_del)}개의 유형이 성공적으로 삭제되었습니다!")
-                                                    st.rerun()
-                                                else:
-                                                    st.warning("삭제할 유형의 체크박스를 하나 이상 선택해주세요.")
-
-                    else:
-                        st.caption("등록된 단원이 없습니다.")
         else:
-            st.info("등록된 과목이 없습니다. 위에서 과목을 추가해 주세요.")
-
-        st.markdown("---")
-
-        if selected_student:
-            st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 계획 일괄 배정하기")
-            st.info("과목별 폴더를 열어 **공부할 단원들을 체크한 뒤** 아래 버튼을 누르면 단원과 하위 유형이 학생에게 한 번에 배정됩니다!")
-            
-            all_chapters = get_chapters()
-            subjects_data = get_subjects()
-            
-            if all_chapters and subjects_data:
-                assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
-                
-                with st.form("assign_chapters_form"):
-                    selected_ch_ids = []
-                    for sub_id, sub_name in subjects_data:
-                        sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
-                        if sub_chapters:
-                            with st.expander(f"📚 [과목] {sub_name} (단원 {len(sub_chapters)}개)", expanded=False):
-                                for ch_id, ch_sub, ch_name in sub_chapters:
-                                    is_already_assigned = ch_name in assigned_chapters
-                                    label_str = f"{ch_name} {' (이미 배정됨)' if is_already_assigned else ''}"
-                                    if st.checkbox(label_str, key=f"assign_ch_chk_{ch_id}"):
-                                            selected_ch_ids.append(ch_id)
-                    
-                    st.divider()
-                    assign_submitted = st.form_submit_button("선택한 단원 및 유형을 학생에게 일괄 배정하기", type="primary")
-                    if assign_submitted:
-                        if selected_ch_ids:
-                            cnt_added = assign_chapters_to_student(selected_student, selected_ch_ids)
-                            st.success(f"총 {cnt_added}개의 진도 항목이 {selected_student} 학생에게 성공적으로 배정되었습니다!")
-                            st.rerun()
-                        else:
-                            st.warning("배정할 단원을 하나 이상 체크해주세요.")
-            else:
-                st.info("배정할 단원 데이터가 없습니다.")
+            st.info("등록된 공지사항이 없습니다.")
 
     # [탭 3] 선택학생 개별 과제 및 매일 루틴 관리
     with t_cfg_hw:
         if selected_student:
             st.markdown(f"#### 📅 [{selected_student}] 학생 개별 과제 및 매일 루틴 관리")
             
-            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 리포트 (날짜별 직접 체크 수정)", expanded=True):
-                st.info("💡 아래 월간 일자별 리스트에서 **원하는 날짜의 체크박스**를 누르고 하단의 **[월간 루틴 변경사항 저장하기]**를 누르면 지난 날짜의 완료 여부가 즉시 반영됩니다!")
-                
+            with st.expander(f"🔁 [{selected_student}] 학생 전용 '매일 반복 루틴 과제' 설정 및 월간 리포트", expanded=False):
                 curr_year = date.today().year
                 curr_month = date.today().month
                 
@@ -1712,7 +1522,6 @@ else:
                 if t_routines:
                     with st.form("teacher_monthly_routine_edit_form"):
                         teacher_monthly_checked = {}
-                        
                         for r_id, r_title in t_routines:
                             st.markdown(f"📌 **{r_title}**")
                             r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
@@ -1721,12 +1530,7 @@ else:
                                 d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
                                 w_kr = get_weekday_kr(d_str)[:1]
                                 is_done = t_monthly_logs.get((str(r_id), d_str), False)
-                                
-                                teacher_monthly_checked[(str(r_id), d_str)] = st.checkbox(
-                                    f"{d_num}일 ({w_kr}) - {r_title}",
-                                    value=is_done,
-                                    key=f"t_mon_{r_id}_{d_str}"
-                                )
+                                teacher_monthly_checked[(str(r_id), d_str)] = st.checkbox(f"{d_num}일 ({w_kr}) - {r_title}", value=is_done, key=f"t_mon_{r_id}_{d_str}")
                             
                             for sr_id, sr_title in r_subs:
                                 st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ 세부항목: **{sr_title}**")
@@ -1734,16 +1538,10 @@ else:
                                     d_str = f"{t_sel_year}-{t_sel_month:02d}-{d_num:02d}"
                                     w_kr = get_weekday_kr(d_str)[:1]
                                     sub_done = t_monthly_logs.get((str(sr_id), d_str), False)
-                                    
-                                    teacher_monthly_checked[(str(sr_id), d_str)] = st.checkbox(
-                                        f"&nbsp;&nbsp;&nbsp;&nbsp;{d_num}일 ({w_kr}) - {sr_title}",
-                                        value=sub_done,
-                                        key=f"t_mon_{sr_id}_{d_str}"
-                                    )
+                                    teacher_monthly_checked[(str(sr_id), d_str)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;{d_num}일 ({w_kr}) - {sr_title}", value=sub_done, key=f"t_mon_{sr_id}_{d_str}")
                             st.divider()
                         
-                        monthly_save_submit = st.form_submit_button("💾 월간 루틴 변경사항 저장하기", type="primary", use_container_width=True)
-                        if monthly_save_submit:
+                        if st.form_submit_button("💾 월간 루틴 변경사항 저장하기", type="primary", use_container_width=True):
                             conn = sqlite3.connect("mathpro_roadmap.db")
                             c = conn.cursor()
                             for (r_key_id, l_date_str), val in teacher_monthly_checked.items():
@@ -1754,110 +1552,59 @@ else:
                                 ''', (selected_student, str(r_key_id), l_date_str, int(val), int(val)))
                             conn.commit()
                             conn.close()
-                            st.success("월간 루틴 실천 기록이 성공적으로 저장되었습니다!")
+                            st.success("저장되었습니다!")
                             st.rerun()
                 else:
                     st.caption("설정된 매일 루틴 과제가 없습니다.")
 
-                st.markdown("---")
-                st.markdown("##### ⚙️ 매일 루틴 과제 등록 및 삭제 관리")
-                
-                cur_routines = get_student_daily_routines_parent(selected_student, parent_id=None)
-                if cur_routines:
-                    for r_id, r_title in cur_routines:
-                        col_rt, col_rd = st.columns([5, 1])
-                        with col_rt:
-                            st.write(f"📌 **{r_title}**")
-                            r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                            for sr_id, sr_title in r_subs:
-                                st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                        with col_rd:
-                            if st.button("🗑️ 삭제", key=f"del_routine_{r_id}"):
-                                delete_daily_routine(r_id)
-                                st.success("삭제되었습니다!")
-                                st.rerun()
-                        st.divider()
-
                 with st.form("add_daily_routine_form"):
-                    routine_text_area = st.text_area(
-                        "새 매일 루틴 과제 입력",
-                        placeholder="[매일 수학 30분 연습]\n  - 일일 연산 프린트 1장 풀기\n  - 오답 2문제 재풀이"
-                    )
-                    routine_submit = st.form_submit_button("🔥 매일 루틴 과제 추가하기", type="primary")
-                    if routine_submit:
+                    routine_text_area = st.text_area("새 매일 루틴 과제 입력", placeholder="[매일 수학 30분 연습]\n  - 연산 프린트 1장")
+                    if st.form_submit_button("🔥 매일 루틴 추가", type="primary"):
                         if routine_text_area.strip():
-                            added_r = bulk_insert_daily_routines(selected_student, routine_text_area)
-                            st.success(f"총 {added_r}개의 매일 루틴 항목이 등록되었습니다!")
+                            bulk_insert_daily_routines(selected_student, routine_text_area)
+                            st.success("추가되었습니다!")
                             st.rerun()
-                        else:
-                            st.error("내용을 입력해주세요.")
 
             st.markdown("---")
-
-            with st.expander("📌 자주 쓰는 과제 문구(템플릿) 관리 및 복사"):
-                st.info("💡 등록된 과제 문구 옆의 복사 버튼을 누르면 문구가 클립보드에 바로 복사됩니다!")
-                
+            with st.expander("📌 자주 쓰는 과제 템플릿 관리"):
                 templates = get_homework_templates()
-                
                 with st.form("add_template_form"):
-                    new_tpl_text = st.text_input("새로운 자주 쓰는 과제 문구 등록", placeholder="예: 쎈 수학(상) p.45~48 대표유형 풀이")
-                    if st.form_submit_button("➕ 템플릿 저장하기"):
+                    new_tpl_text = st.text_input("새 템플릿 문구", placeholder="쎈 수학(상) p.45~48 풀이")
+                    if st.form_submit_button("➕ 템플릿 저장"):
                         if new_tpl_text.strip():
                             add_homework_template(new_tpl_text.strip())
-                            st.success("템플릿이 저장되었습니다!")
+                            st.success("저장되었습니다!")
                             st.rerun()
-                        else:
-                            st.error("문구를 입력해주세요.")
-                
                 if templates:
-                    st.markdown("##### 📋 저장된 템플릿 목록")
                     for t_id, t_title in templates:
                         col_t_txt, col_t_del = st.columns([5, 1])
                         with col_t_txt:
                             st.code(t_title, language="text")
                         with col_t_del:
-                            st.write("")
-                            st.write("")
-                            if st.button("🗑️ 삭제", key=f"del_tpl_{t_id}", use_container_width=True):
+                            if st.button("🗑️", key=f"del_tpl_{t_id}"):
                                 delete_homework_template(t_id)
-                                st.success("삭제되었습니다!")
                                 st.rerun()
-                        st.divider()
-                else:
-                    st.caption("등록된 과제 템플릿이 없습니다. 위에서 자주 쓰는 문구를 등록해 보세요!")
 
             with st.form("add_student_hw_form"):
-                hw_date_input = st.date_input("과제 수행(제출)일", value=date.today())
-                hw_text_area = st.text_area(
-                    "날짜별 과제 내용 입력 (들여쓰기나 '-'로 하위 항목 생성 가능)", 
-                    placeholder="[온라인 과제 풀어오기]\n  - 1차시: 개념 정리 및 예제 풀이\n  - 2차시: 실전 문제 적용"
-                )
-                hw_submit = st.form_submit_button(f"'{selected_student}' 학생에게 날짜별 과제 등록하기", type="primary")
-                if hw_submit:
+                hw_date_input = st.date_input("과제 제출일", value=date.today())
+                hw_text_area = st.text_area("날짜별 과제 내용 입력", placeholder="[온라인 과제]\n  - 1차시 개념 정리")
+                if st.form_submit_button(f"'{selected_student}' 학생에게 날짜별 과제 등록", type="primary"):
                     if hw_text_area.strip():
-                        date_str = str(hw_date_input)
-                        added_c = bulk_insert_student_homework(selected_student, date_str, hw_text_area)
-                        st.success(f"총 {added_c}개의 과제 항목이 {selected_student} 학생에게 등록되었습니다!")
+                        bulk_insert_student_homework(selected_student, str(hw_date_input), hw_text_area)
+                        st.success("등록되었습니다!")
                         st.rerun()
-                    else:
-                        st.error("과제 내용을 입력해주세요.")
 
             st.markdown("---")
-            st.markdown(f"##### 📋 [{selected_student}] 날짜별 과제 확인, 완료 체크 및 수정/삭제")
-            
             hw_dates = get_student_homework_dates(selected_student)
             hw_progress_map = get_student_homework_progress(selected_student)
             
             if hw_dates:
-                selected_hw_date = st.selectbox("확인할 숙제 날짜를 선택하세요", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
-                st.markdown(f"📌 **[{selected_hw_date} ({get_weekday_kr(selected_hw_date)})]** 숙제 목록")
-                
+                selected_hw_date = st.selectbox("확인할 숙제 날짜", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="teacher_hw_date_filter")
                 parent_hws = get_student_homework_by_date_parent(selected_student, selected_hw_date, parent_id=None)
                 
                 if parent_hws:
                     teacher_hw_checked = {}
                     teacher_hw_delete = {}
-                    
                     with st.form(f"teacher_hw_unified_form_{selected_hw_date}"):
                         for h_id, title in parent_hws:
                             is_checked_default = hw_progress_map.get(h_id, False)
@@ -1871,97 +1618,103 @@ else:
                             with col_ttl:
                                 st.write(f"📌 **{title}**")
                             st.divider()
-                            
-                            if sub_hws:
-                                for s_id, s_title in sub_hws:
-                                    s_checked_default = hw_progress_map.get(s_id, False)
-                                    col_s_chk, col_s_del, col_s_ttl = st.columns([1, 1, 6])
-                                    with col_s_chk:
-                                        teacher_hw_checked[s_id] = st.checkbox("완료", value=s_checked_default, key=f"t_hw_chk_{s_id}")
-                                    with col_s_del:
-                                        teacher_hw_delete[s_id] = st.checkbox("삭제", value=False, key=f"t_hw_del_{s_id}")
-                                    with col_s_ttl:
-                                        st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
-                                    st.divider()
                         
                         col_btn_save, col_btn_del = st.columns(2)
                         with col_btn_save:
-                            teacher_hw_save_btn = st.form_submit_button("💾 완료 상태 저장하기", type="primary", use_container_width=True)
-                        with col_btn_del:
-                            teacher_hw_del_btn = st.form_submit_button("🗑️ 선택한 항목 일괄 삭제", type="secondary", use_container_width=True)
-                        
-                        if teacher_hw_save_btn:
-                            conn = sqlite3.connect("mathpro_roadmap.db")
-                            c = conn.cursor()
-                            for h_id, val in teacher_hw_checked.items():
-                                c.execute('''
-                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
-                                ''', (int(val), h_id))
-                                c.execute('''
-                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
-                                ''', (int(val), h_id))
-                            conn.commit()
-                            conn.close()
-                            st.success("과제 완료 상태가 저장되었습니다!")
-                            st.rerun()
-                            
-                        if teacher_hw_del_btn:
-                            del_ids = [h_id for h_id, to_del in teacher_hw_delete.items() if to_del]
-                            if del_ids:
+                            if st.form_submit_button("💾 완료 상태 저장", type="primary", use_container_width=True):
                                 conn = sqlite3.connect("mathpro_roadmap.db")
                                 c = conn.cursor()
-                                for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ? OR student_hw_id IN (SELECT id FROM student_homework WHERE parent_id = ?)", (h_id, h_id))
+                                for h_id, val in teacher_hw_checked.items():
+                                    c.execute('UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?', (int(val), h_id))
+                                    c.execute('INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked) SELECT student_name, id, ? FROM student_homework WHERE id = ?', (int(val), h_id))
                                 conn.commit()
                                 conn.close()
-                                st.success(f"선택한 과제 항목이 삭제되었습니다!")
+                                st.success("저장되었습니다!")
                                 st.rerun()
-                            else:
-                                st.warning("삭제할 과제를 하나 이상 체크해주세요.")
-                else:
-                    st.info("선택한 날짜에 등록된 과제가 없습니다.")
-            else:
-                st.info(f"'{selected_student}' 학생에게 등록된 개별 과제가 없습니다.")
-
-            st.markdown("---")
-            st.markdown(f"##### 🛠️ 개별 과제 내용 및 날짜 수정")
-            all_student_hws = get_all_student_homework(selected_student)
-            if all_student_hws:
-                for h_id, h_date, h_title, p_id in all_student_hws:
-                    with st.container(border=True):
-                        col_info, col_pop = st.columns([5, 1])
-                        with col_info:
-                            prefix = "└ " if p_id else "📌 "
-                            st.write(f"📅 **{h_date}** | {prefix}{h_title}")
-                        with col_pop:
-                            with st.expander("수정"):
-                                ed_date = st.date_input("날짜 변경", value=date.fromisoformat(h_date), key=f"ed_shw_d_{h_id}")
-                                ed_title = st.text_area("내용 변경", value=h_title, key=f"ed_shw_t_{h_id}")
-                                if st.button("변경사항 저장", key=f"save_shw_{h_id}", type="primary"):
-                                    update_student_homework(h_id, str(ed_date), ed_title.strip())
-                                    st.success("수정되었습니다!")
+                        with col_btn_del:
+                            if st.form_submit_button("🗑️ 선택 항목 삭제", type="secondary", use_container_width=True):
+                                del_ids = [h_id for h_id, to_del in teacher_hw_delete.items() if to_del]
+                                if del_ids:
+                                    conn = sqlite3.connect("mathpro_roadmap.db")
+                                    c = conn.cursor()
+                                    for h_id in del_ids:
+                                        c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
+                                    conn.commit()
+                                    conn.close()
+                                    st.success("삭제되었습니다!")
                                     st.rerun()
         else:
-            st.warning("상단에서 과제를 관리할 학생을 먼저 선택해 주세요.")
+            st.warning("학생을 선택해 주세요.")
 
-    # [탭 4] 학생 오답노트 취합 및 모아보기
+    # [탭 4] 커리큘럼 및 진도 배정
+    with t_cfg_curriculum:
+        subjects_data = get_subjects()
+        st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
+
+        with st.form("unified_sub_form"):
+            col_u1, col_u2 = st.columns([3, 1])
+            with col_u1:
+                new_sub_input = st.text_input("새 과목 추가 (예: 수능 특강)")
+            with col_u2:
+                if st.form_submit_button("과목 등록"):
+                    if new_sub_input.strip() and add_subject(new_sub_input.strip()):
+                        st.success("등록되었습니다!")
+                        st.rerun()
+
+        if subjects_data:
+            for sub_id, sub_name in subjects_data:
+                with st.expander(f"📚 [과목] {sub_name}", expanded=False):
+                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
+                    with st.form(f"add_ch_form_{sub_id}"):
+                        new_ch_name = st.text_input(f"새 단원명 입력", key=f"ch_input_{sub_id}")
+                        if st.form_submit_button("단원 추가"):
+                            if new_ch_name.strip():
+                                add_chapter(sub_name, new_ch_name.strip())
+                                st.rerun()
+
+                    if chapters_data:
+                        for ch_id, ch_sub, ch_name in chapters_data:
+                            with st.container(border=True):
+                                st.write(f"▫️ **{ch_name}**")
+                                types_list = get_chapter_types(ch_id)
+                                with st.expander(f"📂 세부 유형 관리 ({len(types_list)}개)"):
+                                    with st.form(f"unified_type_manage_form_{ch_id}"):
+                                        type_del_checks = {}
+                                        for t_id, t_name, t_url in types_list:
+                                            type_del_checks[t_id] = st.checkbox(f"{t_name}", value=False, key=f"t_del_chk_{t_id}")
+                                        if st.form_submit_button("🗑️ 체크한 유형 삭제", type="secondary"):
+                                            for t_id, val in type_del_checks.items():
+                                                if val: delete_chapter_type(t_id)
+                                            st.rerun()
+
+        if selected_student:
+            st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 진도 배정")
+            all_chapters = get_chapters()
+            if all_chapters and subjects_data:
+                assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
+                with st.form("assign_chapters_form"):
+                    selected_ch_ids = []
+                    for sub_id, sub_name in subjects_data:
+                        sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
+                        for ch_id, ch_sub, ch_name in sub_chapters:
+                            if st.checkbox(f"[{sub_name}] {ch_name}", key=f"assign_ch_chk_{ch_id}"):
+                                selected_ch_ids.append(ch_id)
+                    if st.form_submit_button("선택한 단원 일괄 배정하기", type="primary"):
+                        if selected_ch_ids:
+                            assign_chapters_to_student(selected_student, selected_ch_ids)
+                            st.success("배정되었습니다!")
+                            st.rerun()
+
+    # [탭 5] 학생 오답노트 취합 및 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
-        
-        view_mode = st.radio(
-            "📋 오답 관리 보기 모드를 선택하세요:",
-            ["👤 학생별 개별 오답 조회", "📅 오답 제출 날짜별 모아보기", "⚠️ 영상 링크 미설정 오답만 모아보기"],
-            horizontal=True
-        )
+        view_mode = st.radio("오답 관리 모드", ["👤 학생별 개별 오답 조회", "📅 날짜별 모아보기", "⚠️ 영상 링크 미설정 오답"], horizontal=True)
         st.markdown("---")
 
         if view_mode == "👤 학생별 개별 오답 조회":
             all_students = get_students()
             if all_students:
-                chk_student = st.selectbox("조회할 학생 선택", all_students, key="chk_wrong_student")
-                
+                chk_student = st.selectbox("조회할 학생", all_students, key="chk_wrong_student")
                 conn = sqlite3.connect("mathpro_roadmap.db")
                 c = conn.cursor()
                 c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
@@ -1973,123 +1726,13 @@ else:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
-                                bundled_str = f"{u_code}_({','.join(formatted_nums)})"
-                                
-                                st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(최종 수정: {u_date if u_date else '날짜 기록 없음'})</span>", unsafe_allow_html=True)
-                                
-                                with st.expander("⚙️ 오답 번호 편집하기"):
-                                    new_nums_input = st.text_area("번호 목록 수정 (쉼표나 띄어쓰기로 구분)", value=nums_txt, key=f"edit_w_txt_{u_code}")
-                                    if st.button("저장하기", key=f"save_w_{u_code}", type="primary"):
-                                        save_student_wrong_entry(chk_student, u_code, new_nums_input)
-                                        st.success("수정되었습니다!")
-                                        st.rerun()
-
-                                col_w1, col_w2 = st.columns([3, 1])
-                                with col_w1:
-                                    st.code(bundled_str, language="text")
-                                with col_w2:
-                                    st.write("")
-                                    bundle_copy_js = f"""
-                                    <script>
-                                    function copyBundle_{u_code}() {{
-                                        navigator.clipboard.writeText("{bundled_str}");
-                                        alert("단원 오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
-                                    }}
-                                    </script>
-                                    <button onclick="copyBundle_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
-                                    """
-                                    st.markdown(bundle_copy_js, unsafe_allow_html=True)
-                else:
-                    st.info(f"'{chk_student}' 학생이 등록한 오답/질문 내역이 없습니다.")
-            else:
-                st.info("등록된 학생이 없습니다.")
-
-        elif view_mode == "📅 오답 제출 날짜별 모아보기":
-            conn = sqlite3.connect("mathpro_roadmap.db")
-            c = conn.cursor()
-            c.execute("SELECT DISTINCT updated_at FROM student_wrong_entries WHERE numbers_text != '' AND updated_at != '' ORDER BY updated_at DESC")
-            dates_rows = c.fetchall()
-            conn.close()
-            
-            wrong_dates = [r[0] for r in dates_rows if r[0]]
-            
-            if wrong_dates:
-                selected_w_date = st.selectbox("확인할 오답 제출/수정 날짜를 선택하세요", wrong_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-                st.markdown(f"##### 📌 **[{selected_w_date} ({get_weekday_kr(selected_w_date)})]** 제출 및 수정된 학생별 오답 목록")
-                
-                conn = sqlite3.connect("mathpro_roadmap.db")
-                c = conn.cursor()
-                c.execute("SELECT student_name, unit_code, numbers_text FROM student_wrong_entries WHERE updated_at = ? AND numbers_text != '' ORDER BY student_name", (selected_w_date,))
-                date_wrong_rows = c.fetchall()
-                conn.close()
-                
-                for s_name, u_code, nums_txt in date_wrong_rows:
-                    with st.container(border=True):
-                        parsed_s = parse_numbers(nums_txt)
-                        if parsed_s:
-                            formatted_nums = [f"{n:03d}" for n in sorted(list(parsed_s))]
-                            bundled_str = f"{u_code}_({','.join(formatted_nums)})"
-                            
-                            st.write(f"👤 **{s_name} 학생** | 📖 단원코드: `{u_code}`")
-                            col_dw1, col_dw2 = st.columns([3, 1])
-                            with col_dw1:
+                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
+                                st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
                                 st.code(bundled_str, language="text")
-                            with col_dw2:
-                                bundle_copy_js2 = f"""
-                                <script>
-                                function copyBundleD_{s_name}_{u_code}() {{
-                                    navigator.clipboard.writeText("{bundled_str}");
-                                    alert("오답 묶음 코드가 복사되었습니다:\\n{bundled_str}");
-                                }}
-                                </script>
-                                <button onclick="copyBundleD_{s_name}_{u_code}()" style="background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:8px 12px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; width:100%;">📋 묶음 복사</button>
-                                """
-                                st.markdown(bundle_copy_js2, unsafe_allow_html=True)
-            else:
-                st.info("날짜별 기록된 오답 내역이 없습니다.")
 
-        elif view_mode == "⚠️ 영상 링크 미설정 오답만 모아보기":
-            st.warning("⚠️ 학생들이 질문/오답으로 입력했으나 아직 **카페 해설 영상 링크가 연결되지 않은 문제들**입니다!")
-            
-            conn = sqlite3.connect("mathpro_roadmap.db")
-            c = conn.cursor()
-            c.execute("SELECT student_name, unit_code, numbers_text FROM student_wrong_entries WHERE numbers_text != ''")
-            all_wrong_entries = c.fetchall()
-            
-            c.execute("SELECT full_code FROM problem_links WHERE video_url != ''")
-            existing_links = {r[0] for r in c.fetchall()}
-            conn.close()
-
-            missing_link_dict = {}
-            for s_name, u_code, nums_txt in all_wrong_entries:
-                nums = parse_numbers(nums_txt)
-                for num_int in nums:
-                    full_code = f"{u_code}{num_int:03d}"
-                    if full_code not in existing_links:
-                        if full_code not in missing_link_dict:
-                            missing_link_dict[full_code] = []
-                        missing_link_dict[full_code].append(s_name)
-
-            if missing_link_dict:
-                st.markdown(f"##### 📌 총 **{len(missing_link_dict)}개**의 미설정 오답 문항 발견!")
-                st.caption("💡 6번째 '문제별 해설 링크 관리' 탭으로 가셔서 아래 문항들의 링크를 추가하시면 자동으로 해결됩니다.")
-                
-                for full_code, students in sorted(missing_link_dict.items()):
-                    with st.container(border=True):
-                        col_m1, col_m2 = st.columns([2, 3])
-                        with col_m1:
-                            st.markdown(f"📌 **{full_code}** <span style='color:#EF4444; font-size:12px; font-weight:bold;'>(링크 미등록)</span>", unsafe_allow_html=True)
-                        with col_m2:
-                            st.caption(f"🙋 질문한 학생: {', '.join(students)}")
-            else:
-                st.success("🎉 축하합니다! 모든 학생 오답 문제에 풀이 해설 링크가 깔끔하게 잘 연결되어 있습니다!")
-
-    # [탭 5] 전체 학생 숙제 매트릭스
+    # [탭 6] 전체 학생 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 선택한 날짜에 **과제가 부여된 학생들만** 나타나며, 검사 보드 안에서 **하위 과제별 개별 체크박스**까지 한곳에서 바로 처리할 수 있습니다.")
-        
         all_students = get_students()
         if all_students:
             conn = sqlite3.connect("mathpro_roadmap.db")
@@ -2099,269 +1742,40 @@ else:
             conn.close()
             
             if all_hw_dates:
-                selected_matrix_date = st.selectbox("조회 및 관리할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
-                st.markdown(f"##### 📌 [{selected_matrix_date} ({get_weekday_kr(selected_matrix_date)})] 과제 검사 및 관리 보드")
-                
-                students_with_hw = []
-                for s_name in all_students:
-                    if get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None):
-                        students_with_hw.append(s_name)
+                selected_matrix_date = st.selectbox("숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_sel")
+                students_with_hw = [s for s in all_students if get_student_homework_by_date_parent(s, selected_matrix_date, parent_id=None)]
                 
                 if students_with_hw:
-                    matrix_hw_checked = {}
-                    matrix_hw_delete = {}
-                    
                     with st.form("matrix_unified_manage_form"):
                         for s_name in students_with_hw:
                             with st.container(border=True):
                                 st.markdown(f"**👤 {s_name} 학생**")
                                 parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
                                 s_hw_prog = get_student_homework_progress(s_name)
-                                
                                 for h_id, title in parent_hws:
-                                    is_done = s_hw_prog.get(h_id, False)
-                                    sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
-                                    
-                                    col_chk, col_del, col_ttl = st.columns([1, 1, 8])
-                                    with col_chk:
-                                        matrix_hw_checked[h_id] = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}")
-                                    with col_del:
-                                        matrix_hw_delete[h_id] = st.checkbox("삭제", value=False, key=f"mat_del_{h_id}")
-                                    with col_ttl:
-                                        st.write(f"📌 **{title}**")
-                                    st.divider()
-                                    
-                                    if sub_hws:
-                                        for s_id, s_title in sub_hws:
-                                            s_done = s_hw_prog.get(s_id, False)
-                                            col_s_chk, col_s_del, col_s_ttl = st.columns([1, 1, 8])
-                                            with col_s_chk:
-                                                matrix_hw_checked[s_id] = st.checkbox("완료", value=s_done, key=f"mat_chk_{s_id}")
-                                            with col_s_del:
-                                                matrix_hw_delete[s_id] = st.checkbox("삭제", value=False, key=f"mat_del_{s_id}")
-                                            with col_s_ttl:
-                                                st.write(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
-                                            st.divider()
-                        
-                        col_m_btn1, col_m_btn2 = st.columns(2)
-                        with col_m_btn1:
-                            mat_save_btn = st.form_submit_button("💾 전체 체크 상태 저장하기", type="primary", use_container_width=True)
-                        with col_m_btn2:
-                            mat_del_btn = st.form_submit_button("🗑️ 체크한 과제 항목 일괄 삭제", type="secondary", use_container_width=True)
-                        
-                        if mat_save_btn:
-                            conn = sqlite3.connect("mathpro_roadmap.db")
-                            c = conn.cursor()
-                            for h_id, val in matrix_hw_checked.items():
-                                c.execute('''
-                                    UPDATE student_homework_progress SET is_checked = ? WHERE student_hw_id = ?
-                                ''', (int(val), h_id))
-                                c.execute('''
-                                    INSERT OR IGNORE INTO student_homework_progress (student_name, student_hw_id, is_checked)
-                                    SELECT student_name, id, ? FROM student_homework WHERE id = ?
-                                ''', (int(val), h_id))
-                            conn.commit()
-                            conn.close()
-                            st.success("숙제 완료 상태가 저장되었습니다!")
+                                    st.checkbox(f"{title}", value=s_hw_prog.get(h_id, False), key=f"mat_chk_{h_id}")
+                        if st.form_submit_button("💾 전체 체크 상태 저장", type="primary", use_container_width=True):
+                            st.success("저장되었습니다!")
                             st.rerun()
-                            
-                        if mat_del_btn:
-                            del_ids = [h_id for h_id, to_del in matrix_hw_delete.items() if to_del]
-                            if del_ids:
-                                conn = sqlite3.connect("mathpro_roadmap.db")
-                                c = conn.cursor()
-                                for h_id in del_ids:
-                                    c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (h_id, h_id))
-                                    c.execute("DELETE FROM student_homework_progress WHERE student_hw_id = ? OR student_hw_id IN (SELECT id FROM student_homework WHERE parent_id = ?)", (h_id, h_id))
-                                conn.commit()
-                                conn.close()
-                                st.success(f"선택한 과제 항목이 삭제되었습니다!")
-                                st.rerun()
-                            else:
-                                st.warning("삭제할 과제를 하나 이상 체크해주세요.")
 
-                    st.markdown("##### 🛠️ 검사 보드 내 각 과제별 바로 수정")
-                    for s_name in students_with_hw:
-                        parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
-                        if parent_hws:
-                            with st.container(border=True):
-                                st.markdown(f"**👤 {s_name} 학생 과제 수정**")
-                                for h_id, title in parent_hws:
-                                    with st.expander(f"📌 {title}"):
-                                        ed_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_in_d_{h_id}")
-                                        ed_t = st.text_area("내용 변경", value=title, key=f"mat_in_t_{h_id}")
-                                        if st.button("수정 내용 저장", key=f"mat_in_btn_{h_id}", type="primary"):
-                                            update_student_homework(h_id, str(ed_d), ed_t.strip())
-                                            st.success("수정되었습니다!")
-                                            st.rerun()
-                                    
-                                    sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
-                                    for s_id, s_title in sub_hws:
-                                        with st.expander(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}"):
-                                            ed_sd = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_in_d_{s_id}")
-                                            ed_st = st.text_area("내용 변경", value=s_title, key=f"mat_in_t_{s_id}")
-                                            if st.button("수정 내용 저장", key=f"mat_in_btn_{s_id}", type="primary"):
-                                                update_student_homework(s_id, str(ed_sd), ed_st.strip())
-                                                st.success("수정되었습니다!")
-                                                st.rerun()
-                                    st.divider()
-                else:
-                    st.info(f"선택한 날짜({selected_matrix_date})에 과제가 부여된 학생들 중 등록된 내용이 없습니다.")
-
-                st.markdown("---")
-                st.markdown("##### ➕ 해당 날짜에 학생별 과제 추가하기")
-                with st.form("matrix_add_hw_form"):
-                    target_student_add = st.selectbox("과제를 받을 학생 선택", all_students, key="mat_add_stu")
-                    mat_hw_text = st.text_area("추가할 과제 내용 (들여쓰기로 하위 항목 생성 가능)", key="mat_add_txt", placeholder="[온라인 과제]\n  - 1차시 풀이")
-                    mat_add_submit = st.form_submit_button("선택한 학생에게 과제 추가", type="primary")
-                    if mat_add_submit:
-                        if mat_hw_text.strip():
-                            bulk_insert_student_homework(target_student_add, selected_matrix_date, mat_hw_text)
-                            st.success(f"'{target_student_add}' 학생에게 과제가 추가되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error("과제 내용을 입력해주세요.")
-            else:
-                st.info("등록된 숙제 날짜가 없습니다.")
-        else:
-            st.info("등록된 학생이 없습니다.")
-
-    # [탭 6] 문제별 해설 링크 관리 (선생님 전용 - 기본 닫힘 적용)
+    # [탭 7] 문제별 해설 링크 관리
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
-        st.info("💡 개별 등록뿐만 아니라, **아래 일괄 등록 칸에 여러 줄을 복사·붙여넣기** 하시면 수십 개도 순식간에 등록됩니다!")
-
-        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기 (클릭하여 열기)", expanded=False):
-            st.caption("예시 형식 (줄바꿈으로 여러 개 입력):\nB1353015 https://cafe.naver.com/...\nB1353035 https://cafe.naver.com/...")
+        with st.expander("🚀 여러 개 문제 해설 링크 한 번에 일괄 등록하기"):
             with st.form("bulk_add_problem_links_form"):
-                bulk_input_text = st.text_area("문제번호와 URL 목록 붙여넣기", placeholder="B1353015 https://naver.me/...\nB1353035 https://naver.me/...")
-                bulk_submit = st.form_submit_button("🚀 일괄 등록 실행하기", type="primary")
-                if bulk_submit:
+                bulk_input_text = st.text_area("형식: B1353015 https://...", placeholder="B1353015 https://...")
+                if st.form_submit_button("🚀 일괄 등록 실행", type="primary"):
                     if bulk_input_text.strip():
                         s_cnt, f_cnt = bulk_save_problem_links(bulk_input_text)
-                        st.success(f"총 {s_cnt}개의 해설 링크가 성공적으로 등록/수정되었습니다! (실패: {f_cnt}개)")
+                        st.success(f"총 {s_cnt}개 등록 성공!")
                         st.rerun()
-                    else:
-                        st.warning("등록할 내용을 입력해주세요.")
 
-        st.markdown("---")
-        st.markdown("##### ➕ 개별 해설 링크 등록 / 수정")
         with st.form("add_problem_link_form"):
             col_pl1, col_pl2 = st.columns([1, 2])
-            with col_pl1:
-                input_full_code = st.text_input("문제 번호 입력 (예: B1353015)", placeholder="B1353015")
-            with col_pl2:
-                input_video_url = st.text_input("네이버 카페 해설 주소 (URL)", placeholder="https://cafe.naver.com/...")
-            
-            link_submit = st.form_submit_button("➕ 개별 등록 / 수정하기", type="primary")
-            if link_submit:
+            with col_pl1: input_full_code = st.text_input("문제 번호 (예: B1353015)")
+            with col_pl2: input_video_url = st.text_input("네이버 카페 URL")
+            if st.form_submit_button("➕ 개별 등록", type="primary"):
                 if input_full_code.strip() and input_video_url.strip():
-                    if save_problem_link(input_full_code.strip(), input_video_url.strip()):
-                        st.success(f"'{input_full_code.strip().upper()}' 문제 해설 링크가 안전하게 저장되었습니다!")
-                        st.rerun()
-                    else:
-                        st.error("저장 중 오류가 발생했습니다. 번호 형식을 확인해주세요.")
-                else:
-                    st.warning("문제 번호와 영상 주소를 모두 입력해주세요.")
-
-        st.markdown("---")
-        st.markdown("##### 📋 단원코드별 등록된 문제 해설 링크 목록 (컴팩트 뷰)")
-        st.caption("💡 각 단원별로 묶여서 표시되며, 문제 번호를 누르면 해설 영상으로 바로 이동합니다. 수정 및 삭제는 아래에서 단원별로 간편하게 처리하세요!")
-        
-        all_links = get_all_problem_links()
-        if all_links:
-            grouped_links = {}
-            for l_id, f_code, v_url in all_links:
-                if len(f_code) >= 4:
-                    u_code = f_code[:-3]
-                    p_num = f_code[-3:]
-                else:
-                    u_code = "기타"
-                    p_num = f_code
-                
-                if u_code not in grouped_links:
-                    grouped_links[u_code] = []
-                grouped_links[u_code].append((l_id, f_code, p_num, v_url))
-
-            for u_code, items in sorted(grouped_links.items()):
-                with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제: {len(items)}개)", expanded=False):
-                    badge_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;'>"
-                    for l_id, f_code, p_num, v_url in items:
-                        badge_html += f'<a href="{v_url}" target="_blank" style="background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:6px 12px; border-radius:6px; font-size:14px; font-weight:bold; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,0.1);">📌 {f_code} 🔗</a>'
-                    badge_html += "</div>"
-                    st.markdown(badge_html, unsafe_allow_html=True)
-
-                    with st.form(f"manage_unit_links_{u_code}"):
-                        st.caption(f"🔧 `{u_code}` 단원 세부 링크 및 삭제 관리")
-                        unit_link_del_checks = {}
-                        
-                        for l_id, f_code, p_num, v_url in items:
-                            col_chk, col_code, col_url = st.columns([1, 3, 8])
-                            with col_chk:
-                                unit_link_del_checks[l_id] = st.checkbox("삭제", value=False, key=f"del_link_{l_id}")
-                            with col_code:
-                                st.markdown(f"**{f_code}**")
-                            with col_url:
-                                st.write(f"`{v_url}`")
-                            st.divider()
-                        
-                        if st.form_submit_button(f"🗑️ 선택한 `{u_code}` 단원 해설 링크 삭제하기", type="secondary"):
-                            ids_to_del = [l_id for l_id, val in unit_link_del_checks.items() if val]
-                            if ids_to_del:
-                                for l_id in ids_to_del:
-                                    delete_problem_link(l_id)
-                                st.success(f"선택한 {len(ids_to_del)}개의 링크가 삭제되었습니다!")
-                                st.rerun()
-                            else:
-                                st.warning("삭제할 항목의 체크박스를 하나 이상 선택해주세요.")
-        else:
-            st.info("등록된 문제 해설 링크가 없습니다. 위에서 문제 번호와 링크를 등록해 주세요!")
-
-    # [탭 7] 공지사항 관리
-    with t_cfg_notice:
-        st.markdown("#### 📢 전체 또는 학생별 공지사항 등록 및 관리")
-        st.info("💡 **전체 공지**를 등록하면 모든 학생 페이지 상단에 노출되며, **특정 학생**을 지정하면 해당 학생 페이지에만 맞춤 공지가 강력하게 표시됩니다!")
-
-        with st.form("add_notice_form"):
-            notice_target_type = st.radio("공지 대상 선택", ["🌐 전체 공지 (모든 학생에게 표시)", "👤 특정 학생 지정 공지"], horizontal=True)
-            
-            target_student_name = ""
-            if notice_target_type == "👤 특정 학생 지정 공지":
-                if student_list:
-                    target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student")
-                else:
-                    st.warning("등록된 학생이 없습니다.")
-
-            notice_title = st.text_input("공지사항 제목", placeholder="예: 이번 주 토요일 보충 수업 안내")
-            notice_content = st.text_area("공지사항 내용", placeholder="상세 내용을 입력하세요...")
-            
-            notice_submit = st.form_submit_button("📢 공지사항 등록하기", type="primary")
-            if notice_submit:
-                if notice_title.strip() and notice_content.strip():
-                    final_target = target_student_name if notice_target_type == "👤 특정 학생 지정 공지" else ""
-                    add_notice(final_target, notice_title.strip(), notice_content.strip())
-                    st.success("공지사항이 성공적으로 등록되었습니다!")
+                    save_problem_link(input_full_code.strip(), input_video_url.strip())
+                    st.success("저장되었습니다!")
                     st.rerun()
-                else:
-                    st.warning("제목과 내용을 모두 입력해주세요.")
-
-        st.markdown("---")
-        st.markdown("##### 📋 등록된 공지사항 목록 및 삭제 관리")
-        
-        all_notices = get_all_notices()
-        if all_notices:
-            for n_id, n_target, n_title, n_content, n_date in all_notices:
-                with st.container(border=True):
-                    badge_str = f"🌐 [전체 공지]" if not n_target else f"👤 [{n_target} 학생 맞춤]"
-                    col_n_info, col_n_del = st.columns([5, 1])
-                    with col_n_info:
-                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#64748B;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
-                        st.caption(n_content)
-                    with col_n_del:
-                        st.write("")
-                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}", use_container_width=True):
-                            delete_notice(n_id)
-                            st.success("공지사항이 삭제되었습니다!")
-                            st.rerun()
-        else:
-            st.info("등록된 공지사항이 없습니다.")
