@@ -860,8 +860,8 @@ if url_student and url_student in student_list:
         * 매일 실천하는 **[매일 루틴 과제]** 및 **[날짜별 숙제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
-        * 내가 오답을 저장해 둔 **단원코드를 목록에서 선택**한 뒤, 새로 틀린 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
-        * 하단에 생성된 문제 번호를 누르면 **[🎥 해설 영상]**으로 바로 연결되어 오답 복습이 쉬워집니다!
+        * **[📂 내가 저장한 오답 단원 선택하기]**에서 단원을 골라 지금까지 저장한 오답과 해설 영상을 확인할 수 있어요.
+        * 새로운 단원의 오답을 저장할 때는 아래 **[단원코드 입력]** 칸에 직접 코드를 적고 번호를 추가하면 됩니다!
         """)
 
     milestones = get_student_milestones(selected_student)
@@ -1040,9 +1040,9 @@ if url_student and url_student in student_list:
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
-        st.info("💡 내가 오답을 저장했던 **단원코드 목록에서 단원을 선택**하거나, 새로운 단원코드를 입력해 관리할 수 있어요!")
         
-        # ✅ 저장된 단원코드가 있다면 셀렉트박스로 보여주고, 없으면 직접 입력받음
+        # ✅ [1] 저장된 단원 목록 조회용 셀렉트박스 섹션
+        st.markdown("##### 📂 내가 저장한 오답 단원 확인하기")
         conn_w = sqlite3.connect("mathpro_roadmap.db")
         c_w = conn_w.cursor()
         c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
@@ -1052,15 +1052,20 @@ if url_student and url_student in student_list:
         saved_units_list = [r[0] for r in saved_units_rows]
         
         if saved_units_list:
-            selected_unit_from_box = st.selectbox("📂 내가 저장한 오답 단원 선택하기", saved_units_list)
+            selected_unit_from_box = st.selectbox("확인할 단원 선택", saved_units_list, key="view_saved_unit_box")
             current_unit = selected_unit_from_box
+            st.info(f"💡 현재 **`{current_unit}`** 단원의 저장된 오답 목록을 보고 계십니다.")
         else:
-            entered_unit_code = st.text_input("단원코드 직접 입력 (예: A114, B1353)", value="B1353").strip().upper()
-            current_unit = entered_unit_code if entered_unit_code else "B1353"
-        
-        st.markdown(f"선택된 단원코드: **`{current_unit}`**")
-        
+            current_unit = "B1353"
+            st.info("💡 아직 저장된 오답 단원이 없습니다. 아래에서 새로운 단원코드를 입력해 첫 오답을 등록해 보세요!")
+
         st.markdown("---")
+
+        # ✅ [2] 신규 등록 및 수정 입력 섹션 (단원코드 직접 입력 유지)
+        st.markdown("##### ➕ 새로운 오답/질문 번호 등록 및 수정")
+        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value=current_unit).strip().upper()
+        target_unit_code = entered_unit_code if entered_unit_code else current_unit
+
         col_add, col_del = st.columns(2)
         with col_add:
             add_input_text = st.text_input("➕ 추가할 번호 입력 (예: 15, 35, 37)", placeholder="예: 15, 35")
@@ -1068,22 +1073,23 @@ if url_student and url_student in student_list:
             del_input_text = st.text_input("➖ 삭제할 번호 입력 (예: 7, 10)", placeholder="예: 7")
 
         st.markdown("---")
-
         save_btn_tab3 = st.button("💾 오답 목록 저장하기", type="primary", key="save_t3", use_container_width=True)
         st.markdown("---")
 
-        saved_text = get_student_wrong_entry(selected_student, current_unit)
+        # ✅ [3] 현재 선택된(조회된) 단원의 저장된 오답 목록 및 해설 링크 출력
+        view_target_unit = current_unit
+        saved_text = get_student_wrong_entry(selected_student, view_target_unit)
         saved_nums = parse_numbers(saved_text)
 
-        st.markdown("### 📋 현재 저장된 오답 목록 및 풀이영상 바로가기")
+        st.markdown(f"### 📋 [{view_target_unit}] 저장된 오답 목록 및 풀이영상 바로가기")
         if saved_nums:
             st.caption("💡 **문제 번호를 클릭**하면 해당 해설 영상으로 바로 연결됩니다!")
             
-            linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
+            linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(view_target_unit)}
 
             sorted_nums_list = sorted(list(saved_nums))
             for num_int in sorted_nums_list:
-                full_code = f"{current_unit}{num_int:03d}"
+                full_code = f"{view_target_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
 
                 if video_url and video_url.strip() != "":
@@ -1097,11 +1103,11 @@ if url_student and url_student in student_list:
                         unsafe_allow_html=True
                     )
         else:
-            st.info("📋 현재 저장된 오답 번호가 없습니다.")
+            st.info(f"📋 '{view_target_unit}' 단원에 현재 저장된 오답 번호가 없습니다.")
 
         st.markdown("---")
         st.markdown("### 🔍 문제 번호 또는 단원코드로 풀이해설 검색하기")
-        st.info("💡 **B1353015**처럼 전체 번호를 검색하면 해설 영상으로 바로 연결되며, **B1353**처럼 단원코드를 검색하면 링크가 등록된 모든 문제 목록이 깔끔한 다콜 톤 카드로 표시됩니다!")
+        st.info("💡 **B1353015**처럼 전체 번호를 검색하면 해설 영상으로 바로 연결되며, **B1353**처럼 단원코드를 검색하면 링크가 등록된 모든 문제 목록이 깔끔한 단원 톤 카드로 표시됩니다!")
 
         search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
         
@@ -1136,17 +1142,17 @@ if url_student and url_student in student_list:
     if locals().get("save_btn_tab3", False):
         add_txt = locals().get("add_input_text", "")
         del_txt = locals().get("del_input_text", "")
-        cur_code = locals().get("current_unit", "B1353")
+        target_code = locals().get("target_unit_code", "B1353")
         
-        if cur_code:
-            saved_text_pre = get_student_wrong_entry(selected_student, cur_code)
+        if target_code:
+            saved_text_pre = get_student_wrong_entry(selected_student, target_code)
             saved_nums_pre = parse_numbers(saved_text_pre)
             nums_to_add = parse_numbers(add_txt)
             nums_to_del = parse_numbers(del_txt)
             
             final_nums = (saved_nums_pre | nums_to_add) - nums_to_del
             new_saved_text = ", ".join([str(n) for n in sorted(list(final_nums))])
-            save_student_wrong_entry(selected_student, cur_code, new_saved_text)
+            save_student_wrong_entry(selected_student, target_code, new_saved_text)
             st.success("오답 목록이 안전하게 저장되었습니다!")
             st.rerun()
 
