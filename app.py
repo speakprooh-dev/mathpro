@@ -1261,7 +1261,6 @@ else:
             )
         st.divider()
 
-    # 💡 [UI 개선 반영] 맨 위에 불필요한 학생 선택 박스를 없애고 접이식 설정 메뉴로 배치
     with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정 (학생 추가/삭제, 드라이브 링크)", expanded=False):
         col_s2, col_s3 = st.columns(2)
         with col_s2:
@@ -1313,7 +1312,7 @@ else:
         "🎥 7. 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리 (💡 각 탭 내부에서 학생 선택)
+    # [탭 1] 선택한 학생 개별 관리
     with t_cfg_student:
         st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
         if student_list:
@@ -1348,7 +1347,6 @@ else:
 
             st.divider()
             
-            # 구글 드라이브 링크 설정 관리 추가
             current_url = get_student_drive_url(selected_student)
             with st.form(f"drive_url_form_{selected_student}"):
                 new_drive_url = st.text_input(f"'{selected_student}' 구글 드라이브 폴더 URL", value=current_url, placeholder="https://drive.google.com/drive/folders/...")
@@ -1433,7 +1431,7 @@ else:
                             delete_notice(n_id)
                             st.rerun()
 
-    # [탭 3] 개별 과제 관리 (💡 이 안에서 과제를 줄 학생을 선택)
+    # [탭 3] 개별 과제 관리
     with t_cfg_hw:
         st.markdown("#### 📅 학생 개별 과제 관리")
         if student_list:
@@ -1687,15 +1685,53 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 7] 해설 링크 관리
+    # [탭 7] 해설 링크 관리 (💡 [기능 복원] 개별 등록 + 여러 개 일괄 등록(Bulk) + 전체 목록 관리 및 삭제 기능 완벽 부활)
     with t_cfg_links:
-        st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
-        with st.form("add_problem_link_form"):
-            col_pl1, col_pl2 = st.columns([1, 2])
-            with col_pl1: input_full_code = st.text_input("문제 번호 (예: B1353015)")
-            with col_pl2: input_video_url = st.text_input("네이버 카페 URL")
-            if st.form_submit_button("➕ 개별 등록", type="primary"):
-                if input_full_code.strip() and input_video_url.strip():
-                    save_problem_link(input_full_code.strip(), input_video_url.strip())
-                    st.success("저장되었습니다!")
-                    st.rerun()
+        st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
+        
+        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 전체 등록된 링크 목록 및 삭제"])
+        
+        with col_link_tab1:
+            st.markdown("##### 1개씩 개별 등록하기")
+            with st.form("add_problem_link_form"):
+                col_pl1, col_pl2 = st.columns([1, 2])
+                with col_pl1: input_full_code = st.text_input("문제 번호 (예: B1353015)")
+                with col_pl2: input_video_url = st.text_input("네이버 카페 URL")
+                if st.form_submit_button("➕ 개별 등록", type="primary"):
+                    if input_full_code.strip() and input_video_url.strip():
+                        save_problem_link(input_full_code.strip(), input_video_url.strip())
+                        st.success("저장되었습니다!")
+                        st.rerun()
+
+            st.markdown("---")
+            st.markdown("##### 📚 여러 개 해설 링크 일괄 등록 (Bulk)")
+            st.info("💡 콤마(,), 탭, 또는 공백으로 `문제번호 URL` 형태로 줄바꿈하여 여러 개를 한 번에 입력할 수 있습니다.")
+            with st.form("bulk_problem_link_form"):
+                bulk_links_text = st.text_area(
+                    "일괄 등록 텍스트 입력", 
+                    placeholder="B1353015 https://cafe.naver.com/mathpro2020/123\nB1353017 https://cafe.naver.com/mathpro2020/124"
+                )
+                if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
+                    if bulk_links_text.strip():
+                        s_cnt, f_cnt = bulk_save_problem_links(bulk_links_text)
+                        st.success(f"성공 {s_cnt개 등록됨! (실패: {f_cnt}개)")
+                        st.rerun()
+
+        with col_link_tab2:
+            st.markdown("##### 📋 현재 등록된 모든 해설 링크 목록")
+            all_links = get_all_problem_links()
+            if all_links:
+                st.caption(f"총 {len(all_links)}개의 해설 링크가 등록되어 있습니다.")
+                for l_id, f_code, v_url in all_links:
+                    with st.container(border=True):
+                        col_li_info, col_li_del = st.columns([5, 1])
+                        with col_li_info:
+                            st.markdown(f"📌 **{f_code}**")
+                            st.markdown(f"🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                        with col_li_del:
+                            if st.button("🗑️ 삭제", key=f"del_link_{l_id}"):
+                                delete_problem_link(l_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+            else:
+                st.info("등록된 해설 링크가 없습니다.")
