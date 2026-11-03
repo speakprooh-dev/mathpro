@@ -5,6 +5,10 @@ import calendar
 import re
 import pandas as pd
 import io
+import os
+
+# 데이터베이스 경로 설정
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
 
 # 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수
 def get_korean_today():
@@ -22,7 +26,7 @@ def get_cafe_search_url(unit_code, num_int):
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        conn = sqlite3.connect("mathpro_roadmap.db")
+        conn = sqlite3.connect(DB_PATH)
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
@@ -37,6 +41,28 @@ def create_excel_backup():
                 pass
         conn.close()
     return output.getvalue()
+
+# 업로드된 백업 엑셀 파일로부터 DB 복구하는 함수
+def restore_from_excel(uploaded_file):
+    try:
+        excel_file = pd.ExcelFile(uploaded_file)
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        for sheet_name in excel_file.sheet_names:
+            df = pd.read_excel(excel_file, sheet_name=sheet_name)
+            # 기존 테이블 데이터 초기화 후 복구
+            try:
+                c.execute(f"DELETE FROM {sheet_name}")
+                df.to_sql(sheet_name, conn, if_exists='append', index=False)
+            except Exception:
+                pass
+                
+        conn.commit()
+        conn.close()
+        return True, "데이터베이스가 엑셀 백업 파일 내용으로 성공적으로 복구되었습니다!"
+    except Exception as e:
+        return False, f"복구 중 오류가 발생했습니다: {str(e)}"
 
 # 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
@@ -66,7 +92,7 @@ def get_weekday_kr(date_str):
 
 # 1. 데이터베이스 초기화
 def init_db():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
@@ -238,7 +264,7 @@ init_db()
 
 # --- 데이터 관리 함수들 ---
 def get_students():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT name FROM students ORDER BY name")
     rows = c.fetchall()
@@ -246,7 +272,7 @@ def get_students():
     return [r[0] for r in rows]
 
 def get_student_drive_url(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
     row = c.fetchone()
@@ -254,14 +280,14 @@ def get_student_drive_url(name):
     return row[0] if row and row[0] else ""
 
 def update_student_drive_url(name, drive_url):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("UPDATE students SET drive_url = ? WHERE name = ?", (drive_url, name))
     conn.commit()
     conn.close()
 
 def add_student(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     try:
         c.execute("INSERT INTO students (name, drive_url) VALUES (?, ?)", (name, ""))
@@ -273,7 +299,7 @@ def add_student(name):
     return success
 
 def delete_student(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM students WHERE name = ?", (name,))
     c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
@@ -289,7 +315,7 @@ def delete_student(name):
     conn.close()
 
 def get_subjects():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, name FROM subjects ORDER BY id")
     rows = c.fetchall()
@@ -297,7 +323,7 @@ def get_subjects():
     return rows
 
 def add_subject(name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     try:
         c.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
@@ -309,7 +335,7 @@ def add_subject(name):
     return success
 
 def get_chapters():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, subject, name FROM chapters")
     rows = c.fetchall()
@@ -324,7 +350,7 @@ def get_chapters():
     return sorted(rows, key=natural_sort_key)
 
 def add_chapter(subject, name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (subject, name))
     ch_id = c.lastrowid
@@ -333,7 +359,7 @@ def add_chapter(subject, name):
     return ch_id
 
 def delete_chapter(ch_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM chapters WHERE id = ?", (ch_id,))
     c.execute("DELETE FROM chapter_types WHERE chapter_id = ?", (ch_id,))
@@ -341,7 +367,7 @@ def delete_chapter(ch_id):
     conn.close()
 
 def get_chapter_types(chapter_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     rows = c.fetchall()
@@ -349,21 +375,21 @@ def get_chapter_types(chapter_id):
     return rows
 
 def update_chapter_type_url(type_id, video_url):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("UPDATE chapter_types SET video_url = ? WHERE id = ?", (video_url, type_id))
     conn.commit()
     conn.close()
 
 def delete_chapter_type(type_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM chapter_types WHERE id = ?", (type_id,))
     conn.commit()
     conn.close()
 
 def bulk_insert_types_for_chapter(chapter_id, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     count_row = c.fetchone()
@@ -392,7 +418,7 @@ def save_problem_link(full_code, video_url):
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
     
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     try:
         c.execute('''
@@ -411,7 +437,7 @@ def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
     success_count = 0
     fail_count = 0
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     for line in lines:
@@ -443,7 +469,7 @@ def bulk_save_problem_links(text_data):
     return success_count, fail_count
 
 def get_problem_links_by_unit(unit_code):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT full_code, video_url FROM problem_links WHERE unit_code = ? ORDER BY full_code", (unit_code.upper(),))
     rows = c.fetchall()
@@ -451,7 +477,7 @@ def get_problem_links_by_unit(unit_code):
     return rows
 
 def get_problem_link_by_full(full_code):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT video_url FROM problem_links WHERE full_code = ?", (full_code.upper(),))
     row = c.fetchone()
@@ -459,7 +485,7 @@ def get_problem_link_by_full(full_code):
     return row[0] if row else ""
 
 def get_all_problem_links():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code")
     rows = c.fetchall()
@@ -467,7 +493,7 @@ def get_all_problem_links():
     return rows
 
 def delete_problem_link(link_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM problem_links WHERE id = ?", (link_id,))
     conn.commit()
@@ -475,7 +501,7 @@ def delete_problem_link(link_id):
 
 # --- 공지사항 관련 함수 ---
 def add_notice(student_name, title, content):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     today_str = str(get_korean_today())
     c.execute("INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
@@ -483,7 +509,7 @@ def add_notice(student_name, title, content):
     conn.close()
 
 def get_notices_for_student(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
     rows = c.fetchall()
@@ -491,7 +517,7 @@ def get_notices_for_student(student_name):
     return rows
 
 def get_all_notices():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
     rows = c.fetchall()
@@ -499,7 +525,7 @@ def get_all_notices():
     return rows
 
 def delete_notice(notice_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
@@ -507,7 +533,7 @@ def delete_notice(notice_id):
 
 # --- 매일 루틴 및 과제 관련 함수들 ---
 def get_student_daily_routines_parent(student_name, parent_id=None):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     if parent_id is None:
         c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND (parent_id IS NULL) ORDER BY id", (student_name,))
@@ -518,7 +544,7 @@ def get_student_daily_routines_parent(student_name, parent_id=None):
     return rows
 
 def bulk_insert_daily_routines(student_name, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     added_count = 0
@@ -542,7 +568,7 @@ def bulk_insert_daily_routines(student_name, text_data):
     return added_count
 
 def delete_daily_routine(r_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
     c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
@@ -550,7 +576,7 @@ def delete_daily_routine(r_id):
     conn.close()
 
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     for routine_id_str, val in routine_checked_dict.items():
         c.execute('''
@@ -562,7 +588,7 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn.close()
 
 def get_student_monthly_logs(student_name, year, month):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year+1}-01-01" if month == 12 else f"{year}-{month+1:02d}-01"
@@ -575,7 +601,7 @@ def get_student_monthly_logs(student_name, year, month):
     return log_map
 
 def get_student_daily_logs_by_date(student_name, target_date_str):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
     rows = c.fetchall()
@@ -587,7 +613,7 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
 
 # --- 숙제 템플릿 관련 함수 ---
 def get_homework_templates():
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, title FROM homework_templates ORDER BY id")
     rows = c.fetchall()
@@ -595,21 +621,21 @@ def get_homework_templates():
     return rows
 
 def add_homework_template(title):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT INTO homework_templates (title) VALUES (?)", (title,))
     conn.commit()
     conn.close()
 
 def delete_homework_template(t_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
     conn.close()
 
 def get_student_milestones(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
@@ -621,7 +647,7 @@ def get_student_milestones(student_name):
     return rows
 
 def assign_chapters_to_student(student_name, chapter_ids):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     for chapter_id in chapter_ids:
         c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
@@ -641,7 +667,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
     conn.close()
 
 def get_student_homework_dates(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
@@ -649,7 +675,7 @@ def get_student_homework_dates(student_name):
     return [r[0] for r in rows]
 
 def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     if parent_id is None:
         c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND (parent_id IS NULL) ORDER BY id", (student_name, hw_date))
@@ -660,7 +686,7 @@ def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
     return rows
 
 def get_all_student_homework(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT id, hw_date, title, parent_id FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     rows = c.fetchall()
@@ -668,7 +694,7 @@ def get_all_student_homework(student_name):
     return rows
 
 def bulk_insert_student_homework(student_name, hw_date, text_data):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     current_parent_id = None
@@ -689,21 +715,21 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
     conn.close()
 
 def update_student_homework(shw_id, hw_date, title):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("UPDATE student_homework SET hw_date = ?, title = ? WHERE id = ?", (hw_date, title, shw_id))
     conn.commit()
     conn.close()
 
 def delete_student_homework(shw_id):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("DELETE FROM student_homework WHERE id = ? OR parent_id = ?", (shw_id, shw_id))
     conn.commit()
     conn.close()
 
 def get_milestone_progress(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
@@ -711,7 +737,7 @@ def get_milestone_progress(student_name):
     return {r[0]: bool(r[1]) for r in rows}
 
 def get_student_homework_progress(student_name):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
@@ -719,7 +745,7 @@ def get_student_homework_progress(student_name):
     return {r[0]: bool(r[1]) for r in rows}
 
 def save_single_milestone_progress(student_name, milestone_id, val):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
@@ -730,7 +756,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     conn.close()
 
 def save_single_homework_progress(student_name, student_hw_id, val):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
@@ -741,7 +767,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
     conn.close()
 
 def get_student_wrong_entry(student_name, unit_code):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
     row = c.fetchone()
@@ -749,7 +775,7 @@ def get_student_wrong_entry(student_name, unit_code):
     return row[0] if row else ""
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    conn = sqlite3.connect("mathpro_roadmap.db")
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     today_str = str(get_korean_today())
     c.execute('''
@@ -803,7 +829,6 @@ if url_student and url_student in student_list:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 💡 [요청 반영] 환영 인사 카드 아래, 공지사항 바로 위에 컴팩트하게 접힌 상태로 어플 사용 가이드 추가!
     with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
         st.markdown("""
         - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
@@ -811,7 +836,6 @@ if url_student and url_student in student_list:
         - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
         """)
 
-    # 📢 공지사항 (성취도 대시보드 바로 위, 컴팩트한 아디언 형태)
     student_notices = get_notices_for_student(selected_student)
     if student_notices:
         with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -886,8 +910,6 @@ if url_student and url_student in student_list:
 
     with tab2:
         st.markdown("### 🔥 매일 반복 루틴 과제 및 숙제")
-        
-        # 💡 [요청 반영] 과제 체크 안내 메시지 추가
         st.info("📌 **숙제 안내**: 아래 루틴 및 날짜별 숙제를 완료하신 후 **체크박스(✔)를 꼭 체크**해 주세요! 완료율이 대시보드에 반영됩니다.")
 
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
@@ -1015,7 +1037,7 @@ if url_student and url_student in student_list:
             st.markdown("---")
 
             # 내가 저장한 단원 선택 셀렉트박스
-            conn_w = sqlite3.connect("mathpro_roadmap.db")
+            conn_w = sqlite3.connect(DB_PATH)
             c_w = conn_w.cursor()
             c_w.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
             saved_rows = c_w.fetchall()
@@ -1071,6 +1093,9 @@ else:
                 st.session_state["teacher_authenticated"] = False
                 st.rerun()
             st.divider()
+            
+            # 백업 다운로드 및 엑셀 복구 도구
+            st.markdown("##### 📥/📤 데이터 백업 및 복구")
             st.download_button(
                 label="📥 전체 데이터 엑셀 백업하기",
                 data=create_excel_backup(),
@@ -1078,6 +1103,19 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
+            
+            # 💡 [핵심 추가] 백업 엑셀 파일 업로드로 DB 원상복구 기능!
+            with st.expander("🔄 엑셀 파일로 데이터 복구하기"):
+                uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
+                if uploaded_backup is not None:
+                    if st.button("🚀 엑셀 데이터로 DB 복구 실행", type="primary", use_container_width=True):
+                        success, msg = restore_from_excel(uploaded_backup)
+                        if success:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+            
         st.divider()
 
     with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
@@ -1341,7 +1379,7 @@ else:
             st.divider()
 
             base_url = get_base_url()
-            conn = sqlite3.connect("mathpro_roadmap.db")
+            conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             if chk_student_choice == "전체 학생 모아보기":
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
@@ -1427,7 +1465,7 @@ else:
     # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        conn = sqlite3.connect("mathpro_roadmap.db")
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
         all_hw_dates = [r[0] for r in c.fetchall()]
