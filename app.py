@@ -904,7 +904,6 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
             
-            # 💡 [요청 반영] 연도/월 선택기를 아코디언 내부로 쏙 집어넣어 화면을 깔끔하게 정리했습니다!
             with st.expander("📅 지난 루틴 실천 현황 보기 (연도·월 선택)", expanded=False):
                 current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
                 current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
@@ -957,7 +956,6 @@ if url_student and url_student in student_list:
                         st.rerun()
 
     with tab3:
-        # 💡 [요청 반영] 헷갈리지 않게 해설 영상 검색 영역과 오답 등록 영역을 완전히 분리하고 명확하게 타이틀 정리
         st.markdown("### 💬 오답 및 질문 관리")
         
         with st.container(border=True):
@@ -986,7 +984,25 @@ if url_student and url_student in student_list:
             st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
             st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
             
-            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
+            # 💡 [요청 반영] 저장된 단원 선택 셀렉트박스를 다시 깔끔하게 살렸습니다!
+            conn_w = sqlite3.connect("mathpro_roadmap.db")
+            c_w = conn_w.cursor()
+            c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+            saved_units_rows = c_w.fetchall()
+            conn_w.close()
+            saved_units_list = [r[0] for r in saved_units_rows]
+            
+            selected_existing_unit = st.selectbox(
+                "📂 내가 저장한 단원 선택해서 불러오기", 
+                ["-- 단원을 선택하거나 직접 아래에 입력하세요 --"] + saved_units_list,
+                key="saved_unit_select_box"
+            )
+            
+            default_unit_val = ""
+            if selected_existing_unit and selected_existing_unit != "-- 단원을 선택하거나 직접 아래에 입력하세요 --":
+                default_unit_val = selected_existing_unit
+
+            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", value=default_unit_val, placeholder="예: B1353").strip().upper()
             target_code = entered_unit_code if entered_unit_code else "B1353"
             
             if entered_unit_code:
