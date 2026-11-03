@@ -1,10 +1,19 @@
 import streamlit as st
 import sqlite3
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
+import pytz
 import calendar
 import re
 import pandas as pd
 import io
+
+# 한국 시간(KST) 기준 오늘 날짜 반환 함수
+def get_korean_today():
+    try:
+        kst = pytz.timezone('Asia/Seoul')
+        return datetime.now(kst).date()
+    except Exception:
+        return date.today()
 
 # 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
@@ -191,7 +200,7 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    today_str = str(date.today())
+    today_str = str(get_korean_today())
     c.execute("UPDATE student_wrong_entries SET updated_at = ? WHERE updated_at IS NULL OR updated_at = ''", (today_str,))
 
     c.execute('''
@@ -469,7 +478,7 @@ def delete_problem_link(link_id):
 def add_notice(student_name, title, content):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    today_str = str(date.today())
+    today_str = str(get_korean_today())
     c.execute("INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
     conn.commit()
     conn.close()
@@ -743,7 +752,7 @@ def get_student_wrong_entry(student_name, unit_code):
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    today_str = str(date.today())
+    today_str = str(get_korean_today())
     c.execute('''
         INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at)
         VALUES (?, ?, ?, ?)
@@ -778,27 +787,7 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # 📢 공지사항 출력 (최상단 배치)
-    student_notices = get_notices_for_student(selected_student)
-    if student_notices:
-        st.markdown(
-            f'<div style="background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%); border: 2px solid #38BDF8; padding: 18px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);">'
-            f'<div style="font-size: 18px; font-weight: bold; color: #38BDF8; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">'
-            f'📢 [중요 공지사항] 확인해 주세요!</div>',
-            unsafe_allow_html=True
-        )
-        for n_id, n_title, n_content, n_date, n_target in student_notices:
-            target_badge = "🌐 전체 공지" if not n_target else f"👤 {n_target} 학생 맞춤 공지"
-            st.markdown(
-                f'<div style="background-color: rgba(30, 41, 59, 0.7); border-left: 4px solid #38BDF8; padding: 12px; border-radius: 6px; margin-bottom: 10px;">'
-                f'<div style="font-size: 14px; color: #94A3B8; margin-bottom: 4px;">{target_badge} &nbsp;|&nbsp; 작성일: {n_date}</div>'
-                f'<div style="font-size: 16px; font-weight: bold; color: #F8FAFC; margin-bottom: 6px;">📌 {n_title}</div>'
-                f'<div style="font-size: 14px; color: #E2E8F0; white-space: pre-wrap; line-height: 1.5;">{n_content}</div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-        st.markdown('</div>', unsafe_allow_html=True)
-
+    # 환영 인사 먼저 출력
     st.markdown(
         f'<div style="background-color:#1E293B; border:1px solid #334155; padding:16px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">'
         f'<div style="font-size:17px; font-weight:bold; color:#F8FAFC; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#38BDF8;">{selected_student}</span> 학생!</div>'
@@ -814,6 +803,21 @@ if url_student and url_student in student_list:
         )
     
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # 📢 [요청 반영] 공지사항 위치를 환영 인사 바로 아래, 성취도 대시보드 위로 이동 및 크기 간소화
+    student_notices = get_notices_for_student(selected_student)
+    if student_notices:
+        with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
+            for n_id, n_title, n_content, n_date, n_target in student_notices:
+                target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
+                st.markdown(
+                    f'<div style="background-color: rgba(30, 41, 59, 0.5); border-left: 3px solid #38BDF8; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
+                    f'<div style="font-size: 12px; color: #94A3B8;">{target_badge} | {n_date}</div>'
+                    f'<div style="font-size: 14px; font-weight: bold; color: #F8FAFC;">📌 {n_title}</div>'
+                    f'<div style="font-size: 13px; color: #E2E8F0; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
     milestones = get_student_milestones(selected_student)
     hw_dates = get_student_homework_dates(selected_student)
@@ -878,8 +882,8 @@ if url_student and url_student in student_list:
         
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
-            # 💡 [요청 반영 3] 오늘 루틴 체크하기가 최상단으로 이동!
-            today_obj = date.today()
+            # 💡 [요청 반영] 한국 시간(KST) 오늘 날짜 적용
+            today_obj = get_korean_today()
             today_str = str(today_obj)
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
@@ -902,7 +906,6 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
             
-            # 💡 [요청 반영 2 & 1] 접혀진 상태(아코디언)로 펼쳐보기 가능 + O / X 표기로 변경
             current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
             current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
             
@@ -918,7 +921,6 @@ if url_student and url_student in student_list:
                     day_checked_count = sum(1 for r_id, _ in daily_parents if monthly_logs.get((str(r_id), d_str), False))
                     total_r_count = len(daily_parents)
                     
-                    # 💡 완료 문구 대신 O / X 표기로 변경 (모두 완료 시 ⭕ O, 일부/미완료 시 ❌ X)
                     status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
                     
                     highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
@@ -1035,7 +1037,7 @@ else:
             st.download_button(
                 label="📥 전체 데이터 엑셀 백업하기",
                 data=create_excel_backup(),
-                file_name=f"mathpro_backup_{date.today()}.xlsx",
+                file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
@@ -1141,7 +1143,7 @@ else:
         else:
             st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 개별 과제 관리 (루틴 과제, 월간 실천 현황 O/X 리스트, 숙제 템플릿 포함)
+    # [탭 3] 개별 과제 관리
     with t_cfg_hw:
         st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
         if student_list:
@@ -1176,7 +1178,7 @@ else:
 
                     st.markdown("---")
                     st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 (O/X 리스트)")
-                    today_obj = date.today()
+                    today_obj = get_korean_today()
                     t_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="teacher_routine_year")
                     t_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="teacher_routine_month")
                     
@@ -1217,7 +1219,7 @@ else:
                     selected_template_title = chosen_tpl
 
             with st.form("add_student_hw_form"):
-                hw_date_input = st.date_input("과제 제출일", value=date.today())
+                hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
                 hw_text_area = st.text_area("날짜별 과제 내용 입력", value=selected_template_title, placeholder="[진도 교재]\n  - p.12~15 문제 풀이")
                 
                 col_sub_btn1, col_sub_btn2 = st.columns(2)
