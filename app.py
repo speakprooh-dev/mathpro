@@ -1529,10 +1529,10 @@ else:
                             st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
                             st.code(bundled_str, language="text")
 
-    # [탭 6] 전체 숙제 매트릭스 (💡 [개선 완료] 체크 즉시 자동 저장 + 다이렉트 수정/삭제 기능 추가)
+    # [탭 6] 전체 숙제 매트릭스 (💡 [가독성 대폭 개선] 학생별 카드 내부에서 콤팩트하게 체크하고 수정은 우측 버튼으로 통합)
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        st.info("💡 체크박스를 누르는 즉시 실시간으로 자동 저장되며, 하단의 **[🛠️ 숙제 내용 수정 / 삭제]**를 통해 언제든 내용을 고칠 수 있습니다!")
+        st.info("💡 체크박스를 누르는 즉시 실시간으로 자동 저장되며, **[✏️ 수정·삭제]** 버튼을 통해 내용을 깔끔하게 관리할 수 있습니다!")
         
         all_students = get_students()
         if all_students:
@@ -1549,7 +1549,13 @@ else:
                 if students_with_hw:
                     for s_name in students_with_hw:
                         with st.container(border=True):
-                            st.markdown(f"**👤 {s_name} 학생**")
+                            # 학생 이름과 해당 학생의 숙제 관리 익스팬더를 깔끔한 한 줄로 배치
+                            col_s_title, col_s_edit = st.columns([4, 1])
+                            with col_s_title:
+                                st.markdown(f"**👤 {s_name} 학생**")
+                            with col_s_edit:
+                                edit_mode = st.toggle("✏️ 수정·삭제", key=f"tgl_edit_{s_name}_{selected_matrix_date}")
+
                             parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
                             s_hw_prog = get_student_homework_progress(s_name)
                             
@@ -1557,6 +1563,7 @@ else:
                                 is_done = s_hw_prog.get(h_id, False)
                                 sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                                 
+                                # 체크박스와 과제 제목을 한 줄로 정돈
                                 col_chk, col_ttl = st.columns([1, 11])
                                 with col_chk:
                                     mat_chk_val = st.checkbox("완료", value=is_done, key=f"mat_chk_{h_id}", label_visibility="collapsed")
@@ -1564,9 +1571,8 @@ else:
                                         save_single_homework_progress(s_name, h_id, mat_chk_val)
                                         st.rerun()
                                 with col_ttl:
-                                    st.markdown(f"📌 **{title}**")
+                                    st.markdown(f"📌 {title}")
                                 
-                                # 하위 과제 체크박스 처리
                                 if sub_hws:
                                     for s_id, s_title in sub_hws:
                                         s_done = s_hw_prog.get(s_id, False)
@@ -1579,22 +1585,23 @@ else:
                                         with col_s_ttl:
                                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}")
 
-                                # 다이렉트 수정 및 삭제 익스팬더
-                                with st.expander(f"🛠️ [{title}] 내용 수정 / 삭제"):
-                                    ed_mat_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
-                                    ed_mat_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
-                                    col_m_btn1, col_m_btn2 = st.columns(2)
-                                    with col_m_btn1:
-                                        if st.button("수정 저장", key=f"mat_save_btn_{h_id}", type="primary"):
-                                            update_student_homework(h_id, str(ed_mat_d), ed_mat_t.strip())
-                                            st.success("수정되었습니다!")
-                                            st.rerun()
-                                    with col_m_btn2:
-                                        if st.button("숙제 삭제", key=f"mat_del_btn_{h_id}", type="secondary"):
-                                            delete_student_homework(h_id)
-                                            st.success("삭제되었습니다!")
-                                            st.rerun()
-                                st.divider()
+                                # ✏️ 수정·삭제 토글이 켜졌을 때만 나타나는 깔끔한 수정 영역
+                                if edit_mode:
+                                    with st.container(border=True):
+                                        st.caption(f"🔧 '{title}' 과제 수정 및 삭제")
+                                        ed_mat_d = st.date_input("날짜 변경", value=date.fromisoformat(selected_matrix_date), key=f"mat_ed_d_{h_id}")
+                                        ed_mat_t = st.text_area("내용 변경", value=title, key=f"mat_ed_t_{h_id}")
+                                        col_m_btn1, col_m_btn2 = st.columns(2)
+                                        with col_m_btn1:
+                                            if st.button("💾 변경사항 저장", key=f"mat_save_btn_{h_id}", type="primary"):
+                                                update_student_homework(h_id, str(ed_mat_d), ed_mat_t.strip())
+                                                st.success("수정되었습니다!")
+                                                st.rerun()
+                                        with col_m_btn2:
+                                            if st.button("🗑️ 과제 삭제", key=f"mat_del_btn_{h_id}", type="secondary"):
+                                                delete_student_homework(h_id)
+                                                st.success("삭제되었습니다!")
+                                                st.rerun()
                 else:
                     st.info("선택한 날짜에 등록된 과제가 없습니다.")
 
