@@ -2141,7 +2141,7 @@ else:
         else:
             st.info("등록된 학생이 없습니다.")
 
-    # [탭 6] 문제별 해설 링크 관리 (선생님 전용 - [개선 완료])
+    # [탭 6] 문제별 해설 링크 관리 (선생님 전용 - 기본 닫힘 적용)
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 관리")
         st.info("💡 개별 등록뿐만 아니라, **아래 일괄 등록 칸에 여러 줄을 복사·붙여넣기** 하시면 수십 개도 순식간에 등록됩니다!")
@@ -2200,7 +2200,8 @@ else:
                 grouped_links[u_code].append((l_id, f_code, p_num, v_url))
 
             for u_code, items in sorted(grouped_links.items()):
-                with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제: {len(items)}개)", expanded=True):
+                # ✅ 처음 접속 시 닫혀있도록 expanded=False 설정
+                with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제: {len(items)}개)", expanded=False):
                     # 1. 칩(배지) 스타일로 깔끔하게 문제 번호들 모아보기
                     badge_html = "<div style='display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;'>"
                     for l_id, f_code, p_num, v_url in items:
