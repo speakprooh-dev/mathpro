@@ -875,17 +875,58 @@ if url_student and url_student in student_list:
 
     with tab2:
         st.markdown("### 🔥 매일 반복 루틴 과제 및 숙제")
+        
+        # 💡 [복구됨] 학생 화면 월간 루틴 캘린더 및 실천 현황 뷰
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
-            today_str = str(date.today())
+            today_obj = date.today()
+            current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
+            current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
+            
+            monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
+            cal_matrix = calendar.monthcalendar(current_year, current_month)
+            weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+            
+            st.markdown(f"##### 📅 {current_year년} {current_month}월 루틴 실천 달력")
+            cols_header = st.columns(7)
+            for i, w_name in enumerate(weekdays_kr):
+                with cols_header[i]:
+                    st.markdown(f"<div style='text-align:center; font-weight:bold; color:#38BDF8; font-size:13px;'>{w_name}</div>", unsafe_allow_html=True)
+            
+            for week in cal_matrix:
+                cols_week = st.columns(7)
+                for i, day in enumerate(week):
+                    with cols_week[i]:
+                        if day == 0:
+                            st.markdown("<div style='text-align:center; color:#475569; padding:6px; font-size:12px;'>-</div>", unsafe_allow_html=True)
+                        else:
+                            d_str = f"{current_year}-{current_month:02d}-{day:02d}"
+                            is_today = (d_str == str(today_obj))
+                            border_style = "border:2px solid #38BDF8;" if is_today else "border:1px solid #334155;"
+                            bg_style = "background-color:rgba(56,189,248,0.1);" if is_today else "background-color:#1E293B;"
+                            
+                            day_checked_count = sum(1 for r_id, _ in daily_parents if monthly_logs.get((str(r_id), d_str), False))
+                            total_r_count = len(daily_parents)
+                            status_emoji = "🟩" if (total_r_count > 0 and day_checked_count == total_r_count) else ("🟧" if day_checked_count > 0 else "⬜")
+                            
+                            st.markdown(
+                                f"<div style='{border_style} {bg_style} border-radius:6px; padding:6px; text-align:center; margin-bottom:4px;'>"
+                                f"<div style='font-size:12px; font-weight:bold; color:#F8FAFC;'>{day}일</div>"
+                                f"<div style='font-size:14px; margin-top:2px;'>{status_emoji}</div>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+
+            today_str = str(today_obj)
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             with st.container(border=True):
+                st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
                 daily_routine_checked_dict = {}
                 for r_id, r_title in daily_parents:
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
                     default_val = current_day_logs.get((str(r_id), today_str), False)
                     if r_subs:
-                        st.markdown(f"**📌 {r_title}**")
+                        st.markdown(f"**{r_title}**")
                         daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
                         for sr_id, sr_title in r_subs:
                             daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{sr_id}")
@@ -919,7 +960,6 @@ if url_student and url_student in student_list:
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
         
-        # 💡 [복구됨] 단원코드 또는 문제번호로 해설영상 즉시 검색 기능
         st.markdown("##### 🔍 해설 영상 즉시 검색하기")
         search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
         if search_prob_input:
@@ -1104,15 +1144,15 @@ else:
         else:
             st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 개별 과제 관리 (💡 루틴 과제, 월간 실천 현황, 숙제 템플릿 기능 완벽 부활)
+    # [탭 3] 개별 과제 관리 (루틴 과제, 월간 실천 현황, 숙제 템플릿 포함)
     with t_cfg_hw:
         st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            # --- 1. 매일 루틴 과제 설정 영역 ---
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 관리", expanded=False):
-                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제(예: 오답노트 작성, 연산 연습 등)를 설정합니다.")
+            # --- 1. 매일 루틴 과제 설정 및 실천 현황 뷰 복구 ---
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황", expanded=True):
+                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 이번 달 실천 현황을 점검합니다.")
                 
                 with st.form("add_teacher_routine_form"):
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
@@ -1138,11 +1178,46 @@ else:
                                 st.success("삭제되었습니다!")
                                 st.rerun()
 
+                    # 💡 선생님 모드에서의 학생 월간 실천 현황표 뷰
+                    st.markdown("---")
+                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 캘린더")
+                    today_obj = date.today()
+                    t_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="teacher_routine_year")
+                    t_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="teacher_routine_month")
+                    
+                    t_monthly_logs = get_student_monthly_logs(selected_hw_student, t_year, t_month)
+                    t_cal_matrix = calendar.monthcalendar(t_year, t_month)
+                    weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
+                    
+                    cols_header = st.columns(7)
+                    for i, w_name in enumerate(weekdays_kr):
+                        with cols_header[i]:
+                            st.markdown(f"<div style='text-align:center; font-weight:bold; color:#38BDF8; font-size:13px;'>{w_name}</div>", unsafe_allow_html=True)
+                    
+                    for week in t_cal_matrix:
+                        cols_week = st.columns(7)
+                        for i, day in enumerate(week):
+                            with cols_week[i]:
+                                if day == 0:
+                                    st.markdown("<div style='text-align:center; color:#475569; padding:6px; font-size:12px;'>-</div>", unsafe_allow_html=True)
+                                else:
+                                    d_str = f"{t_year}-{t_month:02d}-{day:02d}"
+                                    day_checked_count = sum(1 for r_id, _ in current_routines if t_monthly_logs.get((str(r_id), d_str), False))
+                                    total_r_count = len(current_routines)
+                                    status_emoji = "🟩" if (total_r_count > 0 and day_checked_count == total_r_count) else ("🟧" if day_checked_count > 0 else "⬜")
+                                    
+                                    st.markdown(
+                                        f"<div style='border:1px solid #334155; background-color:#1E293B; border-radius:6px; padding:6px; text-align:center; margin-bottom:4px;'>"
+                                        f"<div style='font-size:12px; font-weight:bold; color:#F8FAFC;'>{day}일</div>"
+                                        f"<div style='font-size:14px; margin-top:2px;'>{status_emoji}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
+
             # --- 2. 날짜별 과제 부여 및 템플릿 영역 ---
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여")
             
-            # 💡 자주 쓰는 숙제 템플릿 불러오기 기능 복구
             templates = get_homework_templates()
             selected_template_title = ""
             if templates:
@@ -1173,7 +1248,6 @@ else:
                         st.success("새로운 숙제 템플릿으로 저장되었습니다!")
                         st.rerun()
 
-            # 💡 템플릿 관리 및 삭제 아코디언 추가
             if templates:
                 with st.expander("⚙️ 저장된 숙제 템플릿 관리 및 삭제", expanded=False):
                     for t_id, t_title in templates:
@@ -1219,7 +1293,7 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기 (미연결 색상 강조 및 학생 이름 클릭 링크 포함)
+    # [탭 5] 오답노트 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
