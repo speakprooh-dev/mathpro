@@ -860,7 +860,7 @@ if url_student and url_student in student_list:
         * 매일 실천하는 **[매일 루틴 과제]** 및 **[날짜별 숙제]**는 체크하는 순간 **자동으로 실시간 저장**됩니다!
         
         **4️⃣ 💬 3. 오답 및 질문 번호 관리하기**
-        * 교재 단원코드(예: `B1353`)를 입력한 뒤, 틀린 문제 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
+        * 내가 오답을 저장해 둔 **단원코드를 목록에서 선택**한 뒤, 새로 틀린 번호는 **[➕ 추가]** 칸에 적어주세요(예: `15, 35`).
         * 하단에 생성된 문제 번호를 누르면 **[🎥 해설 영상]**으로 바로 연결되어 오답 복습이 쉬워집니다!
         """)
 
@@ -1040,10 +1040,25 @@ if url_student and url_student in student_list:
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 번호 관리")
-        st.info("💡 오늘 푼 교재의 **단원코드(예: A114 또는 B1353)**를 넣고, 새로 틀린 번호는 **[추가]**에, 맞았거나 잘못 넣은 번호는 **[삭제]**에 각각 적어주세요!")
+        st.info("💡 내가 오답을 저장했던 **단원코드 목록에서 단원을 선택**하거나, 새로운 단원코드를 입력해 관리할 수 있어요!")
         
-        entered_unit_code = st.text_input("단원코드 입력 (예: A114, B1353)", value="B1353").strip().upper()
-        current_unit = entered_unit_code if entered_unit_code else "B1353"
+        # ✅ 저장된 단원코드가 있다면 셀렉트박스로 보여주고, 없으면 직접 입력받음
+        conn_w = sqlite3.connect("mathpro_roadmap.db")
+        c_w = conn_w.cursor()
+        c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+        saved_units_rows = c_w.fetchall()
+        conn_w.close()
+        
+        saved_units_list = [r[0] for r in saved_units_rows]
+        
+        if saved_units_list:
+            selected_unit_from_box = st.selectbox("📂 내가 저장한 오답 단원 선택하기", saved_units_list)
+            current_unit = selected_unit_from_box
+        else:
+            entered_unit_code = st.text_input("단원코드 직접 입력 (예: A114, B1353)", value="B1353").strip().upper()
+            current_unit = entered_unit_code if entered_unit_code else "B1353"
+        
+        st.markdown(f"선택된 단원코드: **`{current_unit}`**")
         
         st.markdown("---")
         col_add, col_del = st.columns(2)
@@ -1071,7 +1086,6 @@ if url_student and url_student in student_list:
                 full_code = f"{current_unit}{num_int:03d}"
                 video_url = linked_problems_dict.get(full_code, "")
 
-                # ✅ 링크가 등록된 문제는 해설 영상으로, 없으면 네이버 카페 검색으로 분기 처리
                 if video_url and video_url.strip() != "":
                     st.markdown(
                         f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px 16px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8; font-size:13px; font-weight:normal;">🎥 해설 영상 바로가기 ➔</span></a>',
