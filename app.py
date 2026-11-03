@@ -1400,7 +1400,7 @@ else:
         else:
             st.warning("등록된 학생이 없습니다. 상단 설정에서 학생을 먼저 추가해 주세요.")
 
-    # [탭 2] 공지사항 관리
+    # [탭 2] 공지사항 관리 (등록 및 관리 목록)
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록 및 관리")
         with st.form("add_notice_form"):
@@ -1417,6 +1417,7 @@ else:
                     st.rerun()
 
         st.markdown("---")
+        st.markdown("##### 📋 등록된 공지사항 목록 및 관리")
         all_notices = get_all_notices()
         if all_notices:
             for n_id, n_target, n_title, n_content, n_date in all_notices:
@@ -1427,9 +1428,12 @@ else:
                         st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#64748B;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
                         st.caption(n_content)
                     with col_n_del:
-                        if st.button("🗑️", key=f"del_notice_{n_id}"):
+                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}"):
                             delete_notice(n_id)
+                            st.success("삭제되었습니다!")
                             st.rerun()
+        else:
+            st.info("등록된 공지사항이 없습니다.")
 
     # [탭 3] 개별 과제 관리
     with t_cfg_hw:
@@ -1576,11 +1580,20 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 5] 오답노트 모아보기
+    # [탭 5] 오답노트 모아보기 (💡 요청하신 날짜별 정렬 및 해설 미연결 문제 모아보기 옵션 복원 완료)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답 취합 및 스마트 관리")
         if student_list:
             chk_student = st.selectbox("조회할 학생", student_list, key="chk_wrong_student")
+            
+            # 보기 모드 선택 옵션
+            wrong_view_mode = st.radio(
+                "오답 모아보기 방식 선택", 
+                ["📁 단원코드별 전체 보기", "📅 최근 수정일(날짜별) 정렬", "🚨 해설 링크가 연결되지 않은 문제 모아보기"], 
+                horizontal=True
+            )
+            st.divider()
+
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
             c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student,))
@@ -1588,13 +1601,48 @@ else:
             conn.close()
             
             if wrong_rows:
-                for u_code, nums_txt, u_date in wrong_rows:
-                    with st.container(border=True):
+                if wrong_view_mode == "📁 단원코드별 전체 보기":
+                    for u_code, nums_txt, u_date in wrong_rows:
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
+                                st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(최근 수정일: {u_date})</span>", unsafe_allow_html=True)
+                                st.code(bundled_str, language="text")
+
+                elif wrong_view_mode == "📅 최근 수정일(날짜별) 정렬":
+                    # 날짜 기준 내림차순 정렬
+                    sorted_by_date = sorted(wrong_rows, key=lambda x: x[2] if x[2] else "1900-01-01", reverse=True)
+                    for u_code, nums_txt, u_date in sorted_by_date:
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
+                                st.markdown(f"##### 📅 수정일: `{u_date if u_date else '날짜 미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
+                                st.code(bundled_str, language="text")
+
+                elif wrong_view_mode == "🚨 해설 링크가 연결되지 않은 문제 모아보기":
+                    st.info("💡 학생들이 제출한 오답 번호 중, 아직 **'7. 해설 링크 관리'**에 영상 주소가 등록되지 않은 문제들만 모아서 보여줍니다!")
+                    
+                    unlinked_found = False
+                    for u_code, nums_txt, u_date in wrong_rows:
                         parsed_s = parse_numbers(nums_txt)
                         if parsed_s:
-                            bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
-                            st.markdown(f"##### 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
-                            st.code(bundled_str, language="text")
+                            unlinked_nums = []
+                            for num_int in sorted(list(parsed_s)):
+                                full_code = f"{u_code}{num_int:03d}"
+                                if not get_problem_link_by_full(full_code):
+                                    unlinked_nums.append(f"{num_int:03d}")
+                            
+                            if unlinked_nums:
+                                unlinked_found = True
+                                with st.container(border=True):
+                                    bundled_unlinked = f"{u_code}_({','.join(unlinked_nums)})"
+                                    st.markdown(f"##### 🚨 미연결 오답 발견 - 단원코드: `{u_code}`")
+                                    st.code(bundled_unlinked, language="text")
+                    
+                    if not unlinked_found:
+                        st.success("🎉 대단합니다! 현재 등록된 모든 오답에 해설 링크가 완벽하게 연결되어 있습니다.")
             else:
                 st.info("저장된 오답이 없습니다.")
         else:
@@ -1685,7 +1733,7 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 7] 해설 링크 관리 (💡 단원코드별 폴더 그룹화 및 검색 필터 적용 완료)
+    # [탭 7] 해설 링크 관리
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
         
@@ -1722,7 +1770,6 @@ else:
             all_links = get_all_problem_links()
             
             if all_links:
-                # 빠른 검색 필터 추가
                 search_filter = st.text_input("🔍 단원코드 또는 문제번호로 검색하기", placeholder="예: B1353 또는 B1353015").strip().upper()
                 
                 if search_filter:
@@ -1733,7 +1780,6 @@ else:
                 st.caption(f"총 {len(all_links)}개 중 (검색 결과: {len(filtered_links)}개)")
                 
                 if filtered_links:
-                    # 단원코드별로 그룹화
                     grouped_links = {}
                     for l_id, f_code, v_url, u_code in filtered_links:
                         if u_code not in grouped_links:
