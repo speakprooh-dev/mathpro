@@ -1301,10 +1301,10 @@ else:
                     st.success("저장되었습니다!")
                     st.rerun()
 
-        # 💡 [기능 복원] 학생별 전용 링크 바로가기 및 클립보드 복사 기능
+        # 💡 [링크 UI 개선] 중복을 없애고 이름 클릭 + 텍스트 상자 하나로 깔끔하게 통합
         if student_list:
             st.divider()
-            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 시 이동 및 복사)")
+            st.markdown("##### 🔗 학생별 전용 페이지 링크 (클릭 시 이동)")
             try:
                 base_url = st.context.headers.get("Host", "")
                 base_url = f"https://{base_url}" if base_url else "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
@@ -1313,14 +1313,9 @@ else:
 
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
-                
-                # 각 학생 카드 형태로 깔끔하게 배치
                 with st.container(border=True):
                     st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none; font-size:16px; font-weight:bold;'>{s} 학생 페이지 바로가기 ➔</a>**", unsafe_allow_html=True)
                     st.text_input(f"{s} 링크 주소", value=personal_link, key=f"link_txt_{s}", label_visibility="collapsed")
-                    
-                    # Streamlit 내장 클립보드 복사 버튼 지원 (최신 Streamlit 버전 호환)
-                    st.code(personal_link, language="text")
 
     st.divider()
 
@@ -1495,11 +1490,77 @@ else:
         else:
             st.warning("학생을 선택해 주세요.")
 
-    # [탭 4] 커리큘럼 진도 배정
+    # [탭 4] 커리큘럼 진도 배정 (💡 [기능 복원] 과목/단원/유형 등록 및 폴더형 관리 기능 완벽 부활)
     with t_cfg_curriculum:
+        st.markdown("#### 📂 과목 / 단원 / 세부 유형 폴더형 통합 관리")
+
+        # 1. 과목 추가 관리
+        with st.form("unified_sub_form"):
+            col_u1, col_u2 = st.columns([3, 1])
+            with col_u1:
+                new_sub_input = st.text_input("새 과목 추가 (예: 수능 특강)")
+            with col_u2:
+                if st.form_submit_button("과목 등록"):
+                    if new_sub_input.strip() and add_subject(new_sub_input.strip()):
+                        st.success("등록되었습니다!")
+                        st.rerun()
+
         subjects_data = get_subjects()
-        st.markdown("#### 📂 커리큘럼 및 진도 배정")
+        if subjects_data:
+            for sub_id, sub_name in subjects_data:
+                with st.expander(f"📚 [과목] {sub_name}", expanded=False):
+                    chapters_data = [ch for ch in get_chapters() if ch[1] == sub_name]
+                    
+                    # 단원 추가 폼
+                    with st.form(f"add_ch_form_{sub_id}"):
+                        new_ch_name = st.text_input(f"'{sub_name}' 단원 추가", placeholder="예: 1. 다항식의 연산", key=f"ch_input_{sub_id}")
+                        if st.form_submit_button("단원 등록"):
+                            if new_ch_name.strip():
+                                add_chapter(sub_name, new_ch_name.strip())
+                                st.success("단원이 추가되었습니다!")
+                                st.rerun()
+
+                    if chapters_data:
+                        for ch_id, ch_sub, ch_name in chapters_data:
+                            with st.container(border=True):
+                                col_ch_title, col_ch_del = st.columns([5, 1])
+                                with col_ch_title:
+                                    st.markdown(f"▫️ **{ch_name}**")
+                                with col_ch_del:
+                                    if st.button("단원삭제", key=f"del_ch_{ch_id}"):
+                                        delete_chapter(ch_id)
+                                        st.rerun()
+
+                                types_list = get_chapter_types(ch_id)
+                                
+                                # 세부 유형 일괄 등록 폼
+                                with st.form(f"bulk_type_form_{ch_id}"):
+                                    bulk_type_text = st.text_area(f"'{ch_name}' 세부 유형 일괄 등록 (줄바꿈 입력)", placeholder="유형01. 다항식의 덧셈과 빼기\n유형02. 곱셈 공식", key=f"bulk_t_txt_{ch_id}")
+                                    if st.form_submit_button("➕ 세부 유형 일괄 등록"):
+                                        if bulk_type_text.strip():
+                                            bulk_insert_types_for_chapter(ch_id, bulk_type_text)
+                                            st.success("등록되었습니다!")
+                                            st.rerun()
+
+                                # 세부 유형 목록 및 개별 관리
+                                if types_list:
+                                    with st.expander(f"📂 등록된 세부 유형 보기 및 관리 ({len(types_list)}개)"):
+                                        for t_id, t_name, t_url in types_list:
+                                            col_t_name, col_t_url, col_t_del = st.columns([3, 4, 1])
+                                            with col_t_name:
+                                                st.write(t_name)
+                                            with col_t_url:
+                                                new_u = st.text_input("영상URL", value=t_url, key=f"t_url_{t_id}", label_visibility="collapsed")
+                                                if new_u != t_url:
+                                                    update_chapter_type_url(t_id, new_u.strip())
+                                            with col_t_del:
+                                                if st.button("🗑️", key=f"del_t_{t_id}"):
+                                                    delete_chapter_type(t_id)
+                                                    st.rerun()
+
+        st.divider()
         if selected_student:
+            st.markdown(f"#### 🎯 [{selected_student}] 학생 맞춤 단원 진도 배정")
             all_chapters = get_chapters()
             if all_chapters and subjects_data:
                 assigned_chapters = {m[2] for m in get_student_milestones(selected_student)}
@@ -1508,13 +1569,16 @@ else:
                     for sub_id, sub_name in subjects_data:
                         sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
                         for ch_id, ch_sub, ch_name in sub_chapters:
-                            if st.checkbox(f"[{sub_name}] {ch_name}", key=f"assign_ch_chk_{ch_id}"):
+                            is_assigned = ch_name in assigned_chapters
+                            if st.checkbox(f"[{sub_name}] {ch_name}", value=is_assigned, key=f"assign_ch_chk_{ch_id}"):
                                 selected_ch_ids.append(ch_id)
                     if st.form_submit_button("선택한 단원 일괄 배정하기", type="primary"):
                         if selected_ch_ids:
                             assign_chapters_to_student(selected_student, selected_ch_ids)
                             st.success("배정되었습니다!")
                             st.rerun()
+        else:
+            st.warning("상단에서 진도를 배정할 학생을 선택해 주세요.")
 
     # [탭 5] 오답노트 모아보기
     with t_cfg_wrong:
