@@ -37,6 +37,16 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
+# 기본 URL 생성 함수
+def get_base_url():
+    try:
+        base_url = st.context.headers.get("Host", "")
+        if base_url:
+            return f"https://{base_url}"
+    except:
+        pass
+    return "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+
 # 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
     try:
@@ -936,11 +946,12 @@ else:
 
         if student_list:
             st.divider()
-            base_url = "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
+            base_url = get_base_url()
             for s in student_list:
+                personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **{s}**", unsafe_allow_html=True)
-                    st.code(f"{base_url}/?student={s}", language="text")
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.code(personal_link, language="text")
 
     st.divider()
     st.markdown("### ⚙️ 통합 관리 대시보드")
@@ -1061,7 +1072,7 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기 (💡 복사 가능한 코드 블록 & 색상 구분이 적용된 최종본)
+    # [탭 5] 오답노트 모아보기 (💡 날짜 선택 + 최근 날짜별 모두 보기 통합 및 학생 이름 링크 복원 완료)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
@@ -1072,14 +1083,14 @@ else:
                 "오답 모아보기 방식 선택", 
                 [
                     "📁 단원코드별 전체 보기", 
-                    "📅 최근 수정일별 모두 보기", 
-                    "📆 특정 날짜 선택해서 보기", 
+                    "📅 최근 수정일별 보기 (날짜 선택 가능)", 
                     "🚨 해설 링크가 연결되지 않은 문제 모아보기"
                 ], 
                 horizontal=False
             )
             st.divider()
 
+            base_url = get_base_url()
             conn = sqlite3.connect("mathpro_roadmap.db")
             c = conn.cursor()
             if chk_student_choice == "전체 학생 모아보기":
@@ -1095,28 +1106,9 @@ else:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                st.markdown(f"##### {label_prefix}📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                                
-                                # 링크 유무에 따른 HTML 색상 분기 (미연결 문구 없이 색상만 다르게)
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}"
-                                    if get_problem_link_by_full(f_code):
-                                        colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
-                                
-                                st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-
-                elif wrong_view_mode == "📅 최근 수정일별 모두 보기":
-                    sorted_by_date = sorted(all_wrong_rows, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
-                    for s_name, u_code, nums_txt, u_date in sorted_by_date:
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                st.markdown(f"##### {label_prefix}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
+                                student_link = f"{base_url}/?student={s_name}"
+                                name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                st.markdown(f"##### {name_display}📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
                                 
                                 colored_num_tags = []
                                 for n in sorted(list(parsed_s)):
@@ -1128,24 +1120,36 @@ else:
                                 
                                 st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
 
-                elif wrong_view_mode == "📆 특정 날짜 선택해서 보기":
+                elif wrong_view_mode == "📅 최근 수정일별 보기 (날짜 선택 가능)":
                     available_dates = sorted(list(set([r[3] for r in all_wrong_rows if r[3]])), reverse=True)
                     if available_dates:
-                        selected_target_date = st.selectbox("확인할 수정일 선택", available_dates)
-                        st.markdown(f"##### 📅 선택된 날짜: `{selected_target_date}` 오답 목록")
+                        date_options = ["전체 날짜 보기 (최근순)"] + available_dates
+                        selected_date_filter = st.selectbox("확인할 수정일 선택", date_options)
                         
-                        date_filtered_rows = [r for r in all_wrong_rows if r[3] == selected_target_date]
-                        for s_name, u_code, nums_txt, u_date in date_filtered_rows:
+                        if selected_date_filter == "전체 날짜 보기 (최근순)":
+                            target_rows = sorted(all_wrong_rows, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
+                        else:
+                            target_rows = [r for r in all_wrong_rows if r[3] == selected_date_filter]
+                        
+                        st.markdown(f"---")
+                        for s_name, u_code, nums_txt, u_date in target_rows:
                             with st.container(border=True):
                                 parsed_s = parse_numbers(nums_txt)
                                 if parsed_s:
-                                    label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {label_prefix}단원: `{u_code}`")
+                                    student_link = f"{base_url}/?student={s_name}"
+                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                    st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
                                     
-                                    # 클립보드 복사가 가능한 st.code 활용을 위해 문자열 생성 및 색상 강조 병행
-                                    nums_str = ", ".join([f"{n:03d}" for n in sorted(list(parsed_s))])
-                                    clipboard_target_str = f"{u_code}_({nums_str})"
-                                    st.code(clipboard_target_str, language="text")
+                                    # 미연결 색상 구분이 적용되면서도 복사가 편하도록 HTML 박스 및 색상 적용
+                                    colored_num_tags = []
+                                    for n in sorted(list(parsed_s)):
+                                        f_code = f"{u_code}{n:03d}"
+                                        if get_problem_link_by_full(f_code):
+                                            colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                        else:
+                                            colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
+                                    
+                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                     else:
                         st.info("등록된 수정일 데이터가 없습니다.")
 
@@ -1159,8 +1163,9 @@ else:
                             if unlinked_nums:
                                 unlinked_found = True
                                 with st.container(border=True):
-                                    label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {label_prefix}🚨 미연결 오답 - 단원: `{u_code}`")
+                                    student_link = f"{base_url}/?student={s_name}"
+                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                    st.markdown(f"##### {name_display}🚨 미연결 오답 - 단원: `{u_code}`")
                                     unlinked_str = f"{u_code}_({', '.join(unlinked_nums)})"
                                     st.code(unlinked_str, language="text")
                     if not unlinked_found:
