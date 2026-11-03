@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import io
 
-# 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수 (외부 라이브러리 불필요)
+# 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수
 def get_korean_today():
     try:
         kst = timezone(timedelta(hours=9))
@@ -904,13 +904,15 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
             
-            current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
-            current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
-            
-            monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
-            _, last_day = calendar.monthrange(current_year, current_month)
-            
-            with st.expander(f"📅 {current_year}년 {current_month}월 루틴 실천 현황 펼쳐보기", expanded=False):
+            # 💡 [요청 반영] 연도/월 선택기를 아코디언 내부로 쏙 집어넣어 화면을 깔끔하게 정리했습니다!
+            with st.expander("📅 지난 루틴 실천 현황 보기 (연도·월 선택)", expanded=False):
+                current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
+                current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
+                
+                monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
+                _, last_day = calendar.monthrange(current_year, current_month)
+                
+                st.markdown(f"**📋 {current_year}년 {current_month}월 실천 기록**")
                 for day in range(1, last_day + 1):
                     d_str = f"{current_year}-{current_month:02d}-{day:02d}"
                     w_name = get_weekday_kr(d_str)[:1]
@@ -955,60 +957,58 @@ if url_student and url_student in student_list:
                         st.rerun()
 
     with tab3:
-        st.markdown("### 💬 오답 및 질문 번호 관리")
+        # 💡 [요청 반영] 헷갈리지 않게 해설 영상 검색 영역과 오답 등록 영역을 완전히 분리하고 명확하게 타이틀 정리
+        st.markdown("### 💬 오답 및 질문 관리")
         
-        st.markdown("##### 🔍 해설 영상 즉시 검색하기")
-        search_prob_input = st.text_input("문제 번호 또는 단원코드 입력 (예: B1353015 또는 B1353)", placeholder="예: B1353").strip().upper()
-        if search_prob_input:
-            if len(search_prob_input) >= 7:
-                matched_url = get_problem_link_by_full(search_prob_input)
-                if matched_url:
-                    st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                    st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("##### 🔍 1. 해설 영상 즉시 검색하기")
+            st.caption("궁금한 문제 번호 전체를 입력하면 즉시 해설 영상으로 이동합니다.")
+            search_prob_input = st.text_input("문제 번호 입력 (예: B1353015)", placeholder="예: B1353015").strip().upper()
+            if search_prob_input:
+                if len(search_prob_input) >= 7:
+                    matched_url = get_problem_link_by_full(search_prob_input)
+                    if matched_url:
+                        st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                        st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                    else:
+                        st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
                 else:
-                    st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
-            else:
-                unit_results = get_problem_links_by_unit(search_prob_input)
-                if unit_results:
-                    st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
-                    for f_code, v_url in unit_results:
-                        st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
-                else:
-                    st.info("등록된 해설 링크가 없습니다.")
+                    unit_results = get_problem_links_by_unit(search_prob_input)
+                    if unit_results:
+                        st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                        for f_code, v_url in unit_results:
+                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                    else:
+                        st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
-        st.markdown("---")
-        conn_w = sqlite3.connect("mathpro_roadmap.db")
-        c_w = conn_w.cursor()
-        c_w.execute("SELECT unit_code FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-        saved_units_rows = c_w.fetchall()
-        conn_w.close()
-        saved_units_list = [r[0] for r in saved_units_rows]
-        
-        current_unit = st.selectbox("확인할 단원 선택", saved_units_list, index=None, placeholder="-- 단원을 선택해 주세요 --") if saved_units_list else None
-        if current_unit:
-            saved_text = get_student_wrong_entry(selected_student, current_unit)
-            saved_nums = parse_numbers(saved_text)
-            linked_problems_dict = {row[0]: row[1] for row in get_problem_links_by_unit(current_unit)}
-            for num_int in sorted(list(saved_nums)):
-                full_code = f"{current_unit}{num_int:03d}"
-                video_url = linked_problems_dict.get(full_code, "")
-                if video_url:
-                    st.markdown(f'<a href="{video_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; border:1px solid #334155; padding:12px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+        st.markdown("")
+        with st.container(border=True):
+            st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
+            st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
+            
+            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
+            target_code = entered_unit_code if entered_unit_code else "B1353"
+            
+            if entered_unit_code:
+                existing_wrong = get_student_wrong_entry(selected_student, entered_unit_code)
+                if existing_wrong:
+                    st.info(f"현재 등록된 오답 번호: **{entered_unit_code}_({existing_wrong})**")
                 else:
-                    st.markdown(f'<a href="{cafe_main_url}" target="_blank" style="display:block; background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:12px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; margin-bottom:10px;">📌 {full_code} &nbsp;&nbsp;<span style="color:#64748B;">🔍 네이버 카페 검색 ➔</span></a>', unsafe_allow_html=True)
+                    st.info(f"현재 등록된 오답이 없습니다.")
 
-        st.markdown("---")
-        entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", value=current_unit or "").strip().upper()
-        target_code = entered_unit_code if entered_unit_code else "B1353"
-        col_add, col_del = st.columns(2)
-        with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
-        with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
-        if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
-            saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
-            final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
-            save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
-            st.success("저장되었습니다!")
-            st.rerun()
+            col_add, col_del = st.columns(2)
+            with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
+            with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
+            
+            if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
+                if entered_unit_code:
+                    saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
+                    final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
+                    save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
+                    st.success("저장되었습니다!")
+                    st.rerun()
+                else:
+                    st.warning("단원코드를 먼저 입력해 주세요.")
 
 # 2. [선생님 전용 관리 모드]
 else:
