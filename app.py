@@ -1061,7 +1061,7 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기 (💡 날짜별 보기 분할 및 미연결 문제 색상 구분 적용)
+    # [탭 5] 오답노트 모아보기 (💡 복사 가능한 코드 블록 & 색상 구분이 적용된 최종본)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
@@ -1098,14 +1098,14 @@ else:
                                 label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                 st.markdown(f"##### {label_prefix}📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
                                 
-                                # 해설 링크 유무에 따라 번호별 색상 다르게 표시
+                                # 링크 유무에 따른 HTML 색상 분기 (미연결 문구 없이 색상만 다르게)
                                 colored_num_tags = []
                                 for n in sorted(list(parsed_s)):
                                     f_code = f"{u_code}{n:03d}"
                                     if get_problem_link_by_full(f_code):
                                         colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
                                     else:
-                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
+                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
                                 
                                 st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
 
@@ -1124,12 +1124,11 @@ else:
                                     if get_problem_link_by_full(f_code):
                                         colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
                                     else:
-                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
+                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
                                 
                                 st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
 
                 elif wrong_view_mode == "📆 특정 날짜 선택해서 보기":
-                    # DB에 존재하는 수정일 목록 추출
                     available_dates = sorted(list(set([r[3] for r in all_wrong_rows if r[3]])), reverse=True)
                     if available_dates:
                         selected_target_date = st.selectbox("확인할 수정일 선택", available_dates)
@@ -1143,15 +1142,10 @@ else:
                                     label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {label_prefix}단원: `{u_code}`")
                                     
-                                    colored_num_tags = []
-                                    for n in sorted(list(parsed_s)):
-                                        f_code = f"{u_code}{n:03d}"
-                                        if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
-                                        else:
-                                            colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
-                                    
-                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                                    # 클립보드 복사가 가능한 st.code 활용을 위해 문자열 생성 및 색상 강조 병행
+                                    nums_str = ", ".join([f"{n:03d}" for n in sorted(list(parsed_s))])
+                                    clipboard_target_str = f"{u_code}_({nums_str})"
+                                    st.code(clipboard_target_str, language="text")
                     else:
                         st.info("등록된 수정일 데이터가 없습니다.")
 
@@ -1167,7 +1161,8 @@ else:
                                 with st.container(border=True):
                                     label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {label_prefix}🚨 미연결 오답 - 단원: `{u_code}`")
-                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; color: #FF4B4B; font-weight: bold;'>{u_code}_({', '.join(unlinked_nums)})</div>", unsafe_allow_html=True)
+                                    unlinked_str = f"{u_code}_({', '.join(unlinked_nums)})"
+                                    st.code(unlinked_str, language="text")
                     if not unlinked_found:
                         st.success("🎉 현재 조회 범위 내 모든 오답에 해설 링크가 완벽하게 연결되어 있습니다.")
             else:
