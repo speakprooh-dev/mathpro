@@ -51,7 +51,6 @@ def restore_from_excel(uploaded_file):
         
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
-            # 기존 테이블 데이터 초기화 후 복구
             try:
                 c.execute(f"DELETE FROM {sheet_name}")
                 df.to_sql(sheet_name, conn, if_exists='append', index=False)
@@ -793,7 +792,7 @@ def parse_numbers(text):
     return set(int(n) for n in nums)
 
 # --- 웹 UI 구성 ---
-st.title("📐 MathPro 학생 맞춤 학습 로드맵")
+st.title("📐 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
@@ -812,7 +811,6 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     selected_student = url_student
     
-    # 환영 인사 먼저 출력
     st.markdown(
         f'<div style="background-color:#1E293B; border:1px solid #334155; padding:16px; border-radius:12px; margin-bottom:15px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">'
         f'<div style="font-size:17px; font-weight:bold; color:#F8FAFC; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#38BDF8;">{selected_student}</span> 학생!</div>'
@@ -1065,7 +1063,7 @@ if url_student and url_student in student_list:
                             full_code = f"{view_target_code}{n:03d}"
                             v_url = get_problem_link_by_full(full_code)
                             if v_url:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True, unsafe_allow_html=True)
                             else:
                                 st.markdown(f'<div style="background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:#64748B;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
                 else:
@@ -1094,7 +1092,6 @@ else:
                 st.rerun()
             st.divider()
             
-            # 백업 다운로드 및 엑셀 복구 도구
             st.markdown("##### 📥/📤 데이터 백업 및 복구")
             st.download_button(
                 label="📥 전체 데이터 엑셀 백업하기",
@@ -1104,7 +1101,6 @@ else:
                 use_container_width=True
             )
             
-            # 💡 [핵심 추가] 백업 엑셀 파일 업로드로 DB 원상복구 기능!
             with st.expander("🔄 엑셀 파일로 데이터 복구하기"):
                 uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
                 if uploaded_backup is not None:
@@ -1141,7 +1137,7 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True, unsafe_allow_html=True)
                     st.code(personal_link, language="text")
 
     st.divider()
@@ -1425,8 +1421,9 @@ else:
                                 parsed_s = parse_numbers(nums_txt)
                                 if parsed_s:
                                     student_link = f"{base_url}/?student={s_name}"
+                                    # 💡 [핵심 수정] unsafe_allow_html=True 추가하여 HTML 링크가 정상 렌더링되도록 수정함
                                     name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
+                                    st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`", unsafe_allow_html=True)
                                     
                                     colored_num_tags = []
                                     for n in sorted(list(parsed_s)):
@@ -1452,7 +1449,7 @@ else:
                                 with st.container(border=True):
                                     student_link = f"{base_url}/?student={s_name}"
                                     name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {name_display}🚨 미연결 오답 - 단원: `{u_code}`")
+                                    st.markdown(f"##### {name_display}🚨 미연결 오답 - 단원: `{u_code}`", unsafe_allow_html=True)
                                     unlinked_str = f"{u_code}_({', '.join(unlinked_nums)})"
                                     st.code(unlinked_str, language="text")
                     if not unlinked_found:
