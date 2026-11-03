@@ -983,7 +983,7 @@ else:
                                 save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{m_id}"])
                                 st.rerun()
 
-    # [탭 2] 공지사항 관리 (등록 및 하단 관리/삭제 목록 확실하게 분리)
+    # [탭 2] 공지사항 관리
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
         with st.form("add_notice_form"):
@@ -1061,18 +1061,22 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기 (💡 요청하신 전체보기 옵션 추가 완료)
+    # [탭 5] 오답노트 모아보기 (💡 날짜별 보기 분할 및 미연결 문제 색상 구분 적용)
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
-            # 학생 선택 옵션에 '전체 학생 모아보기' 추가
             student_select_options = ["전체 학생 모아보기"] + student_list
             chk_student_choice = st.selectbox("조회할 대상 선택", student_select_options, key="chk_wrong_student_choice")
             
             wrong_view_mode = st.radio(
                 "오답 모아보기 방식 선택", 
-                ["📁 단원코드별 전체 보기", "📅 최근 수정일(날짜별) 정렬", "🚨 해설 링크가 연결되지 않은 문제 모아보기"], 
-                horizontal=True
+                [
+                    "📁 단원코드별 전체 보기", 
+                    "📅 최근 수정일별 모두 보기", 
+                    "📆 특정 날짜 선택해서 보기", 
+                    "🚨 해설 링크가 연결되지 않은 문제 모아보기"
+                ], 
+                horizontal=False
             )
             st.divider()
 
@@ -1080,10 +1084,9 @@ else:
             c = conn.cursor()
             if chk_student_choice == "전체 학생 모아보기":
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
-                all_wrong_rows = c.fetchall() # (student_name, unit_code, numbers_text, updated_at)
             else:
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                all_wrong_rows = c.fetchall()
+            all_wrong_rows = c.fetchall()
             conn.close()
             
             if all_wrong_rows:
@@ -1092,21 +1095,65 @@ else:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
                                 label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                 st.markdown(f"##### {label_prefix}📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                                st.code(bundled_str, language="text")
+                                
+                                # 해설 링크 유무에 따라 번호별 색상 다르게 표시
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
+                                
+                                st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
 
-                elif wrong_view_mode == "📅 최근 수정일(날짜별) 정렬":
+                elif wrong_view_mode == "📅 최근 수정일별 모두 보기":
                     sorted_by_date = sorted(all_wrong_rows, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
                     for s_name, u_code, nums_txt, u_date in sorted_by_date:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                bundled_str = f"{u_code}_({','.join([f'{n:03d}' for n in sorted(list(parsed_s))])})"
                                 label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                 st.markdown(f"##### {label_prefix}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`")
-                                st.code(bundled_str, language="text")
+                                
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
+                                
+                                st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+
+                elif wrong_view_mode == "📆 특정 날짜 선택해서 보기":
+                    # DB에 존재하는 수정일 목록 추출
+                    available_dates = sorted(list(set([r[3] for r in all_wrong_rows if r[3]])), reverse=True)
+                    if available_dates:
+                        selected_target_date = st.selectbox("확인할 수정일 선택", available_dates)
+                        st.markdown(f"##### 📅 선택된 날짜: `{selected_target_date}` 오답 목록")
+                        
+                        date_filtered_rows = [r for r in all_wrong_rows if r[3] == selected_target_date]
+                        for s_name, u_code, nums_txt, u_date in date_filtered_rows:
+                            with st.container(border=True):
+                                parsed_s = parse_numbers(nums_txt)
+                                if parsed_s:
+                                    label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                    st.markdown(f"##### {label_prefix}단원: `{u_code}`")
+                                    
+                                    colored_num_tags = []
+                                    for n in sorted(list(parsed_s)):
+                                        f_code = f"{u_code}{n:03d}"
+                                        if get_problem_link_by_full(f_code):
+                                            colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                        else:
+                                            colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d} (미연결)</span>")
+                                    
+                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("등록된 수정일 데이터가 없습니다.")
 
                 elif wrong_view_mode == "🚨 해설 링크가 연결되지 않은 문제 모아보기":
                     st.info("💡 학생들이 제출한 오답 중, 아직 '7. 해설 링크 관리'에 영상 주소가 등록되지 않은 문제들만 모아봅니다!")
@@ -1120,7 +1167,7 @@ else:
                                 with st.container(border=True):
                                     label_prefix = f"👤 **[{s_name}]** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {label_prefix}🚨 미연결 오답 - 단원: `{u_code}`")
-                                    st.code(f"{u_code}_({','.join(unlinked_nums)})", language="text")
+                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; color: #FF4B4B; font-weight: bold;'>{u_code}_({', '.join(unlinked_nums)})</div>", unsafe_allow_html=True)
                     if not unlinked_found:
                         st.success("🎉 현재 조회 범위 내 모든 오답에 해설 링크가 완벽하게 연결되어 있습니다.")
             else:
