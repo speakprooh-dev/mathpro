@@ -876,7 +876,6 @@ if url_student and url_student in student_list:
     with tab2:
         st.markdown("### 🔥 매일 반복 루틴 과제 및 숙제")
         
-        # 💡 [복구됨] 학생 화면 월간 루틴 캘린더 및 실천 현황 뷰
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
             today_obj = date.today()
@@ -887,7 +886,7 @@ if url_student and url_student in student_list:
             cal_matrix = calendar.monthcalendar(current_year, current_month)
             weekdays_kr = ["월", "화", "수", "목", "금", "토", "일"]
             
-            st.markdown(f"##### 📅 {current_year년} {current_month}월 루틴 실천 달력")
+            st.markdown(f"##### 📅 {current_year}년 {current_month}월 루틴 실천 달력")
             cols_header = st.columns(7)
             for i, w_name in enumerate(weekdays_kr):
                 with cols_header[i]:
@@ -1150,7 +1149,6 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            # --- 1. 매일 루틴 과제 설정 및 실천 현황 뷰 복구 ---
             with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황", expanded=True):
                 st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 이번 달 실천 현황을 점검합니다.")
                 
@@ -1178,7 +1176,6 @@ else:
                                 st.success("삭제되었습니다!")
                                 st.rerun()
 
-                    # 💡 선생님 모드에서의 학생 월간 실천 현황표 뷰
                     st.markdown("---")
                     st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 캘린더")
                     today_obj = date.today()
@@ -1214,7 +1211,6 @@ else:
                                         unsafe_allow_html=True
                                     )
 
-            # --- 2. 날짜별 과제 부여 및 템플릿 영역 ---
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여")
             
