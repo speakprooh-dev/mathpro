@@ -492,7 +492,7 @@ def get_problem_link_by_full(full_code):
 def get_all_problem_links():
     conn = sqlite3.connect("mathpro_roadmap.db")
     c = conn.cursor()
-    c.execute("SELECT id, full_code, video_url FROM problem_links ORDER BY full_code")
+    c.execute("SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code")
     rows = c.fetchall()
     conn.close()
     return rows
@@ -1685,7 +1685,7 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 7] 해설 링크 관리 (💡 [기능 복원] 개별 등록 + 여러 개 일괄 등록(Bulk) + 전체 목록 관리 및 삭제 기능 완벽 부활)
+    # [탭 7] 해설 링크 관리 (💡 단원코드별 폴더 그룹화 및 검색 필터 적용 완료)
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
         
@@ -1715,24 +1715,45 @@ else:
                     if bulk_links_text.strip():
                         s_cnt, f_cnt = bulk_save_problem_links(bulk_links_text)
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
-
                         st.rerun()
 
         with col_link_tab2:
-            st.markdown("##### 📋 현재 등록된 모든 해설 링크 목록")
+            st.markdown("##### 📋 단원별 등록된 해설 링크 목록")
             all_links = get_all_problem_links()
+            
             if all_links:
-                st.caption(f"총 {len(all_links)}개의 해설 링크가 등록되어 있습니다.")
-                for l_id, f_code, v_url in all_links:
-                    with st.container(border=True):
-                        col_li_info, col_li_del = st.columns([5, 1])
-                        with col_li_info:
-                            st.markdown(f"📌 **{f_code}**")
-                            st.markdown(f"🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                        with col_li_del:
-                            if st.button("🗑️ 삭제", key=f"del_link_{l_id}"):
-                                delete_problem_link(l_id)
-                                st.success("삭제되었습니다!")
-                                st.rerun()
+                # 빠른 검색 필터 추가
+                search_filter = st.text_input("🔍 단원코드 또는 문제번호로 검색하기", placeholder="예: B1353 또는 B1353015").strip().upper()
+                
+                if search_filter:
+                    filtered_links = [l for l in all_links if search_filter in l[1] or search_filter in l[3]]
+                else:
+                    filtered_links = all_links
+
+                st.caption(f"총 {len(all_links)}개 중 (검색 결과: {len(filtered_links)}개)")
+                
+                if filtered_links:
+                    # 단원코드별로 그룹화
+                    grouped_links = {}
+                    for l_id, f_code, v_url, u_code in filtered_links:
+                        if u_code not in grouped_links:
+                            grouped_links[u_code] = []
+                        grouped_links[u_code].append((l_id, f_code, v_url))
+
+                    for u_code, links in grouped_links.items():
+                        with st.expander(f"📂 단원코드: `{u_code}` (등록된 문제 {len(links)}개)", expanded=False):
+                            for l_id, f_code, v_url in links:
+                                with st.container(border=True):
+                                    col_li_info, col_li_del = st.columns([5, 1])
+                                    with col_li_info:
+                                        st.markdown(f"📌 **{f_code}**")
+                                        st.markdown(f"🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                                    with col_li_del:
+                                        if st.button("🗑️ 삭제", key=f"del_link_{l_id}"):
+                                            delete_problem_link(l_id)
+                                            st.success("삭제되었습니다!")
+                                            st.rerun()
+                else:
+                    st.info("검색 결과가 없습니다.")
             else:
                 st.info("등록된 해설 링크가 없습니다.")
