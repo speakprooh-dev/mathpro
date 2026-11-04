@@ -901,7 +901,7 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-            # 상세 실천 기록을 볼 수 있는 깔끔한 expander 배치
+            # 상세 실천 기록을 볼 수 있는 깔끔한 expander 배치 (날짜별 내역)
             st.markdown("")
             with st.expander(f"📅 루틴 상세 실천 기록 보기", expanded=False):
                 recent_logs_map = get_student_recent_logs_range(selected_student, 14)
