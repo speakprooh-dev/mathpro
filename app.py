@@ -1313,9 +1313,9 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
-                                # [수정 완료] 하위 숙제 key에 s_name과 selected_matrix_date를 조합하여 완전 고유화
-                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}") != s_done:
-                                    save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}"])
+                                # [완벽한 고유 키 적용] 학생 이름, 날짜, 하위 숙제 ID를 모두 조합
+                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"matrix_sub_chk_{s_name}_{selected_matrix_date}_{s_id}") != s_done:
+                                    save_single_homework_progress(s_name, s_id, st.session_state[f"matrix_sub_chk_{s_name}_{selected_matrix_date}_{s_id}"])
                                     st.rerun()
 
     with t_cfg_links:
