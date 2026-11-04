@@ -785,7 +785,8 @@ if url_student and url_student in student_list:
                         default_val = m_progress.get(m_id, False)
                         cols = st.columns([4, 1])
                         with cols[0]:
-                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{selected_student}_{m_id}")
+                            # 학생 모드 개념 진도 체크박스 key에 m_id를 조합하여 완전 고유화
+                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{m_id}")
                             if val != default_val:
                                 save_single_milestone_progress(selected_student, m_id, val)
                                 st.rerun()
@@ -1313,7 +1314,6 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
-                                # 매트릭스 하위 숙제 key에 고유 식별자 추가 완료
                                 if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}") != s_done:
                                     save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}"])
                                     st.rerun()
