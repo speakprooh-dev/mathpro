@@ -508,6 +508,34 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
+def get_routine_completion_rate(student_name, days_limit=14):
+    """최근 N일간의 루틴 전체 달성률(%) 및 완수/전체 건수 계산"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    
+    today_obj = get_korean_today()
+    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
+    today_str = str(today_obj)
+    
+    c.execute("SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines_count = c.fetchone()[0]
+    
+    if total_routines_count == 0:
+        conn.close()
+        return 0, 0, 0
+    
+    total_expected = total_routines_count * days_limit
+    
+    c.execute("""
+        SELECT COUNT(*) FROM daily_routine_logs 
+        WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
+    """, (student_name, start_date_str, today_str))
+    completed_count = c.fetchone()[0]
+    conn.close()
+    
+    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    return rate, completed_count, total_expected
+
 # --- 숙제 템플릿 관련 함수 ---
 def get_homework_templates():
     conn, _ = get_db_connection()
@@ -822,7 +850,30 @@ if url_student and url_student in student_list:
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
-                st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
+                col_rt_title, col_rt_opt = st.columns([2, 1])
+                with col_rt_title:
+                    st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
+                with col_rt_opt:
+                    range_option = st.selectbox(
+                        "달성률 조회 기간", 
+                        ["최근 1주 (7일)", "최근 2주 (14일)", "최근 3주 (21일)", "최근 4주 (28일)"], 
+                        index=1,
+                        key="student_routine_range_select",
+                        label_visibility="collapsed"
+                    )
+                
+                days_map = {
+                    "최근 1주 (7일)": 7,
+                    "최근 2주 (14일)": 14,
+                    "최근 3주 (21일)": 21,
+                    "최근 4주 (28일)": 28
+                }
+                selected_days = days_map[range_option]
+                r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, selected_days)
+                
+                st.caption(f"🔥 **{range_option} 달성률: {r_rate}%** ({r_total}개 중 {r_completed}개 완료)")
+                st.markdown("---")
+
                 daily_routine_checked_dict = {}
                 for r_id, r_title in daily_parents:
                     r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
