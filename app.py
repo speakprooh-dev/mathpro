@@ -1313,6 +1313,7 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
+                                # 에러가 난 부분 (key 중복 발생)
                                 if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_id}") != s_done:
                                     save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_id}"])
                                     st.rerun()
