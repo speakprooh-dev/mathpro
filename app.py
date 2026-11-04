@@ -78,24 +78,15 @@ def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
-        c = conn.cursor()
         
-        # 외래키 제약조건 무시 (안전한 덮어쓰기)
-        if db_type == "sqlite":
-            c.execute("PRAGMA foreign_keys = OFF;")
-            
+        # 엑셀의 모든 시트 데이터를 데이터베이스에 통째로 덮어쓰기 (테이블 자동 생성)
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
-                c.execute(f"DELETE FROM {sheet_name}")
-                conn.commit()
-                df.to_sql(sheet_name, conn, if_exists='append', index=False, method='multi')
+                df.to_sql(sheet_name, conn, if_exists='replace', index=False)
             except Exception as sub_e:
                 pass
                 
-        if db_type == "sqlite":
-            c.execute("PRAGMA foreign_keys = ON;")
-            
         conn.commit()
         conn.close()
         return True, "데이터베이스가 성공적으로 복구되었습니다!"
