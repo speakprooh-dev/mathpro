@@ -413,8 +413,7 @@ def bulk_insert_daily_routines(student_name, text_data):
         line_str = line.strip()
         if not line_str:
             continue
-        # [수정] 들여쓰기가 있거나, 명시적 기호(-, *, •, └)가 있을 때만 하위 항목으로 인식
-        is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
+        is_sub = line_str.startswith(('-', '*', '•', '└'))
         title = line_str.lstrip('-•*└\t ').strip()
         if not title:
             continue
@@ -578,8 +577,9 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
         line_str = line.strip()
         if not line_str:
             continue
-        # [수정] 오직 들여쓰기(스페이스/탭)나 명시적 기호(-, *, •, └)가 시작될 때만 하위 숙제로 인식합니다.
-        is_sub = line.startswith((' ', '\t')) or line_str.startswith(('-', '*', '•', '└'))
+        # [핵심 수정] 오직 맨 앞에 '-', '*', '•', '└' 기호가 붙어 있는 줄만 하위 항목(└)으로 인식합니다.
+        # 그냥 줄바꿈한 일반 글자는 모두 독립된 상위 숙제로 등록됩니다!
+        is_sub = line_str.startswith(('-', '*', '•', '└'))
         title = line_str.lstrip('-•*└\t ').strip()
         if not title:
             continue
