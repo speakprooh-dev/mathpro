@@ -838,7 +838,7 @@ if url_student and url_student in student_list:
         )
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
 
-        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (라이트모드/다크모드 공통 완벽 가독성 확보)
+        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치
         today_obj = get_korean_today()
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         
@@ -860,6 +860,7 @@ if url_student and url_student in student_list:
                 border_highlight = "border: 2px solid #38BDF8;" if is_today else "border: 1px solid #334155;"
                 today_tag = " (오늘)" if is_today else ""
                 
+                # HTML <span> 대신 순수 태그 및 강제 속성 반영
                 st.markdown(
                     f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
                     f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
