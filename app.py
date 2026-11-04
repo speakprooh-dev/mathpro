@@ -55,9 +55,6 @@ def get_korean_today():
     except Exception:
         return date.today()
 
-def get_cafe_search_url(unit_code, num_int):
-    return "https://cafe.naver.com/mathpro2020"
-
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -82,7 +79,6 @@ def restore_from_excel(uploaded_file):
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
         c = conn.cursor()
-        
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
@@ -90,12 +86,11 @@ def restore_from_excel(uploaded_file):
                 df.to_sql(sheet_name, conn, if_exists='append', index=False)
             except Exception:
                 pass
-                
         conn.commit()
         conn.close()
-        return True, "데이터베이스가 엑셀 백업 파일 내용으로 성공적으로 복구되었습니다!"
+        return True, "데이터베이스가 성공적으로 복구되었습니다!"
     except Exception as e:
-        return False, f"복구 중 오류가 발생했습니다: {str(e)}"
+        return False, f"복구 중 오류 발생: {str(e)}"
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -119,6 +114,8 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
+# 🚀 [최적화된 DB 초기화 함수] 모바일 접속 병목 현상 제거
+@st.cache_resource
 def init_db():
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -142,29 +139,12 @@ def init_db():
         c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
     else:
         c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
-        try:
-            c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
-
         c.execute('CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, name TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id INTEGER PRIMARY KEY AUTOINCREMENT, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\')')
-        
-        try:
-            c.execute("ALTER TABLE chapter_types ADD COLUMN video_url TEXT DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
-        
         c.execute('CREATE TABLE IF NOT EXISTS milestones (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS homework (id INTEGER PRIMARY KEY AUTOINCREMENT, hw_date TEXT NOT NULL, title TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS student_homework (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
-        
-        try:
-            c.execute("ALTER TABLE student_homework ADD COLUMN parent_id INTEGER DEFAULT NULL")
-        except sqlite3.OperationalError:
-            pass
-
         c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
@@ -172,12 +152,6 @@ def init_db():
         c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
         c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date))')
         c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
-        
-        try:
-            c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT ''")
-        except sqlite3.OperationalError:
-            pass
-
         c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
 
@@ -423,7 +397,6 @@ def bulk_insert_daily_routines(student_name, text_data):
     conn, _ = get_db_connection()
     c = conn.cursor()
     lines = text_data.strip().split('\n')
-    added_count = 0
     current_parent_id = None
     for line in lines:
         line_str = line.strip()
@@ -443,10 +416,8 @@ def bulk_insert_daily_routines(student_name, text_data):
                 current_parent_id = row[0] if row else None
             except Exception:
                 pass
-        added_count += 1
     conn.commit()
     conn.close()
-    return added_count
 
 def delete_daily_routine(r_id):
     conn, _ = get_db_connection()
@@ -495,18 +466,15 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    
     today_obj = get_korean_today()
     start_date_str = str(today_obj - timedelta(days=days_limit - 1))
     today_str = str(today_obj)
     
     c.execute("SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
     total_routines_count = c.fetchone()[0]
-    
     if total_routines_count == 0:
         conn.close()
         return 0, 0, 0
-    
     total_expected = total_routines_count * days_limit
     
     c.execute("""
@@ -741,7 +709,7 @@ if url_student and url_student in student_list:
     selected_student = url_student
     
     st.markdown(
-        f'<div style="background-color:var(--secondary-background-color); border:1px solid var(--border-color, #ccc); padding:16px; border-radius:12px; margin-bottom:15px;">'
+        f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
         f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
         f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
         unsafe_allow_html=True
@@ -855,10 +823,7 @@ if url_student and url_student in student_list:
                 total_r_count = len(daily_parents)
                 
                 status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                
                 today_tag = " (오늘)" if is_today else ""
-                
-                # 브라우저 다크모드 반전 영향을 받지 않도록 Streamlit 기본 지원 변수 활용 및 테두리 설정
                 border_style = "border: 2px solid #03C75A;" if is_today else "border: 1px solid rgba(128,128,128,0.3);"
                 
                 st.markdown(
@@ -901,9 +866,6 @@ if url_student and url_student in student_list:
             st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
     with tab2:
-        # -------------------------------------------------------------------------
-        # [구역 1] 매일 반복 루틴 체크 (행동 영역)
-        # -------------------------------------------------------------------------
         st.markdown("### 🔥 매일 반복 루틴 체크")
         st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
 
@@ -932,9 +894,6 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-        # -------------------------------------------------------------------------
-        # [구역 2] 날짜별 개별 숙제
-        # -------------------------------------------------------------------------
         if hw_dates:
             st.markdown("")
             st.markdown("---")
