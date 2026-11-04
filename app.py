@@ -865,7 +865,7 @@ if url_student and url_student in student_list:
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
-                # 1. 오늘 루틴 체크하기가 가장 위로 오도록 배치
+                # 1. 오늘 루틴 체크하기
                 st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
                 st.markdown("---")
 
@@ -884,7 +884,7 @@ if url_student and url_student in student_list:
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-            # 2. 그 바로 아래에 기간 선택 및 달성률, 상세 실천 현황 연동 보기 배치
+            # 2. 기간별 루틴 달성 현황 (상세 현황은 expander로 접어둠)
             with st.container(border=True):
                 col_rt_title, col_rt_opt = st.columns([2, 1])
                 with col_rt_title:
@@ -910,29 +910,31 @@ if url_student and url_student in student_list:
                 st.caption(f"🔥 **{range_option} 달성률: {r_rate}%** ({r_total}개 중 {r_completed}개 완료)")
                 st.markdown("---")
 
-                recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
-                
-                for i in range(selected_days):
-                    target_d = today_obj - timedelta(days=i)
-                    d_str = str(target_d)
-                    w_name = get_weekday_kr(d_str)[:1]
-                    is_today = (d_str == str(today_obj))
+                # 상세 실천 현황을 기본으로 접어두도록 expanded=False 설정
+                with st.expander(f"📅 선택한 {range_option} 상세 실천 현황 보기", expanded=False):
+                    recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
                     
-                    day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
-                    total_r_count = len(daily_parents)
-                    
-                    status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                    
-                    highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
-                    today_tag = " (오늘)" if is_today else ""
-                    
-                    st.markdown(
-                        f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
-                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                        f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
+                    for i in range(selected_days):
+                        target_d = today_obj - timedelta(days=i)
+                        d_str = str(target_d)
+                        w_name = get_weekday_kr(d_str)[:1]
+                        is_today = (d_str == str(today_obj))
+                        
+                        day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
+                        total_r_count = len(daily_parents)
+                        
+                        status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
+                        
+                        highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
+                        today_tag = " (오늘)" if is_today else ""
+                        
+                        st.markdown(
+                            f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
+                            f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                            f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
 
         if hw_dates:
             st.markdown("---")
