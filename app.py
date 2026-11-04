@@ -78,15 +78,12 @@ def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
-        
-        # 엑셀의 모든 시트 데이터를 데이터베이스에 통째로 덮어쓰기 (테이블 자동 생성)
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
                 df.to_sql(sheet_name, conn, if_exists='replace', index=False)
             except Exception as sub_e:
                 pass
-                
         conn.commit()
         conn.close()
         return True, "데이터베이스가 성공적으로 복구되었습니다!"
@@ -697,7 +694,7 @@ def parse_numbers(text):
     return set(int(n) for n in nums)
 
 st.title("학생 맞춤 학습 로드맵")
-st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
+st.caption("선생님과 함께하는 문화와 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
 st.markdown(
@@ -767,7 +764,7 @@ if url_student and url_student in student_list:
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
     # -------------------------------------------------------------------------
-    # 📊 최상단 통합 학습 성취도 대시보드
+    # 📊 최상단 통합 학습 성취도 대시보드 (속도 최적화 적용)
     # -------------------------------------------------------------------------
     st.markdown("##### 📊 나의 학습 성취도 대시보드")
     
@@ -783,44 +780,19 @@ if url_student and url_student in student_list:
             st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
             st.progress(h_percent / 100 if total_h > 0 else 0)
 
-    # 상단 대시보드 카드 안에서 기간 선택 및 상세 실천 기록(Expander) 통합 제공 (기본 7일)
     with st.container(border=True):
-        col_rt_title, col_rt_opt = st.columns([2, 1])
-        with col_rt_title:
-            st.markdown("**🔥 루틴 달성률**")
-        with col_rt_opt:
-            range_option = st.selectbox(
-                "조회 기간", 
-                ["최근 1주 (7일)", "최근 2주 (14일)", "최근 3주 (21일)", "최근 4주 (28일)"], 
-                index=0,
-                key="student_routine_range_select",
-                label_visibility="collapsed"
-            )
-        
-        days_map = {
-            "최근 1주 (7일)": 7,
-            "최근 2주 (14일)": 14,
-            "최근 3주 (21일)": 21,
-            "최근 4주 (28일)": 28
-        }
-        selected_days = days_map[range_option]
-        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, selected_days)
-        
-        st.metric(
-            label=f"{range_option} 달성률", 
-            value=f"{r_rate}%", 
-            delta=f"총 {r_total}개 중 {r_completed}개 완료"
-        )
+        st.markdown("**🔥 루틴 달성률**")
+        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
+        st.metric(label="최근 1주 (7일) 달성률", value=f"{r_rate}%", delta=f"총 {r_total}개 중 {r_completed}개 완료")
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
 
-        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치
+        # 콤보박스 대신 가벼운 텍스트 안내로 로딩 부하 원인 제거
         today_obj = get_korean_today()
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         
-        with st.expander(f"📅 루틴 상세 실천 기록 보기 ({range_option})", expanded=False):
-            recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
-            
-            for i in range(selected_days):
+        with st.expander("📅 최근 1주일 상세 루틴 실천 기록", expanded=False):
+            recent_logs_map = get_student_recent_logs_range(selected_student, 7)
+            for i in range(7):
                 target_d = today_obj - timedelta(days=i)
                 d_str = str(target_d)
                 w_name = get_weekday_kr(d_str)[:1]
@@ -834,8 +806,8 @@ if url_student and url_student in student_list:
                 border_style = "border: 2px solid #03C75A;" if is_today else "border: 1px solid rgba(128,128,128,0.3);"
                 
                 st.markdown(
-                    f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_style} display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<span style='font-size: 14px; font-weight: bold;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                    f"<div style='padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; {border_style} display: flex; justify-content: space-between; align-items: center;'>"
+                    f"<span style='font-size: 13px; font-weight: bold;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
                     f"<span style='font-size: 13px; font-weight: bold; color: #03C75A;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                     f"</div>",
                     unsafe_allow_html=True
