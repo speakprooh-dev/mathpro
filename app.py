@@ -792,7 +792,7 @@ if url_student and url_student in student_list:
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
     # -------------------------------------------------------------------------
-    # 📊 최상단 통합 학습 성취도 대시보드 (개념진도, 숙제완료 + 루틴달성률 및 상세기록 통합)
+    # 📊 최상단 통합 학습 성취도 대시보드
     # -------------------------------------------------------------------------
     st.markdown("##### 📊 나의 학습 성취도 대시보드")
     
@@ -931,7 +931,7 @@ if url_student and url_student in student_list:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
         # -------------------------------------------------------------------------
-        # [구역 2] 날짜별 개별 숙제 (완전히 분리된 하단 섹션)
+        # [구역 2] 날짜별 개별 숙제
         # -------------------------------------------------------------------------
         if hw_dates:
             st.markdown("")
@@ -1083,7 +1083,7 @@ else:
                         if success:
                             st.success(msg)
                             st.rerun()
-else:
+                        else:
                             st.error(msg)
             
         st.divider()
