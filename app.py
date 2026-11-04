@@ -838,7 +838,7 @@ if url_student and url_student in student_list:
         )
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
 
-        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (라이트모드 배경/글자 충돌 방지 스타일 전면 개선)
+        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (글자색 강제 흰색 지정 완료)
         today_obj = get_korean_today()
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         
@@ -856,7 +856,6 @@ if url_student and url_student in student_list:
                 
                 status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
                 
-                # 라이트모드와 다크모드 모두에서 글자가 선명하게 보이도록 배경과 글자색을 명확히 지정
                 bg_color = "#0F172A" if is_today else "#1E293B"
                 border_highlight = "border: 2px solid #38BDF8;" if is_today else "border: 1px solid #334155;"
                 today_tag = " (오늘)" if is_today else ""
