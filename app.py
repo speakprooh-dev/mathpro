@@ -856,15 +856,15 @@ if url_student and url_student in student_list:
                 
                 status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
                 
-                bg_color = "#0F172A" if is_today else "#1E293B"
-                border_highlight = "border: 2px solid #38BDF8;" if is_today else "border: 1px solid #334155;"
+                # 배경은 깔끔한 흰색(#FFFFFF), 글자는 진한 검정색(#111827)으로 변경하여 라이트모드 강제 반전 완벽 차단!
+                bg_color = "#F0FDF4" if is_today else "#FFFFFF"
+                border_highlight = "border: 2px solid #03C75A;" if is_today else "border: 1px solid #CBD5E1;"
                 today_tag = " (오늘)" if is_today else ""
                 
-                # 라이트모드/다크모드 양쪽 모두에서 확실하게 보이는 형광 노란색(#FFE600) 적용 및 컨테이너 배경색 추가
                 st.markdown(
                     f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<span style='font-size: 14px; font-weight: bold; color: #FFE600 !important; -webkit-text-fill-color: #FFE600 !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                    f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                    f"<span style='font-size: 14px; font-weight: bold; color: #111827 !important; -webkit-text-fill-color: #111827 !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                    f"<span style='font-size: 13px; font-weight: bold; color: #03C75A !important; -webkit-text-fill-color: #03C75A !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
@@ -896,7 +896,7 @@ if url_student and url_student in student_list:
                                 st.rerun()
                         with cols[1]:
                             if v_url and v_url.strip() != "":
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#1E293B; color:#38BDF8; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid #334155;">🎥 개념해설</a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; background-color:#F1F5F9; color:#0284C7; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid #CBD5E1;">🎥 개념해설</a>', unsafe_allow_html=True)
         else:
             st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
@@ -975,7 +975,7 @@ if url_student and url_student in student_list:
                     matched_url = get_problem_link_by_full(search_prob_input)
                     if matched_url:
                         st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                        st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                        st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#F1F5F9; color:#0F172A; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid #CBD5E1;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                     else:
                         st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
                 else:
@@ -983,7 +983,7 @@ if url_student and url_student in student_list:
                     if unit_results:
                         st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
                         for f_code, v_url in unit_results:
-                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#F8FAFC; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#F1F5F9; color:#0F172A; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid #CBD5E1;">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
                     else:
                         st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
@@ -1039,9 +1039,9 @@ if url_student and url_student in student_list:
                             full_code = f"{view_target_code}{n:03d}"
                             v_url = get_problem_link_by_full(full_code)
                             if v_url:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#1E293B; color:#38BDF8; border:1px solid #334155; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#F1F5F9; color:#0F172A; border:1px solid #CBD5E1; padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                             else:
-                                st.markdown(f'<div style="background-color:#1E293B; color:#94A3B8; border:1px solid #334155; padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:#64748B;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
+                                st.markdown(f'<div style="background-color:#F1F5F9; color:#64748B; border:1px solid #CBD5E1; padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:#94A3B8;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
                 else:
                     st.info(f"현재 등록된 오답이 없습니다.")
 
@@ -1113,7 +1113,7 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
                     st.code(personal_link, language="text")
 
     st.divider()
@@ -1269,14 +1269,14 @@ else:
                         
                         status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
                         
-                        bg_color = "#0F172A" if is_today else "#1E293B"
-                        border_highlight = "border: 2px solid #38BDF8;" if is_today else "border: 1px solid #334155;"
+                        bg_color = "#F0FDF4" if is_today else "#FFFFFF"
+                        border_highlight = "border: 2px solid #03C75A;" if is_today else "border: 1px solid #CBD5E1;"
                         today_tag = " (오늘)" if is_today else ""
                         
                         st.markdown(
                             f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                            f"<span style='font-size: 14px; font-weight: bold; color: #FFE600 !important; -webkit-text-fill-color: #FFE600 !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                            f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                            f"<span style='font-size: 14px; font-weight: bold; color: #111827 !important; -webkit-text-fill-color: #111827 !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
+                            f"<span style='font-size: 13px; font-weight: bold; color: #03C75A !important; -webkit-text-fill-color: #03C75A !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
@@ -1447,18 +1447,18 @@ else:
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
                                 student_link = f"{base_url}/?student={s_name}"
-                                name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                 st.markdown(f"##### {name_display}📖 단원코드: `{u_code}` <span style='font-size:12px; color:#64748B;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
                                 
                                 colored_num_tags = []
                                 for n in sorted(list(parsed_s)):
                                     f_code = f"{u_code}{n:03d}"
                                     if get_problem_link_by_full(f_code):
-                                        colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                     else:
-                                        colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
                                 
-                                st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='background-color: #F8FAFC; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; color: #111827;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
 
                 elif wrong_view_mode == "📅 최근 수정일별 보기 (날짜 선택 가능)":
                     available_dates = sorted(list(set([r[3] for r in all_wrong_rows if r[3]])), reverse=True)
@@ -1477,18 +1477,18 @@ else:
                                 parsed_s = parse_numbers(nums_txt)
                                 if parsed_s:
                                     student_link = f"{base_url}/?student={s_name}"
-                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`", unsafe_allow_html=True)
                                     
                                     colored_num_tags = []
                                     for n in sorted(list(parsed_s)):
                                         f_code = f"{u_code}{n:03d}"
                                         if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                         else:
-                                            colored_num_tags.append(f"<span style='color: #FF4B4B; font-weight: bold;'>{n:03d}</span>")
+                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
                                     
-                                    st.markdown(f"<div style='background-color: #0E1117; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='background-color: #F8FAFC; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; color: #111827;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                     else:
                         st.info("등록된 수정일 데이터가 없습니다.")
 
@@ -1503,7 +1503,7 @@ else:
                                 unlinked_found = True
                                 with st.container(border=True):
                                     student_link = f"{base_url}/?student={s_name}"
-                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
+                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
                                     st.markdown(f"##### {name_display}🚨 미연결 오답 - 단원: `{u_code}`", unsafe_allow_html=True)
                                     unlinked_str = f"{u_code}_({', '.join(unlinked_nums)})"
                                     st.code(unlinked_str, language="text")
