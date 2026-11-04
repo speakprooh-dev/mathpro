@@ -703,7 +703,7 @@ if url_student and url_student in student_list:
     student_drive = get_student_drive_url(selected_student)
     if student_drive and student_drive.strip() != "":
         st.markdown(
-            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 개인 학습 자료실 및 과제 제출함 (Google Drive) 바로가기 ➔</a>',
+            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 온라인 학습실 (Google Drive) 바로가기 ➔</a>',
             unsafe_allow_html=True
         )
     
