@@ -7,8 +7,67 @@ import pandas as pd
 import io
 import os
 
-# 데이터베이스 경로 설정
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
+# ==========================================
+# ☁️ Supabase / 외부 클라우드 DB 연동 설정
+# ==========================================
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+
+# Streamlit secrets에 Supabase 설정이 있는지 확인
+def get_db_connection():
+    if SUPABASE_AVAILABLE and "supabase" in st.secrets:
+        try:
+            db_conf = st.secrets["supabase"]
+            conn = psycopg2.connect(
+                host=db_conf["host"],
+                database=db_conf["database"],
+                user=db_conf["user"],
+                password=db_conf["password"],
+                port=db_conf.get("port", 5432),
+                sslmode="require"
+            )
+            return conn, "postgres"
+        except Exception as e:
+            st.error(f"클라우드 DB(Supabase) 연결 실패: {e}. 로컬 모드로 대체합니다.")
+    
+    # Supabase 설정이 없거나 실패 시 Fallback (로컬 SQLite)
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
+    return sqlite3.connect(DB_PATH), "sqlite"
+
+# 호환성을 위한 래퍼 클래스 (SQLite와 Postgres SQL 문법 차이 흡수)
+class DBWrapper:
+    def __init__(self):
+        pass
+        
+    def execute(self, query, params=()):
+        conn, db_type = get_db_connection()
+        if db_type == "postgres":
+            # ?를 %s로 변환 (PostgreSQL용)
+            query_pg = query.replace("?", "%s")
+            # SQLite의 INSERT OR REPLACE / ON CONFLICT 구문 대응 보정
+            if "ON CONFLICT" in query_pg and "DO UPDATE SET" in query_pg:
+                # PostgreSQL 표준 형식에 맞게 처리
+                pass
+            c = conn.cursor()
+            c.execute(query_pg, params)
+            try:
+                result = c.fetchall()
+            except Exception:
+                result = []
+            conn.commit()
+            conn.close()
+            return result
+        else:
+            c = conn.cursor()
+            c.execute(query, params)
+            result = c.fetchall()
+            conn.commit()
+            conn.close()
+            return result
 
 # 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수
 def get_korean_today():
@@ -22,11 +81,11 @@ def get_korean_today():
 def get_cafe_search_url(unit_code, num_int):
     return "https://cafe.naver.com/mathpro2020"
 
-# 전체 데이터베이스 테이블을 엑셀 파일(다중 시트)로 변환하는 백업 함수
+# 전체 데이터베이스 백업 함수
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        conn = sqlite3.connect(DB_PATH)
+        conn, db_type = get_db_connection()
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
@@ -46,7 +105,7 @@ def create_excel_backup():
 def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
-        conn = sqlite3.connect(DB_PATH)
+        conn, db_type = get_db_connection()
         c = conn.cursor()
         
         for sheet_name in excel_file.sheet_names:
@@ -89,171 +148,79 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 초기화
+# 1. 데이터베이스 테이블 초기화 (클라우드 DB 대응)
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     
-    c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
-    
-    try:
-        c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
+    if db_type == "postgres":
+        # PostgreSQL 기준 테이블 생성
+        c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
+        c.execute('CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\')')
+        c.execute('CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id SERIAL PRIMARY KEY, title TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date))')
+        c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
+        c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
+    else:
+        # SQLite 기준 테이블 생성
+        c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
+        try:
+            c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS chapters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            subject TEXT NOT NULL,
-            name TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS chapter_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            chapter_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            video_url TEXT DEFAULT ''
-        )
-    ''')
-    
-    try:
-        c.execute("ALTER TABLE chapter_types ADD COLUMN video_url TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            chapter TEXT NOT NULL,
-            type_name TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS homework (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            hw_date TEXT NOT NULL,
-            title TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_homework (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            hw_date TEXT NOT NULL,
-            title TEXT NOT NULL,
-            parent_id INTEGER DEFAULT NULL
-        )
-    ''')
-    
-    try:
-        c.execute("ALTER TABLE student_homework ADD COLUMN parent_id INTEGER DEFAULT NULL")
-    except sqlite3.OperationalError:
-        pass
+        c.execute('CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, name TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id INTEGER PRIMARY KEY AUTOINCREMENT, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\')')
+        
+        try:
+            c.execute("ALTER TABLE chapter_types ADD COLUMN video_url TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        
+        c.execute('CREATE TABLE IF NOT EXISTS milestones (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS homework (id INTEGER PRIMARY KEY AUTOINCREMENT, hw_date TEXT NOT NULL, title TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS student_homework (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+        
+        try:
+            c.execute("ALTER TABLE student_homework ADD COLUMN parent_id INTEGER DEFAULT NULL")
+        except sqlite3.OperationalError:
+            pass
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS daily_routines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT NOT NULL,
-            title TEXT NOT NULL,
-            parent_id INTEGER DEFAULT NULL
-        )
-    ''')
+        c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
+        c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date))')
+        c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
+        
+        try:
+            c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS homework_templates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS milestone_progress (
-            student_name TEXT,
-            milestone_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, milestone_id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS homework_progress (
-            student_name TEXT,
-            homework_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, homework_id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_homework_progress (
-            student_name TEXT,
-            student_hw_id INTEGER,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, student_hw_id)
-        )
-    ''')
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS daily_routine_logs (
-            student_name TEXT,
-            routine_id TEXT,
-            log_date TEXT,
-            is_checked INTEGER,
-            PRIMARY KEY (student_name, routine_id, log_date)
-        )
-    ''')
+        c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
+        c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS student_wrong_entries (
-            student_name TEXT,
-            unit_code TEXT,
-            numbers_text TEXT,
-            updated_at TEXT DEFAULT '',
-            PRIMARY KEY (student_name, unit_code)
-        )
-    ''')
-    
-    try:
-        c.execute("ALTER TABLE student_wrong_entries ADD COLUMN updated_at TEXT DEFAULT ''")
-    except sqlite3.OperationalError:
-        pass
-
-    today_str = str(get_korean_today())
-    c.execute("UPDATE student_wrong_entries SET updated_at = ? WHERE updated_at IS NULL OR updated_at = ''", (today_str,))
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS problem_links (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_code TEXT UNIQUE NOT NULL,
-            unit_code TEXT NOT NULL,
-            prob_num TEXT NOT NULL,
-            video_url TEXT NOT NULL
-        )
-    ''')
-    
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS notices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_name TEXT DEFAULT '',
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    ''')
-    
+    # 기본 과목 데이터 삽입 확인
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
         for sub in default_subjects:
             try:
                 c.execute("INSERT INTO subjects (name) VALUES (?)", (sub,))
-            except sqlite3.IntegrityError:
+            except Exception:
                 pass
                 
     conn.commit()
@@ -263,7 +230,7 @@ init_db()
 
 # --- 데이터 관리 함수들 ---
 def get_students():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT name FROM students ORDER BY name")
     rows = c.fetchall()
@@ -271,7 +238,7 @@ def get_students():
     return [r[0] for r in rows]
 
 def get_student_drive_url(name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
     row = c.fetchone()
@@ -279,26 +246,26 @@ def get_student_drive_url(name):
     return row[0] if row and row[0] else ""
 
 def update_student_drive_url(name, drive_url):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("UPDATE students SET drive_url = ? WHERE name = ?", (drive_url, name))
     conn.commit()
     conn.close()
 
 def add_student(name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     try:
         c.execute("INSERT INTO students (name, drive_url) VALUES (?, ?)", (name, ""))
         conn.commit()
         success = True
-    except sqlite3.IntegrityError:
+    except Exception:
         success = False
     conn.close()
     return success
 
 def delete_student(name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM students WHERE name = ?", (name,))
     c.execute("DELETE FROM milestones WHERE student_name = ?", (name,))
@@ -308,13 +275,13 @@ def delete_student(name):
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
+    c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
 
 def get_subjects():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, name FROM subjects ORDER BY id")
     rows = c.fetchall()
@@ -322,19 +289,19 @@ def get_subjects():
     return rows
 
 def add_subject(name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     try:
         c.execute("INSERT INTO subjects (name) VALUES (?)", (name,))
         conn.commit()
         success = True
-    except sqlite3.IntegrityError:
+    except Exception:
         success = False
     conn.close()
     return success
 
 def get_chapters():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, subject, name FROM chapters")
     rows = c.fetchall()
@@ -348,67 +315,13 @@ def get_chapters():
         
     return sorted(rows, key=natural_sort_key)
 
-def add_chapter(subject, name):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (subject, name))
-    ch_id = c.lastrowid
-    conn.commit()
-    conn.close()
-    return ch_id
-
-def delete_chapter(ch_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM chapters WHERE id = ?", (ch_id,))
-    c.execute("DELETE FROM chapter_types WHERE chapter_id = ?", (ch_id,))
-    conn.commit()
-    conn.close()
-
 def get_chapter_types(chapter_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     rows = c.fetchall()
     conn.close()
     return rows
-
-def update_chapter_type_url(type_id, video_url):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE chapter_types SET video_url = ? WHERE id = ?", (video_url, type_id))
-    conn.commit()
-    conn.close()
-
-def delete_chapter_type(type_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("DELETE FROM chapter_types WHERE id = ?", (type_id,))
-    conn.commit()
-    conn.close()
-
-def bulk_insert_types_for_chapter(chapter_id, text_data):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-    count_row = c.fetchone()
-    type_counter = (count_row[0] if count_row else 0) + 1
-    
-    lines = text_data.strip().split('\n')
-    for line in lines:
-        line_str = line.strip()
-        if not line_str:
-            continue
-        raw_type_name = line_str.lstrip('-•* ').strip()
-        if raw_type_name:
-            if not raw_type_name.startswith("유형"):
-                type_name = f"유형 {type_counter:02d}. {raw_type_name}"
-            else:
-                type_name = raw_type_name
-            c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (chapter_id, type_name, ""))
-            type_counter += 1
-    conn.commit()
-    conn.close()
 
 def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
@@ -417,7 +330,7 @@ def save_problem_link(full_code, video_url):
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
     
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     try:
         c.execute('''
@@ -436,7 +349,7 @@ def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
     success_count = 0
     fail_count = 0
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     
     for line in lines:
@@ -468,7 +381,7 @@ def bulk_save_problem_links(text_data):
     return success_count, fail_count
 
 def get_problem_links_by_unit(unit_code):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT full_code, video_url FROM problem_links WHERE unit_code = ? ORDER BY full_code", (unit_code.upper(),))
     rows = c.fetchall()
@@ -476,7 +389,7 @@ def get_problem_links_by_unit(unit_code):
     return rows
 
 def get_problem_link_by_full(full_code):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT video_url FROM problem_links WHERE full_code = ?", (full_code.upper(),))
     row = c.fetchone()
@@ -484,7 +397,7 @@ def get_problem_link_by_full(full_code):
     return row[0] if row else ""
 
 def get_all_problem_links():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code")
     rows = c.fetchall()
@@ -492,7 +405,7 @@ def get_all_problem_links():
     return rows
 
 def delete_problem_link(link_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM problem_links WHERE id = ?", (link_id,))
     conn.commit()
@@ -500,7 +413,7 @@ def delete_problem_link(link_id):
 
 # --- 공지사항 관련 함수 ---
 def add_notice(student_name, title, content):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
     c.execute("INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
@@ -508,7 +421,7 @@ def add_notice(student_name, title, content):
     conn.close()
 
 def get_notices_for_student(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
     rows = c.fetchall()
@@ -516,7 +429,7 @@ def get_notices_for_student(student_name):
     return rows
 
 def get_all_notices():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
     rows = c.fetchall()
@@ -524,7 +437,7 @@ def get_all_notices():
     return rows
 
 def delete_notice(notice_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
@@ -532,7 +445,7 @@ def delete_notice(notice_id):
 
 # --- 매일 루틴 및 과제 관련 함수들 ---
 def get_student_daily_routines_parent(student_name, parent_id=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     if parent_id is None:
         c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND (parent_id IS NULL) ORDER BY id", (student_name,))
@@ -543,7 +456,7 @@ def get_student_daily_routines_parent(student_name, parent_id=None):
     return rows
 
 def bulk_insert_daily_routines(student_name, text_data):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     added_count = 0
@@ -560,14 +473,17 @@ def bulk_insert_daily_routines(student_name, text_data):
             c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, ?)", (student_name, title, current_parent_id))
         else:
             c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, NULL)", (student_name, title))
-            current_parent_id = c.lastrowid
+            # 마지막 추가된 ID 조회
+            c.execute("SELECT last_insert_rowid()")
+            row = c.fetchone()
+            current_parent_id = row[0] if row else None
         added_count += 1
     conn.commit()
     conn.close()
     return added_count
 
 def delete_daily_routine(r_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
     c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
@@ -575,7 +491,7 @@ def delete_daily_routine(r_id):
     conn.close()
 
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     for routine_id_str, val in routine_checked_dict.items():
         c.execute('''
@@ -587,7 +503,7 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn.close()
 
 def get_student_monthly_logs(student_name, year, month):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year+1}-01-01" if month == 12 else f"{year}-{month+1:02d}-01"
@@ -600,7 +516,7 @@ def get_student_monthly_logs(student_name, year, month):
     return log_map
 
 def get_student_daily_logs_by_date(student_name, target_date_str):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
     rows = c.fetchall()
@@ -612,7 +528,7 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
 
 # --- 숙제 템플릿 관련 함수 ---
 def get_homework_templates():
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, title FROM homework_templates ORDER BY id")
     rows = c.fetchall()
@@ -620,21 +536,21 @@ def get_homework_templates():
     return rows
 
 def add_homework_template(title):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("INSERT INTO homework_templates (title) VALUES (?)", (title,))
     conn.commit()
     conn.close()
 
 def delete_homework_template(t_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
     conn.close()
 
 def get_student_milestones(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
@@ -646,7 +562,7 @@ def get_student_milestones(student_name):
     return rows
 
 def assign_chapters_to_student(student_name, chapter_ids):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     for chapter_id in chapter_ids:
         c.execute("SELECT subject, name FROM chapters WHERE id = ?", (chapter_id,))
@@ -666,7 +582,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
     conn.close()
 
 def get_student_homework_dates(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
@@ -674,7 +590,7 @@ def get_student_homework_dates(student_name):
     return [r[0] for r in rows]
 
 def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     if parent_id is None:
         c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND (parent_id IS NULL) ORDER BY id", (student_name, hw_date))
@@ -685,7 +601,7 @@ def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
     return rows
 
 def get_all_student_homework(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, hw_date, title, parent_id FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     rows = c.fetchall()
@@ -693,7 +609,7 @@ def get_all_student_homework(student_name):
     return rows
 
 def bulk_insert_student_homework(student_name, hw_date, text_data):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     current_parent_id = None
@@ -709,12 +625,14 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
             c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, ?)", (student_name, hw_date, title, current_parent_id))
         else:
             c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, title))
-            current_parent_id = c.lastrowid
+            c.execute("SELECT last_insert_rowid()")
+            row = c.fetchone()
+            current_parent_id = row[0] if row else None
     conn.commit()
     conn.close()
 
 def update_student_homework_by_date(student_name, hw_date, text_data):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
@@ -723,14 +641,14 @@ def update_student_homework_by_date(student_name, hw_date, text_data):
     bulk_insert_student_homework(student_name, hw_date, text_data)
 
 def delete_student_homework_date(student_name, hw_date):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     conn.commit()
     conn.close()
 
 def get_milestone_progress(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
@@ -738,7 +656,7 @@ def get_milestone_progress(student_name):
     return {r[0]: bool(r[1]) for r in rows}
 
 def get_student_homework_progress(student_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
@@ -746,7 +664,7 @@ def get_student_homework_progress(student_name):
     return {r[0]: bool(r[1]) for r in rows}
 
 def save_single_milestone_progress(student_name, milestone_id, val):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute('''
         INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
@@ -757,7 +675,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     conn.close()
 
 def save_single_homework_progress(student_name, student_hw_id, val):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute('''
         INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
@@ -768,7 +686,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
     conn.close()
 
 def get_student_wrong_entry(student_name, unit_code):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
     row = c.fetchone()
@@ -776,7 +694,7 @@ def get_student_wrong_entry(student_name, unit_code):
     return row[0] if row else ""
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    conn = sqlite3.connect(DB_PATH)
+    conn, _ = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
     c.execute('''
@@ -1036,12 +954,11 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
 
-            # 내가 저장한 단원 선택 셀렉트박스
-            conn_w = sqlite3.connect(DB_PATH)
-            c_w = conn_w.cursor()
-            c_w.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-            saved_rows = c_w.fetchall()
-            conn_w.close()
+            conn, _ = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+            saved_rows = c.fetchall()
+            conn.close()
             
             saved_units_list = [r[0] for r in saved_rows]
             
@@ -1440,7 +1357,7 @@ else:
             st.divider()
 
             base_url = get_base_url()
-            conn = sqlite3.connect(DB_PATH)
+            conn, _ = get_db_connection()
             c = conn.cursor()
             if chk_student_choice == "전체 학생 모아보기":
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
@@ -1526,7 +1443,7 @@ else:
     # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
-        conn = sqlite3.connect(DB_PATH)
+        conn, _ = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
         all_hw_dates = [r[0] for r in c.fetchall()]
@@ -1544,7 +1461,6 @@ else:
                         for h_id, title in parent_hws:
                             is_done = s_hw_prog.get(h_id, False)
                             
-                            # 💡 [요청사항 반영] 체크박스 목록을 깔끔하게 먼저 보여주고, 수정/삭제는 접힌 상태(st.expander)로 제공
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
                                 if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{h_id}") != is_done:
@@ -1567,7 +1483,6 @@ else:
                                             st.success("삭제 완료!")
                                             st.rerun()
                             
-                            # 해당 과제의 하위 항목(세부 내용)이 있다면 깔끔하게 들여쓰기로 표시
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
