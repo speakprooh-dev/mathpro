@@ -1093,7 +1093,7 @@ else:
                                 st.success("삭제되었습니다!")
                                 st.rerun()
 
-                    # [신규 추가] 여러 날짜 한 번에 소급 체크하는 매트릭스 (자동저장)
+                    # 여러 날짜 한 번에 소급 체크하는 매트릭스 (자동저장)
                     st.markdown("---")
                     st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
                     st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
@@ -1104,7 +1104,6 @@ else:
                     for r_id, r_title in current_routines:
                         r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
                         
-                        # 부모 루틴 매트릭스
                         st.markdown(f"**📌 {r_title}**")
                         cols = st.columns(7)
                         for idx, d_str in enumerate(date_columns):
@@ -1122,7 +1121,6 @@ else:
                                     save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
                                     st.rerun()
                         
-                        # 서브 루틴 매트릭스
                         for sr_id, sr_title in r_subs:
                             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
                             sub_cols = st.columns(7)
@@ -1361,12 +1359,65 @@ else:
             if all_links:
                 search_filter = st.text_input("🔍 검색", placeholder="단원코드 또는 문제번호").strip().upper()
                 filtered = [l for l in all_links if search_filter in l[1] or search_filter in l[3]] if search_filter else all_links
-                for l_id, f_code, v_url, u_code in filtered:
-                    with st.container(border=True):
-                        col_li_info, col_li_del = st.columns([5, 1])
-                        with col_li_info:
-                            st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                        with col_li_del:
-                            if st.button("🗑️", key=f"del_link_{l_id}"):
-                                delete_problem_link(l_id)
+                
+                st.caption(f"총 {len(filtered)}개의 링크가 등록되어 있습니다.")
+                
+                # 검색어가 없을 때는 단원별 아코디언 그룹화 및 페이지네이션 제공
+                if not search_filter:
+                    # 단원코드별 그룹화
+                    grouped_links = {}
+                    for l_id, f_code, v_url, u_code in filtered:
+                        grouped_links.setdefault(u_code, []).append((l_id, f_code, v_url))
+                    
+                    unit_keys = list(grouped_links.keys())
+                    items_per_page = 10
+                    total_pages = max(1, (len(unit_keys) + items_per_page - 1) // items_per_page)
+                    
+                    if "link_page" not in st.session_state:
+                        st.session_state["link_page"] = 1
+                        
+                    curr_page = st.session_state["link_page"] = min(st.session_state["link_page"], total_pages)
+                    
+                    start_idx = (curr_page - 1) * items_per_page
+                    end_idx = start_idx + items_per_page
+                    page_units = unit_keys[start_idx:end_idx]
+                    
+                    for u_code in page_units:
+                        u_items = grouped_links[u_code]
+                        with st.expander(f"📂 단원코드: [{u_code}] ({len(u_items)}개 문제)"):
+                            for l_id, f_code, v_url in u_items:
+                                col_li_info, col_li_del = st.columns([5, 1])
+                                with col_li_info:
+                                    st.markdown(f"📌 **{f_code}** | 🔗 [{v_url}]({v_url})")
+                                with col_li_del:
+                                    if st.button("🗑️", key=f"del_link_{l_id}"):
+                                        delete_problem_link(l_id)
+                                        st.rerun()
+                    
+                    # 페이지 이동 컨트롤
+                    if total_pages > 1:
+                        st.markdown("---")
+                        col_p1, col_p2, col_p3 = st.columns([1, 2, 1])
+                        with col_p1:
+                            if st.button("◀ 이전", disabled=(curr_page == 1), use_container_width=True):
+                                st.session_state["link_page"] -= 1
                                 st.rerun()
+                        with col_p2:
+                            st.markdown(f"<div style='text-align:center; padding-top:5px;'><b>페이지 {curr_page} / {total_pages}</b></div>", unsafe_allow_html=True)
+                        with col_p3:
+                            if st.button("다음 ▶", disabled=(curr_page == total_pages), use_container_width=True):
+                                st.session_state["link_page"] += 1
+                                st.rerun()
+                else:
+                    # 검색 중일 때는 검색 결과 매칭 항목을 리스트로 바로 표시
+                    for l_id, f_code, v_url, u_code in filtered:
+                        with st.container(border=True):
+                            col_li_info, col_li_del = st.columns([5, 1])
+                            with col_li_info:
+                                st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                            with col_li_del:
+                                if st.button("🗑️", key=f"del_link_{l_id}"):
+                                    delete_problem_link(l_id)
+                                    st.rerun()
+            else:
+                st.info("등록된 해설 링크가 없습니다.")
