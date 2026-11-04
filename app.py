@@ -308,7 +308,7 @@ def delete_student(name):
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
-    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%")) # 안전 처리
+    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
     c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
     conn.commit()
     conn.close()
@@ -1222,7 +1222,6 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            # 💡 [요청사항 반영] 루틴 과제 설정 영역 기본 접힘(expanded=False) 처리
             with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황", expanded=False):
                 st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 특정 날짜의 실천 현황을 직접 체크하거나 수정할 수 있습니다.")
                 
@@ -1266,7 +1265,6 @@ else:
                         st.markdown(f"**📌 {target_chk_date_str} 루틴 완료 여부 실시간 자동 저장**")
                         day_logs_current = get_student_daily_logs_by_date(selected_hw_student, target_chk_date_str)
                         
-                        # 💡 [요청사항 반영] 저장 버튼 없이 체크박스 변경 즉시 자동 저장(on_change 적용)
                         for r_id, r_title in current_routines:
                             r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
                             default_val = day_logs_current.get((str(r_id), target_chk_date_str), False)
@@ -1314,13 +1312,11 @@ else:
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
             
-            # 💡 [요청사항 반영] 날짜별 일괄 텍스트 수정 방식으로 개편
             existing_hw_dates = get_student_homework_dates(selected_hw_student)
             if existing_hw_dates:
                 with st.expander("✏️ 등록된 날짜별 숙제 내용 통째로 수정 및 삭제하기", expanded=False):
                     chosen_edit_date = st.selectbox("수정할 숙제 날짜 선택", existing_hw_dates, format_func=lambda d: f"{d} ({get_weekday_kr(d)})", key="select_date_to_edit_bulk")
                     
-                    # 해당 날짜의 모든 과제 제목을 줄바꿈으로 합쳐서 가져오기
                     date_hws = get_student_homework_by_date_parent(selected_hw_student, chosen_edit_date, parent_id=None)
                     combined_titles = []
                     for h_id, h_title in date_hws:
@@ -1529,7 +1525,7 @@ else:
 
     # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
-        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리 (수정/삭제 가능)")
+        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
@@ -1547,6 +1543,8 @@ else:
                         
                         for h_id, title in parent_hws:
                             is_done = s_hw_prog.get(h_id, False)
+                            
+                            # 💡 [요청사항 반영] 체크박스 목록을 깔끔하게 먼저 보여주고, 수정/삭제는 접힌 상태(st.expander)로 제공
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
                                 if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{h_id}") != is_done:
@@ -1568,6 +1566,14 @@ else:
                                             delete_student_homework_date(s_name, selected_matrix_date)
                                             st.success("삭제 완료!")
                                             st.rerun()
+                            
+                            # 해당 과제의 하위 항목(세부 내용)이 있다면 깔끔하게 들여쓰기로 표시
+                            sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
+                            for s_id, s_title in sub_hws:
+                                s_done = s_hw_prog.get(s_id, False)
+                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_id}") != s_done:
+                                    save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_id}"])
+                                    st.rerun()
 
     # [탭 7] 해설 링크 관리
     with t_cfg_links:
