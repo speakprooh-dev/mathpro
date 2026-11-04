@@ -834,22 +834,26 @@ if url_student and url_student in student_list:
             parent_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=None)
             
             with st.container(border=True):
-                for h_id, title in parent_hws:
+                for h_idx, (h_id, title) in enumerate(parent_hws):
                     default_val = h_progress.get(h_id, False)
                     sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
                     if sub_hws:
                         st.markdown(f"**{title}**")
-                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{selected_student}_{selected_date}_{h_id}") != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{h_id}"])
+                        parent_chk_key = f"s_hw_p_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=parent_chk_key) != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[parent_chk_key])
                             st.rerun()
-                        for s_id, s_title in sub_hws:
+                        for s_idx, (s_id, s_title) in enumerate(sub_hws):
                             s_default = h_progress.get(s_id, False)
-                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_sub_{selected_student}_{selected_date}_{s_id}") != s_default:
-                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_sub_{selected_student}_{selected_date}_{s_id}"])
+                            # [안전한 키 생성] 학생 화면 하위 숙제에도 인덱스(h_idx, s_idx)를 추가하여 중복 원천 차단
+                            sub_chk_key = f"s_hw_sub_{selected_student}_{selected_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
+                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=sub_chk_key) != s_default:
+                                save_single_homework_progress(selected_student, s_id, st.session_state[sub_chk_key])
                                 st.rerun()
                     else:
-                        if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{selected_student}_{selected_date}_{h_id}") != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{h_id}"])
+                        parent_chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                        if st.checkbox(f"{title}", value=default_val, key=parent_chk_key) != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[parent_chk_key])
                             st.rerun()
 
     with tab3:
@@ -1290,7 +1294,6 @@ else:
                             
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
-                                # [안전한 키 생성] 학생 고유 인덱스, 날짜, 부모 ID, 루프 인덱스를 조합하여 중복 원천 차단
                                 parent_chk_key = f"mat_p_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
                                 if st.checkbox(f"📌 {title}", value=is_done, key=parent_chk_key) != is_done:
                                     save_single_homework_progress(s_name, h_id, st.session_state[parent_chk_key])
@@ -1315,7 +1318,6 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_idx, (s_id, s_title) in enumerate(sub_hws):
                                 s_done = s_hw_prog.get(s_id, False)
-                                # [안전한 키 생성] 하위 숙제도 100% 충돌 없는 고유 키 부여
                                 sub_chk_key = f"mat_sub_{s_idx_main}_{selected_matrix_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
                                 if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=sub_chk_key) != s_done:
                                     save_single_homework_progress(s_name, s_id, st.session_state[sub_chk_key])
