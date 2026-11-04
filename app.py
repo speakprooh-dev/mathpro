@@ -21,7 +21,6 @@ def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            # url 형태로 입력된 경우 파싱
             if "url" in sec:
                 parsed_url = urlparse(sec["url"])
                 conn = psycopg2.connect(
@@ -33,7 +32,6 @@ def get_db_connection():
                     sslmode="require"
                 )
                 return conn, "postgres"
-            # 개별 항목(host, user 등)으로 입력된 경우 대응
             elif "host" in sec:
                 conn = psycopg2.connect(
                     host=sec["host"],
@@ -47,11 +45,9 @@ def get_db_connection():
         except Exception as e:
             pass
     
-    # 연결 실패 시 로컬 모드 Fallback
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH), "sqlite"
 
-# 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수
 def get_korean_today():
     try:
         kst = timezone(timedelta(hours=9))
@@ -59,11 +55,9 @@ def get_korean_today():
     except Exception:
         return date.today()
 
-# 네이버 카페 메인 주소 반환 함수
 def get_cafe_search_url(unit_code, num_int):
     return "https://cafe.naver.com/mathpro2020"
 
-# 전체 데이터베이스 백업 함수
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -83,7 +77,6 @@ def create_excel_backup():
         conn.close()
     return output.getvalue()
 
-# 업로드된 백업 엑셀 파일로부터 DB 복구하는 함수
 def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
@@ -104,14 +97,11 @@ def restore_from_excel(uploaded_file):
     except Exception as e:
         return False, f"복구 중 오류가 발생했습니다: {str(e)}"
 
-# 페이지 기본 설정
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 세션 상태에 선생님 인증 여부 초기화
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
-# 기본 URL 생성 함수
 def get_base_url():
     try:
         base_url = st.context.headers.get("Host", "")
@@ -121,7 +111,6 @@ def get_base_url():
         pass
     return "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
 
-# 한국어 요일 변환 함수
 def get_weekday_kr(date_str):
     try:
         d = date.fromisoformat(date_str)
@@ -130,7 +119,6 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 테이블 초기화
 def init_db():
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -207,7 +195,6 @@ def init_db():
 
 init_db()
 
-# --- 데이터 관리 함수들 ---
 def get_students():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -390,7 +377,6 @@ def delete_problem_link(link_id):
     conn.commit()
     conn.close()
 
-# --- 공지사항 관련 함수 ---
 def add_notice(student_name, title, content):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -422,7 +408,6 @@ def delete_notice(notice_id):
     conn.commit()
     conn.close()
 
-# --- 매일 루틴 및 과제 관련 함수들 ---
 def get_student_daily_routines_parent(student_name, parent_id=None):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -508,7 +493,6 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
     return log_map
 
 def get_routine_completion_rate(student_name, days_limit=14):
-    """최근 N일간의 루틴 전체 달성률(%) 및 완수/전체 건수 계산"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     
@@ -536,7 +520,6 @@ def get_routine_completion_rate(student_name, days_limit=14):
     return rate, completed_count, total_expected
 
 def get_student_recent_logs_range(student_name, days_limit=14):
-    """최근 N일간의 날짜별 로그 맵을 반환"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     today_obj = get_korean_today()
@@ -551,7 +534,6 @@ def get_student_recent_logs_range(student_name, days_limit=14):
         log_map[(str(r_id), l_date)] = bool(val)
     return log_map
 
-# --- 숙제 템플릿 관련 함수 ---
 def get_homework_templates():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -739,7 +721,6 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
-# --- 웹 UI 구성 ---
 st.title("📐 학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
@@ -855,8 +836,11 @@ if url_student and url_student in student_list:
             st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
     with tab2:
-        st.markdown("### 🔥 매일 반복 루틴 과제 및 숙제")
-        st.info("📌 **숙제 안내**: 아래 루틴 및 날짜별 숙제를 완료하신 후 **체크박스(✔)를 꼭 체크**해 주세요! 완료율이 대시보드에 반영됩니다.")
+        # -------------------------------------------------------------------------
+        # [구역 1] 매일 반복 루틴 체크 (행동 영역)
+        # -------------------------------------------------------------------------
+        st.markdown("### 🔥 매일 반복 루틴 체크")
+        st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
 
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         if daily_parents:
@@ -865,8 +849,7 @@ if url_student and url_student in student_list:
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
-                # 1. 오늘 루틴 체크하기
-                st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
+                st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
                 st.markdown("---")
 
                 daily_routine_checked_dict = {}
@@ -879,16 +862,19 @@ if url_student and url_student in student_list:
                         for sr_id, sr_title in r_subs:
                             daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{sr_id}")
                     else:
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{r_id}")
                     st.divider()
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
-            # 2. 기간별 루틴 달성 현황 (상세 현황은 expander로 접어둠)
+            # -------------------------------------------------------------------------
+            # [구역 2] 기간별 루틴 달성 현황 및 상세 내역 (분석 영역)
+            # -------------------------------------------------------------------------
+            st.markdown("")
             with st.container(border=True):
                 col_rt_title, col_rt_opt = st.columns([2, 1])
                 with col_rt_title:
-                    st.markdown("**📊 기간별 루틴 달성 현황**")
+                    st.markdown("**📊 기간별 달성 현황**")
                 with col_rt_opt:
                     range_option = st.selectbox(
                         "달성률 조회 기간", 
@@ -910,8 +896,7 @@ if url_student and url_student in student_list:
                 st.caption(f"🔥 **{range_option} 달성률: {r_rate}%** ({r_total}개 중 {r_completed}개 완료)")
                 st.markdown("---")
 
-                # 상세 실천 현황을 기본으로 접어두도록 expanded=False 설정
-                with st.expander(f"📅 선택한 {range_option} 상세 실천 현황 보기", expanded=False):
+                with st.expander(f"📅 선택한 {range_option} 상세 실천 기록 보기", expanded=False):
                     recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
                     
                     for i in range(selected_days):
@@ -936,27 +921,36 @@ if url_student and url_student in student_list:
                             unsafe_allow_html=True
                         )
 
+        # -------------------------------------------------------------------------
+        # [구역 3] 날짜별 개별 숙제 (완전히 분리된 하단 섹션)
+        # -------------------------------------------------------------------------
         if hw_dates:
+            st.markdown("")
             st.markdown("---")
+            st.markdown("### 📚 날짜별 개별 숙제")
+            st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
+            
             selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             parent_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=None)
-            for h_id, title in parent_hws:
-                default_val = h_progress.get(h_id, False)
-                sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
-                if sub_hws:
-                    st.markdown(f"**📌 {title}**")
-                    if st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}") != default_val:
-                        save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
-                        st.rerun()
-                    for s_id, s_title in sub_hws:
-                        s_default = h_progress.get(s_id, False)
-                        if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_{s_id}") != s_default:
-                            save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_{s_id}"])
+            
+            with st.container(border=True):
+                for h_id, title in parent_hws:
+                    default_val = h_progress.get(h_id, False)
+                    sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
+                    if sub_hws:
+                        st.markdown(f"**{title}**")
+                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}") != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
                             st.rerun()
-                else:
-                    if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}") != default_val:
-                        save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
-                        st.rerun()
+                        for s_id, s_title in sub_hws:
+                            s_default = h_progress.get(s_id, False)
+                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_{s_id}") != s_default:
+                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_{s_id}"])
+                                st.rerun()
+                    else:
+                        if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}") != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
+                            st.rerun()
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 관리")
@@ -1124,7 +1118,6 @@ else:
         "🎥 7. 해설 링크 관리"
     ])
 
-    # [탭 1] 선택한 학생 개별 관리
     with t_cfg_student:
         st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
         if student_list:
@@ -1152,7 +1145,6 @@ else:
                                 save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{m_id}"])
                                 st.rerun()
 
-    # [탭 2] 공지사항 관리
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
         with st.form("add_notice_form"):
@@ -1185,7 +1177,6 @@ else:
         else:
             st.info("등록된 공지사항이 없습니다.")
 
-    # [탭 3] 개별 과제 관리
     with t_cfg_hw:
         st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
         if student_list:
@@ -1380,7 +1371,6 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 4] 커리큘럼 진도 배정
     with t_cfg_curriculum:
         st.markdown("#### 📚 과목 / 단원 / 세부 유형 폴더형 통합 관리")
         with st.form("unified_sub_form"):
@@ -1411,7 +1401,6 @@ else:
                         st.success("배정되었습니다!")
                         st.rerun()
 
-    # [탭 5] 오답노트 모아보기
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
         if student_list:
@@ -1513,7 +1502,6 @@ else:
         else:
             st.warning("등록된 학생이 없습니다.")
 
-    # [탭 6] 전체 숙제 매트릭스
     with t_cfg_matrix:
         st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
         conn, _ = get_db_connection()
@@ -1563,7 +1551,6 @@ else:
                                     save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_id}"])
                                     st.rerun()
 
-    # [탭 7] 해설 링크 관리
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
         col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 전체 등록된 링크 목록 및 삭제"])
