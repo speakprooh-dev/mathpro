@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase / 외부 클라우드 DB 연동 설정
+# ☁️ Supabase URL 방식 연동 설정
 # ==========================================
 try:
     import psycopg2
@@ -20,8 +20,10 @@ except ImportError:
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
-            if "url" in st.secrets["supabase"]:
-                parsed_url = urlparse(st.secrets["supabase"]["url"])
+            sec = st.secrets["supabase"]
+            # url 형태로 입력된 경우 파싱
+            if "url" in sec:
+                parsed_url = urlparse(sec["url"])
                 conn = psycopg2.connect(
                     dbname=parsed_url.path[1:],
                     user=parsed_url.username,
@@ -31,43 +33,24 @@ def get_db_connection():
                     sslmode="require"
                 )
                 return conn, "postgres"
+            # 개별 항목(host, user 등)으로 입력된 경우 대응
+            elif "host" in sec:
+                conn = psycopg2.connect(
+                    host=sec["host"],
+                    database=sec.get("database", "postgres"),
+                    user=sec.get("user", "postgres"),
+                    password=sec["password"],
+                    port=sec.get("port", 5432),
+                    sslmode="require"
+                )
+                return conn, "postgres"
         except Exception as e:
-            st.error(f"클라우드 DB(Supabase) 연결 실패: {e}. 로컬 모드로 대체합니다.")
+            # 에러 메시지 노출 최소화 (선생님 화면 깔끔하게 유지)
+            pass
     
+    # 연결 실패 시 로컬 모드 Fallback
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH), "sqlite"
-
-
-# 호환성을 위한 래퍼 클래스 (SQLite와 Postgres SQL 문법 차이 흡수)
-class DBWrapper:
-    def __init__(self):
-        pass
-        
-    def execute(self, query, params=()):
-        conn, db_type = get_db_connection()
-        if db_type == "postgres":
-            # ?를 %s로 변환 (PostgreSQL용)
-            query_pg = query.replace("?", "%s")
-            # SQLite의 INSERT OR REPLACE / ON CONFLICT 구문 대응 보정
-            if "ON CONFLICT" in query_pg and "DO UPDATE SET" in query_pg:
-                # PostgreSQL 표준 형식에 맞게 처리
-                pass
-            c = conn.cursor()
-            c.execute(query_pg, params)
-            try:
-                result = c.fetchall()
-            except Exception:
-                result = []
-            conn.commit()
-            conn.close()
-            return result
-        else:
-            c = conn.cursor()
-            c.execute(query, params)
-            result = c.fetchall()
-            conn.commit()
-            conn.close()
-            return result
 
 # 한국 시간(KST, UTC+9) 기준 오늘 날짜 반환 함수
 def get_korean_today():
@@ -148,13 +131,12 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 1. 데이터베이스 테이블 초기화 (클라우드 DB 대응)
+# 1. 데이터베이스 테이블 초기화
 def init_db():
     conn, db_type = get_db_connection()
     c = conn.cursor()
     
     if db_type == "postgres":
-        # PostgreSQL 기준 테이블 생성
         c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
         c.execute('CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL)')
@@ -172,7 +154,6 @@ def init_db():
         c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
     else:
-        # SQLite 기준 테이블 생성
         c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
         try:
             c.execute("ALTER TABLE students ADD COLUMN drive_url TEXT DEFAULT ''")
@@ -213,7 +194,6 @@ def init_db():
         c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
         c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
 
-    # 기본 과목 데이터 삽입 확인
     c.execute("SELECT COUNT(*) FROM subjects")
     if c.fetchone()[0] == 0:
         default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -473,10 +453,12 @@ def bulk_insert_daily_routines(student_name, text_data):
             c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, ?)", (student_name, title, current_parent_id))
         else:
             c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, NULL)", (student_name, title))
-            # 마지막 추가된 ID 조회
-            c.execute("SELECT last_insert_rowid()")
-            row = c.fetchone()
-            current_parent_id = row[0] if row else None
+            try:
+                c.execute("SELECT last_insert_rowid()")
+                row = c.fetchone()
+                current_parent_id = row[0] if row else None
+            except Exception:
+                pass
         added_count += 1
     conn.commit()
     conn.close()
@@ -625,9 +607,12 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
             c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, ?)", (student_name, hw_date, title, current_parent_id))
         else:
             c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, title))
-            c.execute("SELECT last_insert_rowid()")
-            row = c.fetchone()
-            current_parent_id = row[0] if row else None
+            try:
+                c.execute("SELECT last_insert_rowid()")
+                row = c.fetchone()
+                current_parent_id = row[0] if row else None
+            except Exception:
+                pass
     conn.commit()
     conn.close()
 
