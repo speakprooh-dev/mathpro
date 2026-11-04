@@ -549,7 +549,6 @@ def get_student_homework_dates(student_name):
     conn.close()
     return [r[0] for r in rows]
 
-# [완전 평면화] 숙제는 하위 항목 없이 모든 줄이 독립된 개별 항목으로 조회됩니다.
 def get_student_homework_by_date(student_name, hw_date):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -566,7 +565,6 @@ def get_all_student_homework(student_name):
     conn.close()
     return rows
 
-# [완전 평면화] 줄바꿈된 모든 줄이 독립된 개별 숙제로 등록됩니다.
 def bulk_insert_student_homework(student_name, hw_date, text_data):
     conn, _ = get_db_connection()
     c = conn.cursor()
