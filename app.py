@@ -1264,42 +1264,46 @@ else:
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
         if student_list:
-            chk_student_choice = st.selectbox("조회할 학생 선택", student_list, key="chk_wrong_student_choice")
+            # 기본 설정을 '전체 학생 (모두 보기)'로 지정
+            chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
             
-            # 보기 방식 선택 서브 탭 (단원별 vs 최근 날짜별/날짜별/해설 없는 문제 모아보기)
             wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 최근 날짜별 / 날짜별 보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
             
             conn, _ = get_db_connection()
             c = conn.cursor()
-            c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-            wrong_rows = c.fetchall()
+            if chk_student_choice == "전체 학생 (모두 보기)":
+                c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                wrong_rows_all = c.fetchall() # (student_name, unit_code, numbers_text, updated_at)
+            else:
+                c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                rows = c.fetchall()
+                wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in rows]
             conn.close()
             
-            if wrong_rows:
+            if wrong_rows_all:
                 if wrong_view_mode == "📂 단원별 보기":
-                    for u_code, nums_txt, u_date in wrong_rows:
+                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                                st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
                                 colored_num_tags = []
                                 for n in sorted(list(parsed_s)):
                                     f_code = f"{u_code}{n:03d}"
                                     if get_problem_link_by_full(f_code):
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>") # 파란색 (링크 있음)
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                     else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>") # 빨간색 (링크 없음)
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "📅 최근 날짜별 / 날짜별 보기":
-                    # 수정일(updated_at) 기준으로 내림차순 정렬
-                    sorted_by_date = sorted(wrong_rows, key=lambda x: x[2] if x[2] else "1900-01-01", reverse=True)
-                    for u_code, nums_txt, u_date in sorted_by_date:
+                    sorted_by_date = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
+                    for s_name, u_code, nums_txt, u_date in sorted_by_date:
                         date_label = u_date if u_date else "날짜 미상"
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
-                                st.markdown(f"##### 📅 수정일자: `{date_label}` &nbsp;|&nbsp; 단원코드: `{u_code}`", unsafe_allow_html=True)
+                                st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
                                 colored_num_tags = []
                                 for n in sorted(list(parsed_s)):
                                     f_code = f"{u_code}{n:03d}"
@@ -1311,7 +1315,7 @@ else:
                 
                 elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
                     has_missing = False
-                    for u_code, nums_txt, u_date in wrong_rows:
+                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
                         parsed_s = parse_numbers(nums_txt)
                         missing_nums = []
                         if parsed_s:
@@ -1323,7 +1327,7 @@ else:
                         if missing_nums:
                             has_missing = True
                             with st.container(border=True):
-                                st.markdown(f"##### 🚨 단원코드: `{u_code}` <span style='font-size:12px; color:#DC2626;'>(해설 링크 없는 문제 발견)</span>", unsafe_allow_html=True)
+                                st.markdown(f"##### 👤 **{s_name}** | 🚨 단원코드: `{u_code}` <span style='font-size:12px; color:#DC2626;'>(해설 링크 없는 문제 발견)</span>", unsafe_allow_html=True)
                                 colored_num_tags = [f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>" for n in missing_nums]
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                     
