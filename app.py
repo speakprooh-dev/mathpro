@@ -844,8 +844,8 @@ if url_student and url_student in student_list:
                             st.rerun()
                         for s_id, s_title in sub_hws:
                             s_default = h_progress.get(s_id, False)
-                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_{selected_student}_{selected_date}_{s_id}") != s_default:
-                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{s_id}"])
+                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_sub_{selected_student}_{selected_date}_{s_id}") != s_default:
+                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_sub_{selected_student}_{selected_date}_{s_id}"])
                                 st.rerun()
                     else:
                         if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{selected_student}_{selected_date}_{h_id}") != default_val:
@@ -1041,7 +1041,6 @@ else:
                     with st.expander(f"[{sub}] {ch}", expanded=False):
                         for m_id, t_name, v_url in items:
                             is_done = s_m_progress.get(m_id, False)
-                            # 선생님 모드 개별 진도 탭 체크박스 key 고유화
                             if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{selected_student}_{m_id}") != is_done:
                                 save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{selected_student}_{m_id}"])
                                 st.rerun()
@@ -1314,6 +1313,7 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
+                                # 매트릭스 하위 숙제 key에 고유 식별자 추가 완료
                                 if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}") != s_done:
                                     save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}"])
                                     st.rerun()
