@@ -114,8 +114,7 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 🚀 [완전 초고속 캐싱 적용] DB 초기화 지연 방지
-@st.cache_resource
+# 🚀 DB 초기화 최적화 (가벼운 연결 처리)
 def init_db():
     try:
         conn, db_type = get_db_connection()
@@ -171,7 +170,6 @@ def init_db():
 
 init_db()
 
-@st.cache_data(ttl=5)
 def get_students():
     try:
         conn, _ = get_db_connection()
