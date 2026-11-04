@@ -413,6 +413,7 @@ def bulk_insert_daily_routines(student_name, text_data):
         line_str = line.strip()
         if not line_str:
             continue
+        # [수정] 들여쓰기가 있거나, 명시적 기호(-, *, •, └)가 있을 때만 하위 항목으로 인식
         is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
         title = line_str.lstrip('-•*└\t ').strip()
         if not title:
@@ -577,7 +578,8 @@ def bulk_insert_student_homework(student_name, hw_date, text_data):
         line_str = line.strip()
         if not line_str:
             continue
-        is_sub = line.startswith((' ', '\t', '-', '*', '•', '└')) or line_str.startswith(('-', '*', '•', '└'))
+        # [수정] 오직 들여쓰기(스페이스/탭)나 명시적 기호(-, *, •, └)가 시작될 때만 하위 숙제로 인식합니다.
+        is_sub = line.startswith((' ', '\t')) or line_str.startswith(('-', '*', '•', '└'))
         title = line_str.lstrip('-•*└\t ').strip()
         if not title:
             continue
@@ -845,7 +847,6 @@ if url_student and url_student in student_list:
                             st.rerun()
                         for s_idx, (s_id, s_title) in enumerate(sub_hws):
                             s_default = h_progress.get(s_id, False)
-                            # [안전한 키 생성] 학생 화면 하위 숙제에도 인덱스(h_idx, s_idx)를 추가하여 중복 원천 차단
                             sub_chk_key = f"s_hw_sub_{selected_student}_{selected_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
                             if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=sub_chk_key) != s_default:
                                 save_single_homework_progress(selected_student, s_id, st.session_state[sub_chk_key])
