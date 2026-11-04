@@ -45,7 +45,6 @@ def get_db_connection():
                 )
                 return conn, "postgres"
         except Exception as e:
-            # 에러 메시지 노출 최소화 (선생님 화면 깔끔하게 유지)
             pass
     
     # 연결 실패 시 로컬 모드 Fallback
@@ -866,9 +865,30 @@ if url_student and url_student in student_list:
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
             with st.container(border=True):
+                # 1. 오늘 루틴 체크하기가 가장 위로 오도록 배치
+                st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
+                st.markdown("---")
+
+                daily_routine_checked_dict = {}
+                for r_id, r_title in daily_parents:
+                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    default_val = current_day_logs.get((str(r_id), today_str), False)
+                    if r_subs:
+                        st.markdown(f"**{r_title}**")
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
+                        for sr_id, sr_title in r_subs:
+                            daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{sr_id}")
+                    else:
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
+                    st.divider()
+            if daily_routine_checked_dict:
+                save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
+
+            # 2. 그 바로 아래에 기간 선택 및 달성률, 상세 실천 현황 연동 보기 배치
+            with st.container(border=True):
                 col_rt_title, col_rt_opt = st.columns([2, 1])
                 with col_rt_title:
-                    st.markdown(f"**📌 오늘 ({today_str}) 루틴 체크하기**")
+                    st.markdown("**📊 기간별 루틴 달성 현황**")
                 with col_rt_opt:
                     range_option = st.selectbox(
                         "달성률 조회 기간", 
@@ -890,28 +910,8 @@ if url_student and url_student in student_list:
                 st.caption(f"🔥 **{range_option} 달성률: {r_rate}%** ({r_total}개 중 {r_completed}개 완료)")
                 st.markdown("---")
 
-                daily_routine_checked_dict = {}
-                for r_id, r_title in daily_parents:
-                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                    default_val = current_day_logs.get((str(r_id), today_str), False)
-                    if r_subs:
-                        st.markdown(f"**{r_title}**")
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
-                        for sr_id, sr_title in r_subs:
-                            daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{sr_id}")
-                    else:
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"📌 {r_title}", value=default_val, key=f"s_daily_{r_id}")
-                    st.divider()
-            if daily_routine_checked_dict:
-                save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
-
-            st.markdown("---")
-            
-            # --- 선택한 기간(7일/14일/21일/28일)별 실천 현황 연동 보기 ---
-            with st.expander(f"📅 선택한 {range_option} 상세 실천 현황 보기", expanded=True):
                 recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
                 
-                # 오늘부터 과거로 N일 간의 날짜 리스트 생성
                 for i in range(selected_days):
                     target_d = today_obj - timedelta(days=i)
                     d_str = str(target_d)
