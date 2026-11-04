@@ -838,7 +838,7 @@ if url_student and url_student in student_list:
         )
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
 
-        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치
+        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (색상 오류 수정 완료)
         today_obj = get_korean_today()
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         
@@ -862,7 +862,7 @@ if url_student and url_student in student_list:
                 st.markdown(
                     f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
                     f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                    f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                    f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
@@ -1273,7 +1273,7 @@ else:
                         st.markdown(
                             f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
                             f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                            f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                            f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
