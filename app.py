@@ -860,10 +860,10 @@ if url_student and url_student in student_list:
                 border_highlight = "border: 2px solid #38BDF8;" if is_today else "border: 1px solid #334155;"
                 today_tag = " (오늘)" if is_today else ""
                 
-                # HTML <span> 대신 순수 태그 및 강제 속성 반영
+                # 라이트모드/다크모드 양쪽 모두에서 확실하게 보이는 형광 노란색(#FFE600) 적용 및 컨테이너 배경색 추가
                 st.markdown(
                     f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                    f"<span style='font-size: 14px; font-weight: bold; color: #FFE600 !important; -webkit-text-fill-color: #FFE600 !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
                     f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                     f"</div>",
                     unsafe_allow_html=True
@@ -1275,7 +1275,7 @@ else:
                         
                         st.markdown(
                             f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                            f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
+                            f"<span style='font-size: 14px; font-weight: bold; color: #FFE600 !important; -webkit-text-fill-color: #FFE600 !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
                             f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                             f"</div>",
                             unsafe_allow_html=True
