@@ -440,6 +440,17 @@ def delete_daily_routine(r_id):
     conn.commit()
     conn.close()
 
+def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
+    ''', (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
+    conn.commit()
+    conn.close()
+
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1055,7 +1066,7 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 소급 체크", expanded=False):
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 다중 날짜 소급 매트릭스", expanded=False):
                 with st.form("add_teacher_routine_form"):
                     st.markdown("##### ➕ 루틴 과제 항목 추가")
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
@@ -1082,33 +1093,50 @@ else:
                                 st.success("삭제되었습니다!")
                                 st.rerun()
 
-                    # [신규 추가] 지난 날짜 루틴 소급 체크 기능
+                    # [신규 추가] 여러 날짜 한 번에 소급 체크하는 매트릭스 (자동저장)
                     st.markdown("---")
-                    st.markdown("##### 📅 지난 날짜 루틴 소급 체크 및 수정")
-                    st.caption("학생이 깜빡했거나 지난 날짜의 루틴 완료 여부를 선생님 권한으로 소급해서 체크할 수 있습니다.")
+                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
+                    st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
                     
-                    past_routine_date = st.date_input("소급 적용할 날짜 선택", value=get_korean_today(), key="teacher_past_routine_date")
-                    past_date_str = str(past_routine_date)
-                    past_day_logs = get_student_daily_logs_by_date(selected_hw_student, past_date_str)
+                    today_obj = get_korean_today()
+                    date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
                     
-                    with st.form("teacher_past_routine_form"):
-                        st.markdown(f"**{selected_hw_student} 학생의 [{past_date_str}] 루틴 수행 현황**")
-                        teacher_routine_dict = {}
-                        for r_id, r_title in current_routines:
-                            r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
-                            def_val = past_day_logs.get((str(r_id), past_date_str), False)
-                            if r_subs:
-                                st.markdown(f"**{r_title}**")
-                                teacher_routine_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=def_val, key=f"t_past_{r_id}")
-                                for sr_id, sr_title in r_subs:
-                                    teacher_routine_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=past_day_logs.get((str(sr_id), past_date_str), False), key=f"t_past_{sr_id}")
-                            else:
-                                teacher_routine_dict[str(r_id)] = st.checkbox(f"{r_title}", value=def_val, key=f"t_past_{r_id}")
+                    for r_id, r_title in current_routines:
+                        r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
                         
-                        if st.form_submit_button("💾 선택한 날짜 루틴 소급 저장", type="primary"):
-                            save_daily_routine_logs(selected_hw_student, past_date_str, teacher_routine_dict)
-                            st.success(f"[{past_date_str}] 날짜의 루틴 기록이 성공적으로 소급 저장되었습니다!")
-                            st.rerun()
+                        # 부모 루틴 매트릭스
+                        st.markdown(f"**📌 {r_title}**")
+                        cols = st.columns(7)
+                        for idx, d_str in enumerate(date_columns):
+                            with cols[idx]:
+                                day_name = get_weekday_kr(d_str)[:1]
+                                short_date = d_str[5:] # MM-DD
+                                st.caption(f"{short_date}({day_name})")
+                                
+                                cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
+                                def_val = cur_logs.get((str(r_id), d_str), False)
+                                
+                                chk_key = f"auto_mat_{selected_hw_student}_{r_id}_{d_str}"
+                                new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
+                                if new_val != def_val:
+                                    save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
+                                    st.rerun()
+                        
+                        # 서브 루틴 매트릭스
+                        for sr_id, sr_title in r_subs:
+                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
+                            sub_cols = st.columns(7)
+                            for idx, d_str in enumerate(date_columns):
+                                with sub_cols[idx]:
+                                    cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
+                                    def_val = cur_logs.get((str(sr_id), d_str), False)
+                                    
+                                    chk_key = f"auto_mat_{selected_hw_student}_{sr_id}_{d_str}"
+                                    new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
+                                    if new_val != def_val:
+                                        save_single_routine_log(selected_hw_student, sr_id, d_str, new_val)
+                                        st.rerun()
+                        st.markdown("")
 
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
