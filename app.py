@@ -536,6 +536,22 @@ def get_routine_completion_rate(student_name, days_limit=14):
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
 
+def get_student_recent_logs_range(student_name, days_limit=14):
+    """최근 N일간의 날짜별 로그 맵을 반환"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    today_obj = get_korean_today()
+    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
+    today_str = str(today_obj)
+    
+    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ?", (student_name, start_date_str, today_str))
+    rows = c.fetchall()
+    conn.close()
+    log_map = {}
+    for r_id, l_date, val in rows:
+        log_map[(str(r_id), l_date)] = bool(val)
+    return log_map
+
 # --- 숙제 템플릿 관련 함수 ---
 def get_homework_templates():
     conn, _ = get_db_connection()
@@ -891,20 +907,18 @@ if url_student and url_student in student_list:
 
             st.markdown("---")
             
-            with st.expander("📅 지난 루틴 실천 현황 보기 (연도·월 선택)", expanded=False):
-                current_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="student_routine_year")
-                current_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="student_routine_month")
+            # --- 선택한 기간(7일/14일/21일/28일)별 실천 현황 연동 보기 ---
+            with st.expander(f"📅 선택한 {range_option} 상세 실천 현황 보기", expanded=True):
+                recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
                 
-                monthly_logs = get_student_monthly_logs(selected_student, current_year, current_month)
-                _, last_day = calendar.monthrange(current_year, current_month)
-                
-                st.markdown(f"**📋 {current_year}년 {current_month}월 실천 기록**")
-                for day in range(1, last_day + 1):
-                    d_str = f"{current_year}-{current_month:02d}-{day:02d}"
+                # 오늘부터 과거로 N일 간의 날짜 리스트 생성
+                for i in range(selected_days):
+                    target_d = today_obj - timedelta(days=i)
+                    d_str = str(target_d)
                     w_name = get_weekday_kr(d_str)[:1]
                     is_today = (d_str == str(today_obj))
                     
-                    day_checked_count = sum(1 for r_id, _ in daily_parents if monthly_logs.get((str(r_id), d_str), False))
+                    day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
                     total_r_count = len(daily_parents)
                     
                     status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
@@ -914,7 +928,7 @@ if url_student and url_student in student_list:
                     
                     st.markdown(
                         f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
-                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{current_month}월 {day}일 ({w_name}){today_tag}</span>"
+                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
                         f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                         f"</div>",
                         unsafe_allow_html=True
