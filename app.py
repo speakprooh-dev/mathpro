@@ -1278,7 +1278,7 @@ else:
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
-            for s_name in student_list:
+            for s_idx_main, s_name in enumerate(student_list):
                 parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
                 if parent_hws:
                     with st.container(border=True):
@@ -1290,14 +1290,16 @@ else:
                             
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
-                                if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{s_name}_{selected_matrix_date}_{h_id}_{h_idx}") != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[f"mat_chk_{s_name}_{selected_matrix_date}_{h_id}_{h_idx}"])
+                                # [안전한 키 생성] 학생 고유 인덱스, 날짜, 부모 ID, 루프 인덱스를 조합하여 중복 원천 차단
+                                parent_chk_key = f"mat_p_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
+                                if st.checkbox(f"📌 {title}", value=is_done, key=parent_chk_key) != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[parent_chk_key])
                                     st.rerun()
                             with col_m2:
                                 with st.popover("⚙️ 수정"):
-                                    with st.form(f"matrix_edit_form_{s_name}_{h_id}_{h_idx}"):
-                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_name}_{h_id}_{h_idx}")
-                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_name}_{h_id}_{h_idx}")
+                                    with st.form(f"matrix_edit_form_{s_idx_main}_{h_id}_{h_idx}"):
+                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_idx_main}_{h_id}_{h_idx}")
+                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_idx_main}_{h_id}_{h_idx}")
                                         m_save = st.form_submit_button("저장", type="primary")
                                         m_del = st.form_submit_button("삭제")
                                         if m_save:
@@ -1313,9 +1315,10 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_idx, (s_id, s_title) in enumerate(sub_hws):
                                 s_done = s_hw_prog.get(s_id, False)
-                                # [완벽한 고유 키 적용] 인덱스(h_idx, s_idx)를 추가하여 중복 원천 차단
-                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"matrix_sub_chk_{s_name}_{selected_matrix_date}_{h_id}_{s_id}_{s_idx}") != s_done:
-                                    save_single_homework_progress(s_name, s_id, st.session_state[f"matrix_sub_chk_{s_name}_{selected_matrix_date}_{h_id}_{s_id}_{s_idx}"])
+                                # [안전한 키 생성] 하위 숙제도 100% 충돌 없는 고유 키 부여
+                                sub_chk_key = f"mat_sub_{s_idx_main}_{selected_matrix_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
+                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=sub_chk_key) != s_done:
+                                    save_single_homework_progress(s_name, s_id, st.session_state[sub_chk_key])
                                     st.rerun()
 
     with t_cfg_links:
