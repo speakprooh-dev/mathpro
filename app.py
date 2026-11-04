@@ -785,7 +785,7 @@ if url_student and url_student in student_list:
                         default_val = m_progress.get(m_id, False)
                         cols = st.columns([4, 1])
                         with cols[0]:
-                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{m_id}")
+                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_{selected_student}_{m_id}")
                             if val != default_val:
                                 save_single_milestone_progress(selected_student, m_id, val)
                                 st.rerun()
@@ -815,11 +815,11 @@ if url_student and url_student in student_list:
                     default_val = current_day_logs.get((str(r_id), today_str), False)
                     if r_subs:
                         st.markdown(f"**{r_title}**")
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
                         for sr_id, sr_title in r_subs:
-                            daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{sr_id}")
+                            daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{selected_student}_{sr_id}")
                     else:
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
                     st.divider()
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
@@ -839,17 +839,17 @@ if url_student and url_student in student_list:
                     sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
                     if sub_hws:
                         st.markdown(f"**{title}**")
-                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{h_id}") != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
+                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=f"s_hw_{selected_student}_{selected_date}_{h_id}") != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{h_id}"])
                             st.rerun()
                         for s_id, s_title in sub_hws:
                             s_default = h_progress.get(s_id, False)
-                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_{s_id}") != s_default:
-                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_{s_id}"])
+                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=f"s_hw_{selected_student}_{selected_date}_{s_id}") != s_default:
+                                save_single_homework_progress(selected_student, s_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{s_id}"])
                                 st.rerun()
                     else:
-                        if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{h_id}") != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{h_id}"])
+                        if st.checkbox(f"{title}", value=default_val, key=f"s_hw_{selected_student}_{selected_date}_{h_id}") != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[f"s_hw_{selected_student}_{selected_date}_{h_id}"])
                             st.rerun()
 
     with tab3:
@@ -1041,8 +1041,9 @@ else:
                     with st.expander(f"[{sub}] {ch}", expanded=False):
                         for m_id, t_name, v_url in items:
                             is_done = s_m_progress.get(m_id, False)
-                            if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{m_id}") != is_done:
-                                save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{m_id}"])
+                            # 선생님 모드 개별 진도 탭 체크박스 key 고유화
+                            if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{selected_student}_{m_id}") != is_done:
+                                save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{selected_student}_{m_id}"])
                                 st.rerun()
 
     with t_cfg_notice:
@@ -1231,7 +1232,7 @@ else:
                     if sub_chapters:
                         with st.expander(f"📚 [{sub_name}] 단원 목록 ({len(sub_chapters)}개)"):
                             for ch_id, ch_sub, ch_name in sub_chapters:
-                                if st.checkbox(f"{ch_name}", value=ch_name in assigned_chapters, key=f"assign_ch_chk_{ch_id}"):
+                                if st.checkbox(f"{ch_name}", value=ch_name in assigned_chapters, key=f"assign_ch_chk_{selected_assign_student}_{ch_id}"):
                                     selected_ch_ids.append(ch_id)
                 if st.form_submit_button("선택한 단원 일괄 배정하기", type="primary"):
                     if selected_ch_ids:
