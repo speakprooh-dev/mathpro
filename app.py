@@ -1264,7 +1264,6 @@ else:
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
         if student_list:
-            # 기본 설정을 '전체 학생 (모두 보기)'로 지정
             chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
             
             wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 최근 날짜별 / 날짜별 보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
@@ -1273,7 +1272,7 @@ else:
             c = conn.cursor()
             if chk_student_choice == "전체 학생 (모두 보기)":
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
-                wrong_rows_all = c.fetchall() # (student_name, unit_code, numbers_text, updated_at)
+                wrong_rows_all = c.fetchall()
             else:
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 rows = c.fetchall()
@@ -1297,21 +1296,36 @@ else:
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "📅 최근 날짜별 / 날짜별 보기":
-                    sorted_by_date = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
-                    for s_name, u_code, nums_txt, u_date in sorted_by_date:
-                        date_label = u_date if u_date else "날짜 미상"
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}"
-                                    if get_problem_link_by_full(f_code):
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                    # DB에 존재하는 모든 수정일자 추출 (최신순 정렬)
+                    available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
+                    
+                    if available_dates:
+                        # 날짜 선택 옵션 제공 ("전체 날짜 보기" 포함)
+                        date_filter_options = ["전체 날짜 보기 (최근순)"] + available_dates
+                        selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", date_filter_options)
+                        
+                        # 선택한 날짜에 맞게 필터링
+                        if selected_date_filter == "전체 날짜 보기 (최근순)":
+                            filtered_by_date_rows = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
+                        else:
+                            filtered_by_date_rows = [r for r in wrong_rows_all if r[3] == selected_date_filter]
+                        
+                        for s_name, u_code, nums_txt, u_date in filtered_by_date_rows:
+                            date_label = u_date if u_date else "날짜 미상"
+                            with st.container(border=True):
+                                parsed_s = parse_numbers(nums_txt)
+                                if parsed_s:
+                                    st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
+                                    colored_num_tags = []
+                                    for n in sorted(list(parsed_s)):
+                                        f_code = f"{u_code}{n:03d}"
+                                        if get_problem_link_by_full(f_code):
+                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                        else:
+                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                                    st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("기록된 날짜 정보가 없습니다.")
                 
                 elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
                     has_missing = False
