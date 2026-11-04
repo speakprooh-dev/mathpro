@@ -1093,7 +1093,6 @@ else:
                                 st.success("삭제되었습니다!")
                                 st.rerun()
 
-                    # 여러 날짜 한 번에 소급 체크하는 매트릭스 (자동저장)
                     st.markdown("---")
                     st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
                     st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
@@ -1263,9 +1262,13 @@ else:
                         st.rerun()
 
     with t_cfg_wrong:
-        st.markdown("#### 🔍 학생별 오답노트 조회")
+        st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
         if student_list:
             chk_student_choice = st.selectbox("조회할 학생 선택", student_list, key="chk_wrong_student_choice")
+            
+            # 보기 방식 선택 서브 탭 (단원별 vs 최근 날짜별/날짜별/해설 없는 문제 모아보기)
+            wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 최근 날짜별 / 날짜별 보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
+            
             conn, _ = get_db_connection()
             c = conn.cursor()
             c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
@@ -1273,19 +1276,59 @@ else:
             conn.close()
             
             if wrong_rows:
-                for u_code, nums_txt, u_date in wrong_rows:
-                    with st.container(border=True):
+                if wrong_view_mode == "📂 단원별 보기":
+                    for u_code, nums_txt, u_date in wrong_rows:
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>") # 파란색 (링크 있음)
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>") # 빨간색 (링크 없음)
+                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                
+                elif wrong_view_mode == "📅 최근 날짜별 / 날짜별 보기":
+                    # 수정일(updated_at) 기준으로 내림차순 정렬
+                    sorted_by_date = sorted(wrong_rows, key=lambda x: x[2] if x[2] else "1900-01-01", reverse=True)
+                    for u_code, nums_txt, u_date in sorted_by_date:
+                        date_label = u_date if u_date else "날짜 미상"
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                st.markdown(f"##### 📅 수정일자: `{date_label}` &nbsp;|&nbsp; 단원코드: `{u_code}`", unsafe_allow_html=True)
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                
+                elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
+                    has_missing = False
+                    for u_code, nums_txt, u_date in wrong_rows:
                         parsed_s = parse_numbers(nums_txt)
+                        missing_nums = []
                         if parsed_s:
-                            st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                            colored_num_tags = []
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}"
-                                if get_problem_link_by_full(f_code):
-                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                else:
-                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                                if not get_problem_link_by_full(f_code):
+                                    missing_nums.append(n)
+                        
+                        if missing_nums:
+                            has_missing = True
+                            with st.container(border=True):
+                                st.markdown(f"##### 🚨 단원코드: `{u_code}` <span style='font-size:12px; color:#DC2626;'>(해설 링크 없는 문제 발견)</span>", unsafe_allow_html=True)
+                                colored_num_tags = [f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>" for n in missing_nums]
+                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                    
+                    if not has_missing:
+                        st.success("🎉 축하합니다! 현재 등록된 오답들 중 해설 링크가 누락된 문제가 하나도 없습니다.")
             else:
                 st.info("저장된 오답이 없습니다.")
         else:
@@ -1362,9 +1405,7 @@ else:
                 
                 st.caption(f"총 {len(filtered)}개의 링크가 등록되어 있습니다.")
                 
-                # 검색어가 없을 때는 단원별 아코디언 그룹화 및 페이지네이션 제공
                 if not search_filter:
-                    # 단원코드별 그룹화
                     grouped_links = {}
                     for l_id, f_code, v_url, u_code in filtered:
                         grouped_links.setdefault(u_code, []).append((l_id, f_code, v_url))
@@ -1394,7 +1435,6 @@ else:
                                         delete_problem_link(l_id)
                                         st.rerun()
                     
-                    # 페이지 이동 컨트롤
                     if total_pages > 1:
                         st.markdown("---")
                         col_p1, col_p2, col_p3 = st.columns([1, 2, 1])
@@ -1409,7 +1449,6 @@ else:
                                 st.session_state["link_page"] += 1
                                 st.rerun()
                 else:
-                    # 검색 중일 때는 검색 결과 매칭 항목을 리스트로 바로 표시
                     for l_id, f_code, v_url, u_code in filtered:
                         with st.container(border=True):
                             col_li_info, col_li_del = st.columns([5, 1])
