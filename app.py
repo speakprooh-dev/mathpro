@@ -449,19 +449,6 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn.commit()
     conn.close()
 
-def get_student_monthly_logs(student_name, year, month):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    start_date = f"{year}-{month:02d}-01"
-    end_date = f"{year+1}-01-01" if month == 12 else f"{year}-{month+1:02d}-01"
-    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date < ?", (student_name, start_date, end_date))
-    rows = c.fetchall()
-    conn.close()
-    log_map = {}
-    for r_id, l_date, val in rows:
-        log_map[(str(r_id), l_date)] = bool(val)
-    return log_map
-
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -496,21 +483,6 @@ def get_routine_completion_rate(student_name, days_limit=7):
     
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
-
-def get_student_recent_logs_range(student_name, days_limit=7):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    today_obj = get_korean_today()
-    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
-    today_str = str(today_obj)
-    
-    c.execute("SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ?", (student_name, start_date_str, today_str))
-    rows = c.fetchall()
-    conn.close()
-    log_map = {}
-    for r_id, l_date, val in rows:
-        log_map[(str(r_id), l_date)] = bool(val)
-    return log_map
 
 def get_homework_templates():
     conn, _ = get_db_connection()
@@ -788,32 +760,6 @@ if url_student and url_student in student_list:
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
         st.metric(label="최근 1주 (7일) 달성률", value=f"{r_rate}%", delta=f"총 {r_total}개 중 {r_completed}개 완료")
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
-
-        today_obj = get_korean_today()
-        daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
-        
-        with st.expander("📅 최근 1주일 상세 루틴 실천 기록", expanded=False):
-            recent_logs_map = get_student_recent_logs_range(selected_student, 7)
-            for i in range(7):
-                target_d = today_obj - timedelta(days=i)
-                d_str = str(target_d)
-                w_name = get_weekday_kr(d_str)[:1]
-                is_today = (d_str == str(today_obj))
-                
-                day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
-                total_r_count = len(daily_parents)
-                
-                status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                today_tag = " (오늘)" if is_today else ""
-                border_style = "border: 2px solid #03C75A;" if is_today else "border: 1px solid rgba(128,128,128,0.3);"
-                
-                st.markdown(
-                    f"<div style='padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; {border_style} display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<span style='font-size: 13px; font-weight: bold;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                    f"<span style='font-size: 13px; font-weight: bold; color: #03C75A;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
-                    f"</div>",
-                    unsafe_allow_html=True
-                )
 
     st.divider()
 
@@ -1133,9 +1079,7 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 월간 실천 현황", expanded=False):
-                st.caption("학생이 매일 수행해야 하는 반복 루틴 과제를 설정하고, 특정 날짜의 실천 현황을 직접 체크하거나 수정할 수 있습니다.")
-                
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정", expanded=False):
                 with st.form("add_teacher_routine_form"):
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
                     if st.form_submit_button("➕ 루틴 과제 일괄 등록", type="primary"):
@@ -1159,65 +1103,6 @@ else:
                                 delete_daily_routine(r_id)
                                 st.success("삭제되었습니다!")
                                 st.rerun()
-
-                    st.markdown("---")
-                    st.markdown(f"##### 📊 **{selected_hw_student}** 학생의 월간 루틴 실천 현황 및 선생님 완료 체크")
-                    today_obj = get_korean_today()
-                    t_year = st.selectbox("연도 선택", [today_obj.year - 1, today_obj.year, today_obj.year + 1], index=1, key="teacher_routine_year")
-                    t_month = st.selectbox("월 선택", list(range(1, 13)), index=today_obj.month - 1, key="teacher_routine_month")
-                    
-                    t_monthly_logs = get_student_monthly_logs(selected_hw_student, t_year, t_month)
-                    _, t_last_day = calendar.monthrange(t_year, t_month)
-                    
-                    teacher_chk_day = st.selectbox("📝 완료 체크/수정할 날짜 선택", list(range(1, t_last_day + 1)), format_func=lambda d: f"{t_month}월 {d}일 ({get_weekday_kr(f'{t_year}-{t_month:02d}-{d:02d}')})", key="teacher_chk_day_select")
-                    target_chk_date_str = f"{t_year}-{t_month:02d}-{teacher_chk_day:02d}"
-                    
-                    with st.container(border=True):
-                        st.markdown(f"**📌 {target_chk_date_str} 루틴 완료 여부 실시간 자동 저장**")
-                        day_logs_current = get_student_daily_logs_by_date(selected_hw_student, target_chk_date_str)
-                        
-                        for r_id, r_title in current_routines:
-                            r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
-                            default_val = day_logs_current.get((str(r_id), target_chk_date_str), False)
-                            
-                            def auto_save_routine_callback(s_name, d_str, r_key):
-                                val = st.session_state.get(r_key, False)
-                                save_daily_routine_logs(s_name, d_str, {r_key.split('_')[2]: val})
-
-                            if r_subs:
-                                st.markdown(f"**{r_title}**")
-                                key_main = f"t_daily_{r_id}_{target_chk_date_str}"
-                                st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=key_main, on_change=auto_save_routine_callback, args=(selected_hw_student, target_chk_date_str, key_main))
-                                for sr_id, sr_title in r_subs:
-                                    sub_default = day_logs_current.get((str(sr_id), target_chk_date_str), False)
-                                    key_sub = f"t_daily_{sr_id}_{target_chk_date_str}"
-                                    st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=sub_default, key=key_sub, on_change=auto_save_routine_callback, args=(selected_hw_student, target_chk_date_str, key_sub))
-                            else:
-                                key_single = f"t_daily_{r_id}_{target_chk_date_str}"
-                                st.checkbox(f"📌 {r_title}", value=default_val, key=key_single, on_change=auto_save_routine_callback, args=(selected_hw_student, target_chk_date_str, key_single))
-                            st.divider()
-
-                    st.markdown("---")
-                    st.markdown(f"**📋 {t_year}년 {t_month}월 전체 실천 요약**")
-                    for day in range(1, t_last_day + 1):
-                        d_str = f"{t_year}-{t_month:02d}-{day:02d}"
-                        w_name = get_weekday_kr(d_str)[:1]
-                        is_today = (d_str == str(today_obj))
-                        
-                        day_checked_count = sum(1 for r_id, _ in current_routines if t_monthly_logs.get((str(r_id), d_str), False))
-                        total_r_count = len(current_routines)
-                        
-                        status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                        today_tag = " (오늘)" if is_today else ""
-                        border_style = "border: 2px solid #03C75A;" if is_today else "border: 1px solid rgba(128,128,128,0.3);"
-                        
-                        st.markdown(
-                            f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_style} display: flex; justify-content: space-between; align-items: center;'>"
-                            f"<span style='font-size: 14px; font-weight: bold;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                            f"<span style='font-size: 13px; font-weight: bold; color: #03C75A;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
-                            f"</div>",
-                            unsafe_allow_html=True
-                        )
 
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
@@ -1352,101 +1237,30 @@ else:
                         st.rerun()
 
     with t_cfg_wrong:
-        st.markdown("#### 🔍 학생별 / 전체 오답 취합 및 스마트 관리")
+        st.markdown("#### 🔍 학생별 오답노트 조회")
         if student_list:
-            student_select_options = ["전체 학생 모아보기"] + student_list
-            chk_student_choice = st.selectbox("조회할 대상 선택", student_select_options, key="chk_wrong_student_choice")
-            
-            wrong_view_mode = st.radio(
-                "오답 모아보기 방식 선택", 
-                [
-                    "📁 단원코드별 전체 보기", 
-                    "📅 최근 수정일별 보기 (날짜 선택 가능)", 
-                    "🚨 해설 링크가 연결되지 않은 문제 모아보기"
-                ], 
-                horizontal=False
-            )
-            st.divider()
-
-            base_url = get_base_url()
+            chk_student_choice = st.selectbox("조회할 학생 선택", student_list, key="chk_wrong_student_choice")
             conn, _ = get_db_connection()
             c = conn.cursor()
-            if chk_student_choice == "전체 학생 모아보기":
-                c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
-            else:
-                c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-            all_wrong_rows = c.fetchall()
+            c.execute("SELECT unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+            wrong_rows = c.fetchall()
             conn.close()
             
-            if all_wrong_rows:
-                if wrong_view_mode == "📁 단원코드별 전체 보기":
-                    for s_name, u_code, nums_txt, u_date in all_wrong_rows:
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                student_link = f"{base_url}/?student={s_name}"
-                                name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                st.markdown(f"##### {name_display}📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                                
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}"
-                                    if get_problem_link_by_full(f_code):
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-
-                elif wrong_view_mode == "📅 최근 수정일별 보기 (날짜 선택 가능)":
-                    available_dates = sorted(list(set([r[3] for r in all_wrong_rows if r[3]])), reverse=True)
-                    if available_dates:
-                        date_options = ["전체 날짜 보기 (최근순)"] + available_dates
-                        selected_date_filter = st.selectbox("확인할 수정일 선택", date_options)
-                        
-                        if selected_date_filter == "전체 날짜 보기 (최근순)":
-                            target_rows = sorted(all_wrong_rows, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
-                        else:
-                            target_rows = [r for r in all_wrong_rows if r[3] == selected_date_filter]
-                        
-                        st.markdown(f"---")
-                        for s_name, u_code, nums_txt, u_date in target_rows:
-                            with st.container(border=True):
-                                parsed_s = parse_numbers(nums_txt)
-                                if parsed_s:
-                                    student_link = f"{base_url}/?student={s_name}"
-                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {name_display}📅 수정일: `{u_date or '미기재'}` &nbsp;|&nbsp; 단원: `{u_code}`", unsafe_allow_html=True)
-                                    
-                                    colored_num_tags = []
-                                    for n in sorted(list(parsed_s)):
-                                        f_code = f"{u_code}{n:03d}"
-                                        if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                        else:
-                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                    
-                                    st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                    else:
-                        st.info("등록된 수정일 데이터가 없습니다.")
-
-                elif wrong_view_mode == "🚨 해설 링크가 연결되지 않은 문제 모아보기":
-                    st.info("💡 학생들이 제출한 오답 중, 아직 '7. 해설 링크 관리'에 영상 주소가 등록되지 않은 문제들만 모아봅니다!")
-                    unlinked_found = False
-                    for s_name, u_code, nums_txt, u_date in all_wrong_rows:
+            if wrong_rows:
+                base_url = get_base_url()
+                for u_code, nums_txt, u_date in wrong_rows:
+                    with st.container(border=True):
                         parsed_s = parse_numbers(nums_txt)
                         if parsed_s:
-                            unlinked_nums = [f"{n:03d}" for n in sorted(list(parsed_s)) if not get_problem_link_by_full(f"{u_code}{n:03d}")]
-                            if unlinked_nums:
-                                unlinked_found = True
-                                with st.container(border=True):
-                                    student_link = f"{base_url}/?student={s_name}"
-                                    name_display = f"👤 **<a href='{student_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>[{s_name}]</a>** &nbsp;|&nbsp; " if chk_student_choice == "전체 학생 모아보기" else ""
-                                    st.markdown(f"##### {name_display}🚨 미연결 오답 - 단원: `{u_code}`", unsafe_allow_html=True)
-                                    unlinked_str = f"{u_code}_({', '.join(unlinked_nums)})"
-                                    st.code(unlinked_str, language="text")
-                    if not unlinked_found:
-                        st.success("🎉 현재 조회 범위 내 모든 오답에 해설 링크가 완벽하게 연결되어 있습니다.")
+                            st.markdown(f"##### 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                            colored_num_tags = []
+                            for n in sorted(list(parsed_s)):
+                                f_code = f"{u_code}{n:03d}"
+                                if get_problem_link_by_full(f_code):
+                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                else:
+                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("저장된 오답이 없습니다.")
         else:
