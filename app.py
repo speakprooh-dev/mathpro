@@ -492,7 +492,7 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
-def get_routine_completion_rate(student_name, days_limit=14):
+def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
     
@@ -519,7 +519,7 @@ def get_routine_completion_rate(student_name, days_limit=14):
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
 
-def get_student_recent_logs_range(student_name, days_limit=14):
+def get_student_recent_logs_range(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
     today_obj = get_korean_today()
@@ -792,7 +792,7 @@ if url_student and url_student in student_list:
     h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
     # -------------------------------------------------------------------------
-    # 📊 최상단 통합 학습 성취도 대시보드 (개념진도, 숙제완료 + 루틴달성률 통합)
+    # 📊 최상단 통합 학습 성취도 대시보드 (개념진도, 숙제완료 + 루틴달성률 및 상세기록 통합)
     # -------------------------------------------------------------------------
     st.markdown("##### 📊 나의 학습 성취도 대시보드")
     
@@ -808,7 +808,7 @@ if url_student and url_student in student_list:
             st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
             st.progress(h_percent / 100 if total_h > 0 else 0)
 
-    # 상단 대시보드 카드 안에 루틴 달성률 카드 추가 (기간 선택 기능 포함)
+    # 상단 대시보드 카드 안에서 기간 선택 및 상세 실천 기록(Expander) 통합 제공 (기본 7일)
     with st.container(border=True):
         col_rt_title, col_rt_opt = st.columns([2, 1])
         with col_rt_title:
@@ -817,7 +817,7 @@ if url_student and url_student in student_list:
             range_option = st.selectbox(
                 "조회 기간", 
                 ["최근 1주 (7일)", "최근 2주 (14일)", "최근 3주 (21일)", "최근 4주 (28일)"], 
-                index=1,
+                index=0,
                 key="student_routine_range_select",
                 label_visibility="collapsed"
             )
@@ -837,6 +837,35 @@ if url_student and url_student in student_list:
             delta=f"총 {r_total}개 중 {r_completed}개 완료"
         )
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
+
+        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치
+        today_obj = get_korean_today()
+        daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
+        
+        with st.expander(f"📅 루틴 상세 실천 기록 보기 ({range_option})", expanded=False):
+            recent_logs_map = get_student_recent_logs_range(selected_student, selected_days)
+            
+            for i in range(selected_days):
+                target_d = today_obj - timedelta(days=i)
+                d_str = str(target_d)
+                w_name = get_weekday_kr(d_str)[:1]
+                is_today = (d_str == str(today_obj))
+                
+                day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
+                total_r_count = len(daily_parents)
+                
+                status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
+                
+                highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
+                today_tag = " (오늘)" if is_today else ""
+                
+                st.markdown(
+                    f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
+                    f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                    f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
 
     st.divider()
 
@@ -871,7 +900,7 @@ if url_student and url_student in student_list:
 
     with tab2:
         # -------------------------------------------------------------------------
-        # [구역 1] 매일 반복 루틴 체크 (행동 영역) 및 상세 실천 기록 보기
+        # [구역 1] 매일 반복 루틴 체크 (행동 영역)
         # -------------------------------------------------------------------------
         st.markdown("### 🔥 매일 반복 루틴 체크")
         st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
@@ -900,33 +929,6 @@ if url_student and url_student in student_list:
                     st.divider()
             if daily_routine_checked_dict:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
-
-            # 상세 실천 기록을 볼 수 있는 깔끔한 expander 배치 (날짜별 내역)
-            st.markdown("")
-            with st.expander(f"📅 루틴 상세 실천 기록 보기", expanded=False):
-                recent_logs_map = get_student_recent_logs_range(selected_student, 14)
-                
-                for i in range(14):
-                    target_d = today_obj - timedelta(days=i)
-                    d_str = str(target_d)
-                    w_name = get_weekday_kr(d_str)[:1]
-                    is_today = (d_str == str(today_obj))
-                    
-                    day_checked_count = sum(1 for r_id, _ in daily_parents if recent_logs_map.get((str(r_id), d_str), False))
-                    total_r_count = len(daily_parents)
-                    
-                    status_ox = "⭕ O" if (total_r_count > 0 and day_checked_count == total_r_count) else "❌ X"
-                    
-                    highlight_style = "border-left: 4px solid #38BDF8; background-color: rgba(56,189,248,0.05);" if is_today else ""
-                    today_tag = " (오늘)" if is_today else ""
-                    
-                    st.markdown(
-                        f"<div style='padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; border: 1px solid #334155; background-color: #1E293B; {highlight_style} display: flex; justify-content: space-between; align-items: center;'>"
-                        f"<span style='font-size: 14px; font-weight: bold; color: #F8FAFC;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                        f"<span style='font-size: 13px; font-weight: bold;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
 
         # -------------------------------------------------------------------------
         # [구역 2] 날짜별 개별 숙제 (완전히 분리된 하단 섹션)
@@ -1081,7 +1083,7 @@ else:
                         if success:
                             st.success(msg)
                             st.rerun()
-                        else:
+else:
                             st.error(msg)
             
         st.divider()
