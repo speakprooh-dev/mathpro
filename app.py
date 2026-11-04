@@ -1055,8 +1055,9 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정", expanded=False):
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 소급 체크", expanded=False):
                 with st.form("add_teacher_routine_form"):
+                    st.markdown("##### ➕ 루틴 과제 항목 추가")
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
                     if st.form_submit_button("➕ 루틴 과제 일괄 등록", type="primary"):
                         if new_routine_txt.strip():
@@ -1066,6 +1067,7 @@ else:
                 
                 current_routines = get_student_daily_routines_parent(selected_hw_student, parent_id=None)
                 if current_routines:
+                    st.markdown("---")
                     st.markdown("##### 📋 현재 등록된 루틴 과제 목록")
                     for r_id, r_title in current_routines:
                         col_r1, col_r2 = st.columns([5, 1])
@@ -1079,6 +1081,34 @@ else:
                                 delete_daily_routine(r_id)
                                 st.success("삭제되었습니다!")
                                 st.rerun()
+
+                    # [신규 추가] 지난 날짜 루틴 소급 체크 기능
+                    st.markdown("---")
+                    st.markdown("##### 📅 지난 날짜 루틴 소급 체크 및 수정")
+                    st.caption("학생이 깜빡했거나 지난 날짜의 루틴 완료 여부를 선생님 권한으로 소급해서 체크할 수 있습니다.")
+                    
+                    past_routine_date = st.date_input("소급 적용할 날짜 선택", value=get_korean_today(), key="teacher_past_routine_date")
+                    past_date_str = str(past_routine_date)
+                    past_day_logs = get_student_daily_logs_by_date(selected_hw_student, past_date_str)
+                    
+                    with st.form("teacher_past_routine_form"):
+                        st.markdown(f"**{selected_hw_student} 학생의 [{past_date_str}] 루틴 수행 현황**")
+                        teacher_routine_dict = {}
+                        for r_id, r_title in current_routines:
+                            r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
+                            def_val = past_day_logs.get((str(r_id), past_date_str), False)
+                            if r_subs:
+                                st.markdown(f"**{r_title}**")
+                                teacher_routine_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=def_val, key=f"t_past_{r_id}")
+                                for sr_id, sr_title in r_subs:
+                                    teacher_routine_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=past_day_logs.get((str(sr_id), past_date_str), False), key=f"t_past_{sr_id}")
+                            else:
+                                teacher_routine_dict[str(r_id)] = st.checkbox(f"{r_title}", value=def_val, key=f"t_past_{r_id}")
+                        
+                        if st.form_submit_button("💾 선택한 날짜 루틴 소급 저장", type="primary"):
+                            save_daily_routine_logs(selected_hw_student, past_date_str, teacher_routine_dict)
+                            st.success(f"[{past_date_str}] 날짜의 루틴 기록이 성공적으로 소급 저장되었습니다!")
+                            st.rerun()
 
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
