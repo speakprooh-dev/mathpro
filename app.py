@@ -862,8 +862,8 @@ if url_student and url_student in student_list:
                 
                 st.markdown(
                     f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                    f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
-                    f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                    f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>{target_d.month}월 {target_d.day}일 ({w_name}){today_tag}</span>"
+                    f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                     f"</div>",
                     unsafe_allow_html=True
                 )
@@ -1274,8 +1274,8 @@ else:
                         
                         st.markdown(
                             f"<div style='padding: 10px 14px; margin-bottom: 6px; border-radius: 6px; {border_highlight} background-color: {bg_color}; display: flex; justify-content: space-between; align-items: center;'>"
-                            f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
-                            f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
+                            f"<span style='font-size: 14px; font-weight: bold; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;'>{t_month}월 {day}일 ({w_name}){today_tag}</span>"
+                            f"<span style='font-size: 13px; font-weight: bold; color: #38BDF8 !important; -webkit-text-fill-color: #38BDF8 !important;'>{status_ox} ({day_checked_count}/{total_r_count})</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
