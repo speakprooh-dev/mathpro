@@ -1250,33 +1250,34 @@ else:
 
                                     templates = get_homework_templates()
 
-            if templates:
-                template_options = ["-- 자주 쓰는 숙제 템플릿 불러오기 --"] + [t[1] for t in templates]
-                
-                def on_template_change():
-                    chosen = st.session_state.get("select_hw_template_box", "")
-                    if chosen and chosen != "-- 자주 쓰는 숙제 템플릿 불러오기 --":
-                        current_val = st.session_state.get("hw_text_area_input", "")
-                        if current_val.strip():
-                            st.session_state["hw_text_area_input"] = current_val + "\n" + chosen
-                        else:
-                            st.session_state["hw_text_area_input"] = chosen
+if templates:
+    template_options = ["-- 자주 쓰는 숙제 템플릿 불러오기 --"] + [t[1] for t in templates]
+    
+    def on_template_change():
+        chosen = st.session_state.get("select_hw_template_box", "")
+        if chosen and chosen != "-- 자주 쓰는 숙제 템플릿 불러오기 --":
+            current_val = st.session_state.get("hw_text_area_input", "")
+            if current_val.strip():
+                st.session_state["hw_text_area_input"] = current_val + "\n" + chosen
+            else:
+                st.session_state["hw_text_area_input"] = chosen
 
-                st.selectbox(
-                    "📌 템플릿 선택", 
-                    template_options, 
-                    key="select_hw_template_box", 
-                    on_change=on_template_change
-                )
+    st.selectbox(
+        "📌 템플릿 선택", 
+        template_options, 
+        key="select_hw_template_box", 
+        on_change=on_template_change
+    )
 
-            with st.form("add_student_hw_form"):
-                hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
-                hw_text_area = st.text_area(
-                    "날짜별 과제 내용 입력", 
-                    key="hw_text_area_input",
-                    placeholder="[진도 교재]\n  - p.12~15 문제 풀이",
-                    height=150
-                )
+with st.form("add_student_hw_form"):
+    hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
+    hw_text_area = st.text_area(
+        "날짜별 과제 내용 입력", 
+        key="hw_text_area_input",
+        placeholder="[진도 교재]\n  - p.12~15 문제 풀이",
+        height=150
+    )
+
 
 
                 
