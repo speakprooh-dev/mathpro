@@ -549,13 +549,11 @@ def get_student_homework_dates(student_name):
     conn.close()
     return [r[0] for r in rows]
 
-def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
+# [완전 평면화] 숙제는 하위 항목 없이 모든 줄이 독립된 개별 항목으로 조회됩니다.
+def get_student_homework_by_date(student_name, hw_date):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    if parent_id is None:
-        c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND (parent_id IS NULL) ORDER BY id", (student_name, hw_date))
-    else:
-        c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? AND parent_id = ? ORDER BY id", (student_name, hw_date, parent_id))
+    c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -563,36 +561,21 @@ def get_student_homework_by_date_parent(student_name, hw_date, parent_id=None):
 def get_all_student_homework(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, hw_date, title, parent_id FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
+    c.execute("SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     rows = c.fetchall()
     conn.close()
     return rows
 
+# [완전 평면화] 줄바꿈된 모든 줄이 독립된 개별 숙제로 등록됩니다.
 def bulk_insert_student_homework(student_name, hw_date, text_data):
     conn, _ = get_db_connection()
     c = conn.cursor()
     lines = text_data.strip().split('\n')
-    current_parent_id = None
     for line in lines:
         line_str = line.strip()
         if not line_str:
             continue
-        # [핵심 수정] 오직 맨 앞에 '-', '*', '•', '└' 기호가 붙어 있는 줄만 하위 항목(└)으로 인식합니다.
-        # 그냥 줄바꿈한 일반 글자는 모두 독립된 상위 숙제로 등록됩니다!
-        is_sub = line_str.startswith(('-', '*', '•', '└'))
-        title = line_str.lstrip('-•*└\t ').strip()
-        if not title:
-            continue
-        if is_sub and current_parent_id is not None:
-            c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, ?)", (student_name, hw_date, title, current_parent_id))
-        else:
-            c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, title))
-            try:
-                c.execute("SELECT last_insert_rowid()")
-                row = c.fetchone()
-                current_parent_id = row[0] if row else None
-            except Exception:
-                pass
+        c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, line_str))
     conn.commit()
     conn.close()
 
@@ -833,29 +816,15 @@ if url_student and url_student in student_list:
             st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
             
             selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-            parent_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=None)
+            hws = get_student_homework_by_date(selected_student, selected_date)
             
             with st.container(border=True):
-                for h_idx, (h_id, title) in enumerate(parent_hws):
+                for h_idx, (h_id, title) in enumerate(hws):
                     default_val = h_progress.get(h_id, False)
-                    sub_hws = get_student_homework_by_date_parent(selected_student, selected_date, parent_id=h_id)
-                    if sub_hws:
-                        st.markdown(f"**{title}**")
-                        parent_chk_key = f"s_hw_p_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                        if st.checkbox(f"{title} (전체 대표)", value=default_val, key=parent_chk_key) != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[parent_chk_key])
-                            st.rerun()
-                        for s_idx, (s_id, s_title) in enumerate(sub_hws):
-                            s_default = h_progress.get(s_id, False)
-                            sub_chk_key = f"s_hw_sub_{selected_student}_{selected_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
-                            if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_default, key=sub_chk_key) != s_default:
-                                save_single_homework_progress(selected_student, s_id, st.session_state[sub_chk_key])
-                                st.rerun()
-                    else:
-                        parent_chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                        if st.checkbox(f"{title}", value=default_val, key=parent_chk_key) != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[parent_chk_key])
-                            st.rerun()
+                    chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                    if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
+                        save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
+                        st.rerun()
 
     with tab3:
         st.markdown("### 💬 오답 및 질문 관리")
@@ -1120,14 +1089,8 @@ else:
                 with st.expander("✏️ 등록된 날짜별 숙제 내용 통째로 수정 및 삭제하기", expanded=False):
                     chosen_edit_date = st.selectbox("수정할 숙제 날짜 선택", existing_hw_dates, format_func=lambda d: f"{d} ({get_weekday_kr(d)})", key="select_date_to_edit_bulk")
                     
-                    date_hws = get_student_homework_by_date_parent(selected_hw_student, chosen_edit_date, parent_id=None)
-                    combined_titles = []
-                    for h_id, h_title in date_hws:
-                        combined_titles.append(h_title)
-                        sub_hws = get_student_homework_by_date_parent(selected_hw_student, chosen_edit_date, parent_id=h_id)
-                        for _, s_title in sub_hws:
-                            combined_titles.append(f"  - {s_title}")
-                    
+                    date_hws = get_student_homework_by_date(selected_hw_student, chosen_edit_date)
+                    combined_titles = [h_title for _, h_title in date_hws]
                     initial_text_val = "\n".join(combined_titles)
                     
                     with st.form(f"bulk_edit_hw_form_{chosen_edit_date}"):
@@ -1284,20 +1247,20 @@ else:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
             for s_idx_main, s_name in enumerate(student_list):
-                parent_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=None)
-                if parent_hws:
+                hws = get_student_homework_by_date(s_name, selected_matrix_date)
+                if hws:
                     with st.container(border=True):
                         st.markdown(f"**👤 {s_name} 학생**")
                         s_hw_prog = get_student_homework_progress(s_name)
                         
-                        for h_idx, (h_id, title) in enumerate(parent_hws):
+                        for h_idx, (h_id, title) in enumerate(hws):
                             is_done = s_hw_prog.get(h_id, False)
                             
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
-                                parent_chk_key = f"mat_p_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                if st.checkbox(f"📌 {title}", value=is_done, key=parent_chk_key) != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[parent_chk_key])
+                                chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
+                                if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
                                     st.rerun()
                             with col_m2:
                                 with st.popover("⚙️ 수정"):
@@ -1315,14 +1278,6 @@ else:
                                             delete_student_homework_date(s_name, selected_matrix_date)
                                             st.success("삭제 완료!")
                                             st.rerun()
-                            
-                            sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
-                            for s_idx, (s_id, s_title) in enumerate(sub_hws):
-                                s_done = s_hw_prog.get(s_id, False)
-                                sub_chk_key = f"mat_sub_{s_idx_main}_{selected_matrix_date}_{h_id}_{s_id}_{h_idx}_{s_idx}"
-                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=sub_chk_key) != s_done:
-                                    save_single_homework_progress(s_name, s_id, st.session_state[sub_chk_key])
-                                    st.rerun()
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
