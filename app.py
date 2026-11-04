@@ -838,7 +838,7 @@ if url_student and url_student in student_list:
         )
         st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
 
-        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (글자색 강제 흰색 지정 완료)
+        # 카드 안쪽에 접힌 상태(Expander)로 선택한 기간에 맞춘 루틴 상세 실천 기록 배치 (라이트모드/다크모드 공통 완벽 가독성 확보)
         today_obj = get_korean_today()
         daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
         
