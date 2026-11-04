@@ -1290,14 +1290,14 @@ else:
                             
                             col_m1, col_m2 = st.columns([5, 1])
                             with col_m1:
-                                if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{h_id}") != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[f"mat_chk_{h_id}"])
+                                if st.checkbox(f"📌 {title}", value=is_done, key=f"mat_chk_{s_name}_{selected_matrix_date}_{h_id}") != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[f"mat_chk_{s_name}_{selected_matrix_date}_{h_id}"])
                                     st.rerun()
                             with col_m2:
                                 with st.popover("⚙️ 수정"):
-                                    with st.form(f"matrix_edit_form_{h_id}"):
-                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{h_id}")
-                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{h_id}")
+                                    with st.form(f"matrix_edit_form_{s_name}_{h_id}"):
+                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_name}_{h_id}")
+                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_name}_{h_id}")
                                         m_save = st.form_submit_button("저장", type="primary")
                                         m_del = st.form_submit_button("삭제")
                                         if m_save:
@@ -1313,9 +1313,8 @@ else:
                             sub_hws = get_student_homework_by_date_parent(s_name, selected_matrix_date, parent_id=h_id)
                             for s_id, s_title in sub_hws:
                                 s_done = s_hw_prog.get(s_id, False)
-                                # 에러가 난 부분 (key 중복 발생)
-                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_id}") != s_done:
-                                    save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_id}"])
+                                if st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {s_title}", value=s_done, key=f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}") != s_done:
+                                    save_single_homework_progress(s_name, s_id, st.session_state[f"mat_chk_sub_{s_name}_{selected_matrix_date}_{s_id}"])
                                     st.rerun()
 
     with t_cfg_links:
