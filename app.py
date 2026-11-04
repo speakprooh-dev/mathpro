@@ -79,13 +79,23 @@ def restore_from_excel(uploaded_file):
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
         c = conn.cursor()
+        
+        # 외래키 제약조건 무시 (안전한 덮어쓰기)
+        if db_type == "sqlite":
+            c.execute("PRAGMA foreign_keys = OFF;")
+            
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
                 c.execute(f"DELETE FROM {sheet_name}")
-                df.to_sql(sheet_name, conn, if_exists='append', index=False)
-            except Exception:
+                conn.commit()
+                df.to_sql(sheet_name, conn, if_exists='append', index=False, method='multi')
+            except Exception as sub_e:
                 pass
+                
+        if db_type == "sqlite":
+            c.execute("PRAGMA foreign_keys = ON;")
+            
         conn.commit()
         conn.close()
         return True, "데이터베이스가 성공적으로 복구되었습니다!"
@@ -114,7 +124,6 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 🚀 [안정성 강화] DB 초기화 함수 (충돌 방지 처리)
 def init_db():
     try:
         conn, db_type = get_db_connection()
@@ -138,7 +147,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
         else:
-            c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY)')
+            c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, name TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id INTEGER PRIMARY KEY AUTOINCREMENT, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\')')
