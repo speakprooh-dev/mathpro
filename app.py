@@ -692,13 +692,7 @@ if url_student and url_student in student_list:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
-        st.markdown("""
-        - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
-        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-        - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
-        """)
-
+    # 📢 [공지사항 강제 가시화 영역]
     student_notices = get_notices_for_student(selected_student)
     if student_notices:
         with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -712,6 +706,16 @@ if url_student and url_student in student_list:
                     f'</div>',
                     unsafe_allow_html=True
                 )
+    else:
+        with st.expander("📢 [공지사항] 확인하기", expanded=False):
+            st.info("현재 등록된 공지사항이 없습니다.")
+
+    with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
+        st.markdown("""
+        - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
+        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
+        - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
+        """)
 
     milestones = get_student_milestones(selected_student)
     hw_dates = get_student_homework_dates(selected_student)
