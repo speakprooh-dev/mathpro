@@ -12,31 +12,31 @@ import os
 # ==========================================
 try:
     import psycopg2
-    from psycopg2.extras import RealDictCursor
+    from urllib.parse import urlparse
     SUPABASE_AVAILABLE = True
 except ImportError:
     SUPABASE_AVAILABLE = False
 
-# Streamlit secrets에 Supabase 설정이 있는지 확인
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
-            db_conf = st.secrets["supabase"]
-            conn = psycopg2.connect(
-                host=db_conf["host"],
-                database=db_conf["database"],
-                user=db_conf["user"],
-                password=db_conf["password"],
-                port=db_conf.get("port", 5432),
-                sslmode="require"
-            )
-            return conn, "postgres"
+            if "url" in st.secrets["supabase"]:
+                parsed_url = urlparse(st.secrets["supabase"]["url"])
+                conn = psycopg2.connect(
+                    dbname=parsed_url.path[1:],
+                    user=parsed_url.username,
+                    password=parsed_url.password,
+                    host=parsed_url.hostname,
+                    port=parsed_url.port,
+                    sslmode="require"
+                )
+                return conn, "postgres"
         except Exception as e:
             st.error(f"클라우드 DB(Supabase) 연결 실패: {e}. 로컬 모드로 대체합니다.")
     
-    # Supabase 설정이 없거나 실패 시 Fallback (로컬 SQLite)
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH), "sqlite"
+
 
 # 호환성을 위한 래퍼 클래스 (SQLite와 Postgres SQL 문법 차이 흡수)
 class DBWrapper:
