@@ -668,6 +668,12 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
+st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
+
+# 🖼️ 메인 화면 상단 로고 이미지 배치
+if os.path.exists("mathpro_logo.png"):
+    st.image("mathpro_logo.png", use_container_width=True)
+
 st.title("학생 맞춤 학습 로드맵")
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
@@ -1296,15 +1302,12 @@ else:
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "📅 최근 날짜별 / 날짜별 보기":
-                    # DB에 존재하는 모든 수정일자 추출 (최신순 정렬)
                     available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
                     
                     if available_dates:
-                        # 날짜 선택 옵션 제공 ("전체 날짜 보기" 포함)
                         date_filter_options = ["전체 날짜 보기 (최근순)"] + available_dates
                         selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", date_filter_options)
                         
-                        # 선택한 날짜에 맞게 필터링
                         if selected_date_filter == "전체 날짜 보기 (최근순)":
                             filtered_by_date_rows = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
                         else:
