@@ -692,7 +692,7 @@ if url_student and url_student in student_list:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 📢 [공지사항 강제 가시화 영역]
+    # 📢 [공지사항: 등록된 공지사항이 있을 때만 눈에 띄게 펼쳐진 상태로 표시]
     student_notices = get_notices_for_student(selected_student)
     if student_notices:
         with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -706,9 +706,6 @@ if url_student and url_student in student_list:
                     f'</div>',
                     unsafe_allow_html=True
                 )
-    else:
-        with st.expander("📢 [공지사항] 확인하기", expanded=False):
-            st.info("현재 등록된 공지사항이 없습니다.")
 
     with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
         st.markdown("""
