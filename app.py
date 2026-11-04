@@ -46,7 +46,7 @@ def get_db_connection():
             pass
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
-    return sqlite3.connect(DB_PATH), "sqlite"
+    return sqlite3.connect(DB_PATH, timeout=30), "sqlite"
 
 def get_korean_today():
     try:
@@ -114,7 +114,7 @@ def get_weekday_kr(date_str):
     except:
         return "날짜 확인"
 
-# 🚀 DB 초기화 최적화 (가벼운 연결 처리)
+# 🚀 [안정성 강화] DB 초기화 함수 (충돌 방지 처리)
 def init_db():
     try:
         conn, db_type = get_db_connection()
