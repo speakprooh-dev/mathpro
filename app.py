@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정
+# ☁️ Supabase URL 방식 연동 설정 (유지)
 # ==========================================
 try:
     import psycopg2
@@ -55,6 +55,9 @@ def get_korean_today():
     except Exception:
         return date.today()
 
+# ==========================================
+# 📥/📤 엑셀 백업 및 복구 장치 (유지)
+# ==========================================
 def create_excel_backup():
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -686,7 +689,7 @@ student_list = get_students()
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 1. [학생 전용 모드]
+# 1. [학생 전용 모드 - 모바일 초경량 최적화]
 if url_student and url_student in student_list:
     selected_student = url_student
     
@@ -709,7 +712,7 @@ if url_student and url_student in student_list:
     with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
         st.markdown("""
         - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
-        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요! (달성률 대시보드에 실시간 반영됩니다.)
+        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
         - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
         """)
 
@@ -1247,7 +1250,6 @@ else:
             conn.close()
             
             if wrong_rows:
-                base_url = get_base_url()
                 for u_code, nums_txt, u_date in wrong_rows:
                     with st.container(border=True):
                         parsed_s = parse_numbers(nums_txt)
