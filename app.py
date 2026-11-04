@@ -868,7 +868,7 @@ if url_student and url_student in student_list:
                 save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
             # -------------------------------------------------------------------------
-            # [구역 2] 기간별 루틴 달성 현황 및 상세 내역 (분석 영역)
+            # [구역 2] 기간별 루틴 달성 현황 대시보드 (핵심 강조 영역)
             # -------------------------------------------------------------------------
             st.markdown("")
             with st.container(border=True):
@@ -893,7 +893,13 @@ if url_student and url_student in student_list:
                 selected_days = days_map[range_option]
                 r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, selected_days)
                 
-                st.caption(f"🔥 **{range_option} 달성률: {r_rate}%** ({r_total}개 중 {r_completed}개 완료)")
+                # 🌟 대시보드 형태로 달성률을 강력하게 부각 (st.metric 및 st.progress 적용)
+                st.metric(
+                    label=f"🔥 {range_option} 루틴 달성률", 
+                    value=f"{r_rate}%", 
+                    delta=f"총 {r_total}개 중 {r_completed}개 완료"
+                )
+                st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
                 st.markdown("---")
 
                 with st.expander(f"📅 선택한 {range_option} 상세 실천 기록 보기", expanded=False):
