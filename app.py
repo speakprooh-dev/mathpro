@@ -151,13 +151,14 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
-            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
 
         try:
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_unique ON student_wrong_entries (student_name, unit_code)')
         except Exception:
             pass
 
@@ -658,16 +659,24 @@ def get_student_wrong_entry(student_name, unit_code):
     conn.close()
     return row[0] if row else ""
 
+# 🛡️ SQLite / Postgres 겸용 안전한 오답노트 저장 함수
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
-    c.execute('''
-        INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
-    ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
-    conn.commit()
+    try:
+        if db_type == "sqlite":
+            c.execute("DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
+            c.execute("INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
+        else:
+            c.execute('''
+                INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
+            ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
 
 def parse_numbers(text):
