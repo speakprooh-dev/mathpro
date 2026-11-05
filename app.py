@@ -95,6 +95,7 @@ def restore_from_excel(uploaded_file):
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
+# 💡 세션 상태 초기화 (새로고침 시 유지되도록 안전하게 설정)
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
@@ -1528,7 +1529,6 @@ else:
                                 with col_li_info:
                                     st.markdown(f"📌 **{f_code}** | 🔗 [{v_url}]({v_url})")
                                 with col_li_del:
-                                    # 💡 단원 코드와 인덱스를 결합하여 키 중복 원천 차단
                                     if st.button("🗑️", key=f"del_page_unit_{u_code}_{l_id}_{item_idx}"):
                                         delete_problem_link(l_id)
                                         st.rerun()
@@ -1553,7 +1553,6 @@ else:
                             with col_li_info:
                                 st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
                             with col_li_del:
-                                # 💡 검색 결과에서도 순번을 결합하여 키 중복 방지
                                 if st.button("🗑️", key=f"del_search_item_{u_code}_{l_id}_{item_idx}"):
                                     delete_problem_link(l_id)
                                     st.rerun()
