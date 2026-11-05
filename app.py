@@ -149,14 +149,14 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
-            c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
+            c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
-            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
 
         try:
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
         except Exception:
             pass
@@ -631,15 +631,23 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     conn.commit()
     conn.close()
 
+# 🛡️ SQLite / Postgres 겸용 안전한 숙제 체크 저장 함수
 def save_single_homework_progress(student_name, student_hw_id, val):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute('''
-        INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
-        VALUES (?, ?, ?)
-        ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
-    ''', (student_name, student_hw_id, int(val), int(val)))
-    conn.commit()
+    try:
+        if db_type == "sqlite":
+            c.execute("DELETE FROM student_homework_progress WHERE student_name = ? AND student_hw_id = ?", (student_name, student_hw_id))
+            c.execute("INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?)", (student_name, student_hw_id, int(val)))
+        else:
+            c.execute('''
+                INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked)
+                VALUES (?, ?, ?)
+                ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
+            ''', (student_name, student_hw_id, int(val), int(val)))
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
 
 def get_student_wrong_entry(student_name, unit_code):
