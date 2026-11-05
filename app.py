@@ -810,26 +810,37 @@ if not st.session_state["teacher_authenticated"]:
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
         # ----------------------------------------------------
-        # 📊 [컴팩트한 학습 성취도 대시보드 디자인 적용]
+        # 📊 [시각적 게이지 바가 포함된 깔끔한 세로형 대시보드 디자인]
         # ----------------------------------------------------
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
-        col_dash1, col_dash2, col_dash3 = st.columns(3)
-        with col_dash1:
-            with st.container(border=True):
-                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>🎯 개념진도</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
-                st.caption(f"<div style='text-align:center;'>{completed_m}/{total_m}완료</div>", unsafe_allow_html=True)
-        with col_dash2:
-            with st.container(border=True):
-                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>📚 숙제완료</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#10B981;'>{h_percent}%</div>", unsafe_allow_html=True)
-                st.caption(f"<div style='text-align:center;'>{completed_h}/{total_h}완료</div>", unsafe_allow_html=True)
-        with col_dash3:
-            with st.container(border=True):
-                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>🔥 루틴달성</div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
-                st.caption(f"<div style='text-align:center;'>{r_completed}/{r_total}개</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("🎯 **개념 진도**")
+            cols_m = st.columns([4, 1])
+            with cols_m[0]:
+                st.progress(m_percent / 100 if total_m > 0 else 0)
+            with cols_m[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
+            st.caption(f"완료: {completed_m} / 총 {total_m}개")
+
+        with st.container(border=True):
+            st.markdown("📚 **숙제 완료**")
+            cols_h = st.columns([4, 1])
+            with cols_h[0]:
+                st.progress(h_percent / 100 if total_h > 0 else 0)
+            with cols_h[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#10B981;'>{h_percent}%</div>", unsafe_allow_html=True)
+            st.caption(f"완료: {completed_h} / 총 {total_h}개")
+
+        with st.container(border=True):
+            st.markdown("🔥 **루틴 달성률 (최근 7일)**")
+            r_progress_val = (r_rate / 100) if r_rate <= 100 else 1.0
+            cols_r = st.columns([4, 1])
+            with cols_r[0]:
+                st.progress(r_progress_val)
+            with cols_r[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
+            st.caption(f"완료: {r_completed} / 총 {r_total}개")
 
         st.divider()
 
