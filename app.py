@@ -700,12 +700,11 @@ query_params = st.query_params
 url_student = query_params.get("student", None)
 
 # ----------------------------------------------------
-# 🧭 사이드바 구성 (학생 페이지에서도 상단/하단에 선생님 로그인 가능하도록 배치)
+# 🧭 사이드바 구성 (선생님 로그인 버튼 하단 배치)
 # ----------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 MathPro 시스템")
     
-    # 선생님 인증 상태일 때
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
@@ -734,7 +733,6 @@ with st.sidebar:
                         st.error(msg)
         st.divider()
 
-    # 🔒 학생 화면을 보시다가도 바로 선생님 창으로 넘어갈 수 있도록 사이드바 하단에 배치한 로그인 영역 (비밀번호: 1234)
     st.markdown("<br>" * 5, unsafe_allow_html=True)
     st.markdown("---")
     
@@ -809,25 +807,29 @@ if not st.session_state["teacher_authenticated"]:
         completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
         h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
+        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
+
+        # ----------------------------------------------------
+        # 📊 [컴팩트한 학습 성취도 대시보드 디자인 적용]
+        # ----------------------------------------------------
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
-        col_dash1, col_dash2 = st.columns(2)
+        col_dash1, col_dash2, col_dash3 = st.columns(3)
         with col_dash1:
             with st.container(border=True):
-                st.markdown(f"**🎯 개념 진도**")
-                st.metric(label="달성률", value=f"{m_percent}%", delta=f"{completed_m}/{total_m} 완료")
-                st.progress(m_percent / 100 if total_m > 0 else 0)
+                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>🎯 개념진도</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
+                st.caption(f"<div style='text-align:center;'>{completed_m}/{total_m}완료</div>", unsafe_allow_html=True)
         with col_dash2:
             with st.container(border=True):
-                st.markdown(f"**📚 숙제 완료**")
-                st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
-                st.progress(h_percent / 100 if total_h > 0 else 0)
-
-        with st.container(border=True):
-            st.markdown("**🔥 루틴 달성률**")
-            r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
-            st.metric(label="최근 1주 (7일) 달성률", value=f"{r_rate}%", delta=f"총 {r_total}개 중 {r_completed}개 완료")
-            st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
+                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>📚 숙제완료</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#10B981;'>{h_percent}%</div>", unsafe_allow_html=True)
+                st.caption(f"<div style='text-align:center;'>{completed_h}/{total_h}완료</div>", unsafe_allow_html=True)
+        with col_dash3:
+            with st.container(border=True):
+                st.markdown(f"<div style='font-size:13px; font-weight:bold; text-align:center;'>🔥 루틴달성</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size:20px; font-weight:bold; text-align:center; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
+                st.caption(f"<div style='text-align:center;'>{r_completed}/{r_total}개</div>", unsafe_allow_html=True)
 
         st.divider()
 
