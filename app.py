@@ -593,9 +593,15 @@ def get_all_student_homework(student_name):
     conn.close()
     return rows
 
-def bulk_insert_student_homework(student_name, hw_date, text_data):
+def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
     conn, _ = get_db_connection()
     c = conn.cursor()
+    
+    # 지시사항/메시지가 있으면 가장 첫 번째 항목으로 삽입
+    if message_text.strip():
+        msg_header = f"💬 [선생님 메시지]: {message_text.strip()}"
+        c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, msg_header))
+        
     lines = text_data.strip().split('\n')
     for line in lines:
         line_str = line.strip()
@@ -834,8 +840,10 @@ if not st.session_state["teacher_authenticated"]:
         completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
         m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
 
-        total_h = len(all_hws_flat)
-        completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
+        # 선생님 메시지 항목은 전체 숙제 개수 통계에서 제외
+        actual_hws_flat = [h for h in all_hws_flat if not h[2].startswith("💬 [선생님 메시지]:")]
+        total_h = len(actual_hws_flat)
+        completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
         h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
@@ -944,11 +952,16 @@ if not st.session_state["teacher_authenticated"]:
                 
                 with st.container(border=True):
                     for h_idx, (h_id, title) in enumerate(hws):
-                        default_val = h_progress.get(h_id, False)
-                        chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                        if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
-                            save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
-                            st.rerun()
+                        # 💡 선생님 메시지는 강조 알림 박스로 표시 (체크박스 제외)
+                        if title.startswith("💬 [선생님 메시지]:"):
+                            msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
+                            st.info(f"📌 **선생님의 한마디**: {msg_content}")
+                        else:
+                            default_val = h_progress.get(h_id, False)
+                            chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                            if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
+                                save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
+                                st.rerun()
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
@@ -1268,6 +1281,13 @@ else:
 
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
+                
+                # 💡 [새로운 입력란] 학생에게 전하는 메시지/학습 지침
+                teacher_msg_input = st.text_input(
+                    "💬 학생에게 전하는 메시지 / 학습 지침 (선택)", 
+                    placeholder="예: 개념 노트 복습 먼저 하고 풀어보자! 화이팅 🔥"
+                )
+                
                 hw_text_area = st.text_area(
                     "날짜별 과제 내용 입력", 
                     key="hw_text_area_input",
@@ -1283,8 +1303,8 @@ else:
                 
                 if submit_hw_btn:
                     if hw_text_area.strip():
-                        bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area)
-                        st.success("과제가 등록되었습니다!")
+                        bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input)
+                        st.success("과제 및 메시지가 성공적으로 등록되었습니다!")
                         st.rerun()
                 
                 if save_as_tpl_btn:
@@ -1443,30 +1463,33 @@ else:
                         s_hw_prog = get_student_homework_progress(s_name)
                         
                         for h_idx, (h_id, title) in enumerate(hws):
-                            is_done = s_hw_prog.get(h_id, False)
-                            
-                            col_m1, col_m2 = st.columns([5, 1])
-                            with col_m1:
-                                chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                    st.rerun()
-                            with col_m2:
-                                with st.popover("⚙️ 수정"):
-                                    with st.form(f"matrix_edit_form_{s_idx_main}_{h_id}_{h_idx}"):
-                                        m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_idx_main}_{h_id}_{h_idx}")
-                                        m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_idx_main}_{h_id}_{h_idx}")
-                                        m_save = st.form_submit_button("저장", type="primary")
-                                        m_del = st.form_submit_button("삭제")
-                                        if m_save:
-                                            if m_new_title.strip():
-                                                update_student_homework_by_date(s_name, str(m_new_date), m_new_title.strip())
-                                                st.success("수정 완료!")
+                            if title.startswith("💬 [선생님 메시지]:"):
+                                msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
+                                st.info(f"💬 **선생님의 한마디**: {msg_content}")
+                            else:
+                                is_done = s_hw_prog.get(h_id, False)
+                                col_m1, col_m2 = st.columns([5, 1])
+                                with col_m1:
+                                    chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
+                                    if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
+                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                        st.rerun()
+                                with col_m2:
+                                    with st.popover("⚙️ 수정"):
+                                        with st.form(f"matrix_edit_form_{s_idx_main}_{h_id}_{h_idx}"):
+                                            m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_idx_main}_{h_id}_{h_idx}")
+                                            m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_idx_main}_{h_id}_{h_idx}")
+                                            m_save = st.form_submit_button("저장", type="primary")
+                                            m_del = st.form_submit_button("삭제")
+                                            if m_save:
+                                                if m_new_title.strip():
+                                                    update_student_homework_by_date(s_name, str(m_new_date), m_new_title.strip())
+                                                    st.success("수정 완료!")
+                                                    st.rerun()
+                                            if m_del:
+                                                delete_student_homework_date(s_name, selected_matrix_date)
+                                                st.success("삭제 완료!")
                                                 st.rerun()
-                                        if m_del:
-                                            delete_student_homework_date(s_name, selected_matrix_date)
-                                            st.success("삭제 완료!")
-                                            st.rerun()
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
