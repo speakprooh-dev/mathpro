@@ -674,8 +674,9 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
-st.title("학생 맞춤 학습 로드맵")
+st.title("고등 수학 1등급을 향한 완벽한 여정")  # <-- 이렇게 변경해주세요!
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
+
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
 st.markdown(
