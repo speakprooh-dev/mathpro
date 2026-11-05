@@ -674,8 +674,20 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
-st.title("고등 수학 1등급을 향한 완벽한 여정")  # <-- 이렇게 변경해주세요!
+# 💡 크기와 여백을 깔끔하게 잡은 타이틀 마크다운
+st.markdown(
+    """
+    <div style="text-align: center; margin-top: 10px; margin-bottom: 5px;">
+        <h2 style="font-size: 22px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; line-height: 1.4;">
+            고등 수학 1등급을 향한 완벽한 여정
+        </h2>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
+
 
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
