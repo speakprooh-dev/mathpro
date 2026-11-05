@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (유지)
+# ☁️ Supabase URL 방식 연동 설정
 # ==========================================
 try:
     import psycopg2
@@ -42,7 +42,7 @@ def get_db_connection():
                     sslmode="require"
                 )
                 return conn, "postgres"
-        except Exception as e:
+        except Exception:
             pass
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
@@ -56,7 +56,7 @@ def get_korean_today():
         return date.today()
 
 # ==========================================
-# 📥/📤 엑셀 백업 및 복구 장치 (유지)
+# 📥/📤 엑셀 백업 및 복구 장치
 # ==========================================
 def create_excel_backup():
     output = io.BytesIO()
@@ -85,7 +85,7 @@ def restore_from_excel(uploaded_file):
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
                 df.to_sql(sheet_name, conn, if_exists='replace', index=False)
-            except Exception as sub_e:
+            except Exception:
                 pass
         conn.commit()
         conn.close()
@@ -103,7 +103,7 @@ def get_base_url():
         base_url = st.context.headers.get("Host", "")
         if base_url:
             return f"https://{base_url}"
-    except:
+    except Exception:
         pass
     return "https://speakprooh-dev-mathpro-app-4byisa.streamlit.app"
 
@@ -112,7 +112,7 @@ def get_weekday_kr(date_str):
         d = date.fromisoformat(date_str)
         weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
         return weekdays[d.weekday()]
-    except:
+    except Exception:
         return "날짜 확인"
 
 def init_db():
@@ -668,13 +668,23 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
-st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
-
-# 🖼️ 메인 화면 상단 로고 이미지 배치
+# ----------------------------------------------------
+# 🖼️ 메인 화면 상단 로고 이미지 배치 및 타이틀
+# ----------------------------------------------------
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
-st.title("학생 맞춤 학습 로드맵")
+st.markdown(
+    """
+    <div style="text-align: center; margin-top: 10px; margin-bottom: 5px;">
+        <h2 style="font-size: 22px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; line-height: 1.4;">
+            고등 수학 1등급을 향한 완벽한 여정
+        </h2>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.caption("선생님과 함께하는 나의 고등 수학 학습 여정")
 
 cafe_main_url = "https://cafe.naver.com/mathpro2020"
@@ -689,286 +699,301 @@ student_list = get_students()
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 1. [학생 전용 모드 - 모바일 초경량 최적화]
-if url_student and url_student in student_list:
-    selected_student = url_student
+# ----------------------------------------------------
+# 🧭 사이드바 구성 (학생 페이지에서도 상단/하단에 선생님 로그인 가능하도록 배치)
+# ----------------------------------------------------
+with st.sidebar:
+    st.markdown("### 🧭 MathPro 시스템")
     
-    st.markdown(
-        f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
-        f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
-        f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
-        unsafe_allow_html=True
-    )
-    
-    student_drive = get_student_drive_url(selected_student)
-    if student_drive and student_drive.strip() != "":
-        st.markdown(
-            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 개인 학습 자료실 및 과제 제출함 (Google Drive) 바로가기 ➔</a>',
-            unsafe_allow_html=True
-        )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # 📢 [공지사항: 등록된 공지사항이 있을 때만 눈에 띄게 펼쳐진 상태로 표시]
-    student_notices = get_notices_for_student(selected_student)
-    if student_notices:
-        with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
-            for n_id, n_title, n_content, n_date, n_target in student_notices:
-                target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
-                st.markdown(
-                    f'<div style="background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
-                    f'<div style="font-size: 12px;">{target_badge} | {n_date}</div>'
-                    f'<div style="font-size: 14px; font-weight: bold;">📌 {n_title}</div>'
-                    f'<div style="font-size: 13px; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-    with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
-        st.markdown("""
-        - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
-        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-        - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
-        """)
-
-    milestones = get_student_milestones(selected_student)
-    hw_dates = get_student_homework_dates(selected_student)
-    m_progress = get_milestone_progress(selected_student)
-    h_progress = get_student_homework_progress(selected_student)
-    all_hws_flat = get_all_student_homework(selected_student)
-
-    total_m = len(milestones)
-    completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
-    m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
-
-    total_h = len(all_hws_flat)
-    completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
-    h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
-
-    st.markdown("##### 📊 나의 학습 성취도 대시보드")
-    
-    col_dash1, col_dash2 = st.columns(2)
-    with col_dash1:
-        with st.container(border=True):
-            st.markdown(f"**🎯 개념 진도**")
-            st.metric(label="달성률", value=f"{m_percent}%", delta=f"{completed_m}/{total_m} 완료")
-            st.progress(m_percent / 100 if total_m > 0 else 0)
-    with col_dash2:
-        with st.container(border=True):
-            st.markdown(f"**📚 숙제 완료**")
-            st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
-            st.progress(h_percent / 100 if total_h > 0 else 0)
-
-    with st.container(border=True):
-        st.markdown("**🔥 루틴 달성률**")
-        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
-        st.metric(label="최근 1주 (7일) 달성률", value=f"{r_rate}%", delta=f"총 {r_total}개 중 {r_completed}개 완료")
-        st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
-
-    st.divider()
-
-    tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
-
-    with tab1:
-        st.markdown("### 📘 나의 개념 학습 목록")
-        if milestones:
-            grouped_s_milestones = {}
-            for m_id, sub, ch, t_name, v_url in milestones:
-                key = (sub, ch)
-                if key not in grouped_s_milestones:
-                    grouped_s_milestones[key] = []
-                grouped_s_milestones[key].append((m_id, t_name, v_url))
-
-            for (sub, ch), items in grouped_s_milestones.items():
-                done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
-                    for m_id, t_name, v_url in items:
-                        default_val = m_progress.get(m_id, False)
-                        cols = st.columns([4, 1])
-                        with cols[0]:
-                            val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{m_id}")
-                            if val != default_val:
-                                save_single_milestone_progress(selected_student, m_id, val)
-                                st.rerun()
-                        with cols[1]:
-                            if v_url and v_url.strip() != "":
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
-        else:
-            st.info("아직 배정된 개념 학습 목록이 없습니다.")
-
-    with tab2:
-        st.markdown("### 🔥 매일 반복 루틴 체크")
-        st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
-
-        daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
-        if daily_parents:
-            today_obj = get_korean_today()
-            today_str = str(today_obj)
-            current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
-            
-            with st.container(border=True):
-                st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
-                st.markdown("---")
-
-                daily_routine_checked_dict = {}
-                for r_id, r_title in daily_parents:
-                    r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
-                    default_val = current_day_logs.get((str(r_id), today_str), False)
-                    if r_subs:
-                        st.markdown(f"**{r_title}**")
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                        for sr_id, sr_title in r_subs:
-                            daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{selected_student}_{sr_id}")
-                    else:
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                    st.divider()
-            if daily_routine_checked_dict:
-                save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
-
-        if hw_dates:
-            st.markdown("")
-            st.markdown("---")
-            st.markdown("### 📚 날짜별 개별 숙제")
-            st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
-            
-            selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-            hws = get_student_homework_by_date(selected_student, selected_date)
-            
-            with st.container(border=True):
-                for h_idx, (h_id, title) in enumerate(hws):
-                    default_val = h_progress.get(h_id, False)
-                    chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                    if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
-                        save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
-                        st.rerun()
-
-    with tab3:
-        st.markdown("### 💬 오답 및 질문 관리")
+    # 선생님 인증 상태일 때
+    if st.session_state["teacher_authenticated"]:
+        st.success("👑 선생님 모드 활성화됨")
+        if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
+            st.session_state["teacher_authenticated"] = False
+            st.rerun()
+        st.divider()
         
-        with st.container(border=True):
-            st.markdown("##### 🔍 1. 해설 영상 즉시 검색하기")
-            st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
-            search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
-            if search_prob_input:
-                if len(search_prob_input) >= 7:
-                    matched_url = get_problem_link_by_full(search_prob_input)
-                    if matched_url:
-                        st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                        st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+        st.markdown("##### 📥/📤 데이터 백업 및 복구")
+        st.download_button(
+            label="📥 전체 데이터 엑셀 백업하기",
+            data=create_excel_backup(),
+            file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+        
+        with st.expander("🔄 엑셀 파일로 데이터 복구하기"):
+            uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
+            if uploaded_backup is not None:
+                if st.button("🚀 엑셀 데이터로 DB 복구 실행", type="primary", use_container_width=True):
+                    success, msg = restore_from_excel(uploaded_backup)
+                    if success:
+                        st.success(msg)
+                        st.rerun()
                     else:
-                        st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
-                else:
-                    unit_results = get_problem_links_by_unit(search_prob_input)
-                    if unit_results:
-                        st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
-                        for f_code, v_url in unit_results:
-                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
-                    else:
-                        st.info("단원코드 형식으로 올바르게 입력해 주세요.")
+                        st.error(msg)
+        st.divider()
 
-        st.markdown("")
-        with st.container(border=True):
-            st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
-            st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
-            
-            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
-            target_code = entered_unit_code if entered_unit_code else "B1353"
-
-            col_add, col_del = st.columns(2)
-            with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
-            with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
-            
-            if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
-                if entered_unit_code:
-                    saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
-                    final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
-                    save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
-                    st.success("저장되었습니다!")
-                    st.rerun()
-                else:
-                    st.warning("단원코드를 먼저 입력해 주세요.")
-
-            st.markdown("---")
-
-            conn, _ = get_db_connection()
-            c = conn.cursor()
-            c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-            saved_rows = c.fetchall()
-            conn.close()
-            
-            saved_units_list = [r[0] for r in saved_rows]
-            
-            selected_existing_unit = st.selectbox(
-                "📂 내가 저장한 단원 선택해서 보기", 
-                ["-- 저장된 단원을 선택하세요 --"] + saved_units_list,
-                key="saved_unit_select_box"
-            )
-            
-            view_target_code = ""
-            if selected_existing_unit and selected_existing_unit != "-- 저장된 단원을 선택하세요 --":
-                view_target_code = selected_existing_unit
-
-            if view_target_code:
-                existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
-                if existing_wrong:
-                    st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
-                    parsed_nums = parse_numbers(existing_wrong)
-                    if parsed_nums:
-                        for n in sorted(list(parsed_nums)):
-                            full_code = f"{view_target_code}{n:03d}"
-                            v_url = get_problem_link_by_full(full_code)
-                            if v_url:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
-                            else:
-                                st.markdown(f'<div style="border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:gray;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
-                else:
-                    st.info(f"현재 등록된 오답이 없습니다.")
-
-# 2. [선생님 전용 관리 모드]
-else:
-    with st.sidebar:
-        st.markdown("### 🛠️ 선생님 전용 도구")
-        if not st.session_state["teacher_authenticated"]:
-            st.markdown("🔒 **선생님 모드 잠금 상태**")
-            with st.form("teacher_login_form"):
+    # 🔒 학생 화면을 보시다가도 바로 선생님 창으로 넘어갈 수 있도록 사이드바 하단에 배치한 로그인 영역 (비밀번호: 1234)
+    st.markdown("<br>" * 5, unsafe_allow_html=True)
+    st.markdown("---")
+    
+    if not st.session_state["teacher_authenticated"]:
+        with st.expander("🔒 선생님 전용 공간 (관리자 전환)"):
+            with st.form("sidebar_teacher_login_form"):
                 teacher_pw_input = st.text_input("비밀번호 입력", type="password")
-                if st.form_submit_button("로그인", type="primary"):
+                if st.form_submit_button("선생님 모드 전환", type="primary"):
                     if teacher_pw_input == "1234":
                         st.session_state["teacher_authenticated"] = True
                         st.success("인증 성공!")
                         st.rerun()
                     else:
                         st.error("비밀번호가 틀렸습니다.")
-            st.stop()
-        else:
-            st.success("👑 선생님 모드 활성화됨")
-            if st.button("로그아웃 (잠금)", use_container_width=True):
-                st.session_state["teacher_authenticated"] = False
-                st.rerun()
-            st.divider()
-            
-            st.markdown("##### 📥/📤 데이터 백업 및 복구")
-            st.download_button(
-                label="📥 전체 데이터 엑셀 백업하기",
-                data=create_excel_backup(),
-                file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+
+# ====================================================
+# 1. [학생 전용 모드 / 일반 사용자 화면]
+# ====================================================
+if not st.session_state["teacher_authenticated"]:
+    if url_student and url_student in student_list:
+        selected_student = url_student
+        
+        st.markdown(
+            f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
+            f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
+            f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
+            unsafe_allow_html=True
+        )
+        
+        student_drive = get_student_drive_url(selected_student)
+        if student_drive and student_drive.strip() != "":
+            st.markdown(
+                f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 온라인 학습실 (Google Drive) 바로가기 ➔</a>',
+                unsafe_allow_html=True
             )
-            
-            with st.expander("🔄 엑셀 파일로 데이터 복구하기"):
-                uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
-                if uploaded_backup is not None:
-                    if st.button("🚀 엑셀 데이터로 DB 복구 실행", type="primary", use_container_width=True):
-                        success, msg = restore_from_excel(uploaded_backup)
-                        if success:
-                            st.success(msg)
-                            st.rerun()
-                        else:
-                            st.error(msg)
-            
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # 📢 공지사항
+        student_notices = get_notices_for_student(selected_student)
+        if student_notices:
+            with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
+                for n_id, n_title, n_content, n_date, n_target in student_notices:
+                    target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
+                    st.markdown(
+                        f'<div style="background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
+                        f'<div style="font-size: 12px;">{target_badge} | {n_date}</div>'
+                        f'<div style="font-size: 14px; font-weight: bold;">📌 {n_title}</div>'
+                        f'<div style="font-size: 13px; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+        with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
+            st.markdown("""
+            - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
+            - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
+            """)
+
+        milestones = get_student_milestones(selected_student)
+        hw_dates = get_student_homework_dates(selected_student)
+        m_progress = get_milestone_progress(selected_student)
+        h_progress = get_student_homework_progress(selected_student)
+        all_hws_flat = get_all_student_homework(selected_student)
+
+        total_m = len(milestones)
+        completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
+        m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
+
+        total_h = len(all_hws_flat)
+        completed_h = sum(1 for h in all_hws_flat if h_progress.get(h[0], False))
+        h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
+
+        st.markdown("##### 📊 나의 학습 성취도 대시보드")
+        
+        col_dash1, col_dash2 = st.columns(2)
+        with col_dash1:
+            with st.container(border=True):
+                st.markdown(f"**🎯 개념 진도**")
+                st.metric(label="달성률", value=f"{m_percent}%", delta=f"{completed_m}/{total_m} 완료")
+                st.progress(m_percent / 100 if total_m > 0 else 0)
+        with col_dash2:
+            with st.container(border=True):
+                st.markdown(f"**📚 숙제 완료**")
+                st.metric(label="달성률", value=f"{h_percent}%", delta=f"{completed_h}/{total_h} 완료")
+                st.progress(h_percent / 100 if total_h > 0 else 0)
+
+        with st.container(border=True):
+            st.markdown("**🔥 루틴 달성률**")
+            r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
+            st.metric(label="최근 1주 (7일) 달성률", value=f"{r_rate}%", delta=f"총 {r_total}개 중 {r_completed}개 완료")
+            st.progress(r_rate / 100 if r_rate <= 100 else 1.0)
+
         st.divider()
 
+        tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
+
+        with tab1:
+            st.markdown("### 📘 나의 개념 학습 목록")
+            if milestones:
+                grouped_s_milestones = {}
+                for m_id, sub, ch, t_name, v_url in milestones:
+                    key = (sub, ch)
+                    if key not in grouped_s_milestones:
+                        grouped_s_milestones[key] = []
+                    grouped_s_milestones[key].append((m_id, t_name, v_url))
+
+                for (sub, ch), items in grouped_s_milestones.items():
+                    done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
+                    with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
+                        for m_id, t_name, v_url in items:
+                            default_val = m_progress.get(m_id, False)
+                            cols = st.columns([4, 1])
+                            with cols[0]:
+                                val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{m_id}")
+                                if val != default_val:
+                                    save_single_milestone_progress(selected_student, m_id, val)
+                                    st.rerun()
+                            with cols[1]:
+                                if v_url and v_url.strip() != "":
+                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
+            else:
+                st.info("아직 배정된 개념 학습 목록이 없습니다.")
+
+        with tab2:
+            st.markdown("### 🔥 매일 반복 루틴 체크")
+            st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
+
+            daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
+            if daily_parents:
+                today_obj = get_korean_today()
+                today_str = str(today_obj)
+                current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
+                
+                with st.container(border=True):
+                    st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
+                    st.markdown("---")
+
+                    daily_routine_checked_dict = {}
+                    for r_id, r_title in daily_parents:
+                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                        default_val = current_day_logs.get((str(r_id), today_str), False)
+                        if r_subs:
+                            st.markdown(f"**{r_title}**")
+                            daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                            for sr_id, sr_title in r_subs:
+                                daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{selected_student}_{sr_id}")
+                        else:
+                            daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                        st.divider()
+                if daily_routine_checked_dict:
+                    save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
+
+            if hw_dates:
+                st.markdown("")
+                st.markdown("---")
+                st.markdown("### 📚 날짜별 개별 숙제")
+                st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
+                
+                selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+                hws = get_student_homework_by_date(selected_student, selected_date)
+                
+                with st.container(border=True):
+                    for h_idx, (h_id, title) in enumerate(hws):
+                        default_val = h_progress.get(h_id, False)
+                        chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                        if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
+                            save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
+                            st.rerun()
+
+        with tab3:
+            st.markdown("### 💬 오답 및 질문 관리")
+            
+            with st.container(border=True):
+                st.markdown("##### 🔍 1. 해설 영상 즉시 검색하기")
+                st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
+                search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
+                if search_prob_input:
+                    if len(search_prob_input) >= 7:
+                        matched_url = get_problem_link_by_full(search_prob_input)
+                        if matched_url:
+                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                        else:
+                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+                    else:
+                        unit_results = get_problem_links_by_unit(search_prob_input)
+                        if unit_results:
+                            st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                            for f_code, v_url in unit_results:
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                        else:
+                            st.info("단원코드 형식으로 올바르게 입력해 주세요.")
+
+            st.markdown("")
+            with st.container(border=True):
+                st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
+                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
+                
+                entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
+                target_code = entered_unit_code if entered_unit_code else "B1353"
+
+                col_add, col_del = st.columns(2)
+                with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
+                with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
+                
+                if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
+                    if entered_unit_code:
+                        saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
+                        final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
+                        save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
+                        st.success("저장되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("단원코드를 먼저 입력해 주세요.")
+
+                st.markdown("---")
+
+                conn, _ = get_db_connection()
+                c = conn.cursor()
+                c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+                saved_rows = c.fetchall()
+                conn.close()
+                
+                saved_units_list = [r[0] for r in saved_rows]
+                
+                selected_existing_unit = st.selectbox(
+                    "📂 내가 저장한 단원 선택해서 보기", 
+                    ["-- 저장된 단원을 선택하세요 --"] + saved_units_list,
+                    key="saved_unit_select_box"
+                )
+                
+                view_target_code = ""
+                if selected_existing_unit and selected_existing_unit != "-- 저장된 단원을 선택하세요 --":
+                    view_target_code = selected_existing_unit
+
+                if view_target_code:
+                    existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
+                    if existing_wrong:
+                        st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
+                        parsed_nums = parse_numbers(existing_wrong)
+                        if parsed_nums:
+                            for n in sorted(list(parsed_nums)):
+                                full_code = f"{view_target_code}{n:03d}"
+                                v_url = get_problem_link_by_full(full_code)
+                                if v_url:
+                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f'<div style="border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:gray;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.info(f"현재 등록된 오답이 없습니다.")
+    else:
+        st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다. 링크를 확인해 주세요.")
+
+# ====================================================
+# 2. [선생님 전용 관리 모드 화면]
+# ====================================================
+else:
     with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
         col_s2, col_s3 = st.columns(2)
         with col_s2:
