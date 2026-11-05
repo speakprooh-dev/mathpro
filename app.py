@@ -1136,17 +1136,24 @@ else:
                 current_routines = get_student_daily_routines(selected_hw_student)
                 if current_routines:
                     st.markdown("---")
-                    st.markdown("##### 📋 현재 등록된 루틴 과제 목록")
+                    st.markdown("##### 📋 현재 등록된 루틴 과제 목록 (삭제할 항목 선택)")
                     
-                    # 💡 form을 완전히 제거하고 일반 버튼으로 변경하여 클릭 즉시 DB 삭제 및 새로고침 실행
-                    for r_id, r_title in current_routines:
-                        col_r1, col_r2 = st.columns([5, 1])
-                        with col_r1:
-                            st.markdown(f"📌 **{r_title}**")
-                        with col_r2:
-                            if st.button("🗑️ 삭제", key=f"del_routine_btn_{r_id}"):
-                                delete_daily_routine(r_id)
+                    # 💡 체크박스로 삭제할 루틴들을 선택한 뒤 버튼 하나로 확실하게 삭제하는 구조로 개선
+                    routines_to_delete = []
+                    with st.form(f"routine_delete_batch_form_{selected_hw_student}"):
+                        for r_id, r_title in current_routines:
+                            if st.checkbox(f"📌 {r_title}", key=f"chk_del_routine_{r_id}"):
+                                routines_to_delete.append(r_id)
+                        
+                        submitted_del = st.form_submit_button("🗑️ 선택한 루틴 과제 삭제하기", type="primary")
+                        if submitted_del:
+                            if routines_to_delete:
+                                for r_id in routines_to_delete:
+                                    delete_daily_routine(r_id)
+                                st.success("선택한 루틴 과제가 삭제되었습니다!")
                                 st.rerun()
+                            else:
+                                st.warning("삭제할 루틴 과제를 체크박스에서 선택해 주세요.")
 
                     st.markdown("---")
                     st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
