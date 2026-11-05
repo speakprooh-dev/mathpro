@@ -977,6 +977,9 @@ if not st.session_state["teacher_authenticated"]:
                         saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
                         final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
                         save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
+                        
+                        # 💡 토스트 메시지로 저장 완료를 눈에 띄게 표시
+                        st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
                         st.success("저장되었습니다!")
                         st.rerun()
                     else:
