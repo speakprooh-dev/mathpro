@@ -95,7 +95,6 @@ def restore_from_excel(uploaded_file):
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 세션 상태 초기화 (새로고침 시 유지되도록 안전하게 설정)
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
@@ -409,13 +408,11 @@ def delete_notice(notice_id):
     conn.commit()
     conn.close()
 
-def get_student_daily_routines_parent(student_name, parent_id=None):
+# 💡 하위 개념을 제거하고 단일 항목으로 등록하도록 단순화된 루틴 함수
+def get_student_daily_routines(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    if parent_id is None:
-        c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND (parent_id IS NULL) ORDER BY id", (student_name,))
-    else:
-        c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? AND parent_id = ? ORDER BY id", (student_name, parent_id))
+    c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -425,25 +422,11 @@ def bulk_insert_daily_routines(student_name, text_data):
     c = conn.cursor()
     lines = text_data.strip().split('\n')
     added_count = 0
-    current_parent_id = None
     for line in lines:
-        line_str = line.strip()
-        if not line_str:
-            continue
-        is_sub = line_str.startswith(('-', '*', '•', '└'))
-        title = line_str.lstrip('-•*└\t ').strip()
+        title = line.lstrip('-•*└\t ').strip()
         if not title:
             continue
-        if is_sub and current_parent_id is not None:
-            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, ?)", (student_name, title, current_parent_id))
-        else:
-            c.execute("INSERT INTO daily_routines (student_name, title, parent_id) VALUES (?, ?, NULL)", (student_name, title))
-            try:
-                c.execute("SELECT last_insert_rowid()")
-                row = c.fetchone()
-                current_parent_id = row[0] if row else None
-            except Exception:
-                pass
+        c.execute("INSERT INTO daily_routines (student_name, title) VALUES (?, ?)", (student_name, title))
         added_count += 1
     conn.commit()
     conn.close()
@@ -452,8 +435,8 @@ def bulk_insert_daily_routines(student_name, text_data):
 def delete_daily_routine(r_id):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    c.execute("DELETE FROM daily_routines WHERE id = ? OR parent_id = ?", (r_id, r_id))
-    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ? OR routine_id LIKE ?", (str(r_id), f"{r_id}_%"))
+    c.execute("DELETE FROM daily_routines WHERE id = ?", (r_id,))
+    c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ?", (str(r_id),))
     conn.commit()
     conn.close()
 
@@ -807,7 +790,6 @@ if not st.session_state["teacher_authenticated"]:
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # 📢 공지사항
         student_notices = get_notices_for_student(selected_student)
         if student_notices:
             with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -846,9 +828,6 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
-        # ----------------------------------------------------
-        # 📊 [시각적 게이지 바가 포함된 깔끔한 세로형 대시보드 디자인]
-        # ----------------------------------------------------
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
         with st.container(border=True):
@@ -914,8 +893,8 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("### 🔥 매일 반복 루틴 체크")
             st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
 
-            daily_parents = get_student_daily_routines_parent(selected_student, parent_id=None)
-            if daily_parents:
+            daily_routines_list = get_student_daily_routines(selected_student)
+            if daily_routines_list:
                 today_obj = get_korean_today()
                 today_str = str(today_obj)
                 current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
@@ -925,16 +904,9 @@ if not st.session_state["teacher_authenticated"]:
                     st.markdown("---")
 
                     daily_routine_checked_dict = {}
-                    for r_id, r_title in daily_parents:
-                        r_subs = get_student_daily_routines_parent(selected_student, parent_id=r_id)
+                    for r_id, r_title in daily_routines_list:
                         default_val = current_day_logs.get((str(r_id), today_str), False)
-                        if r_subs:
-                            st.markdown(f"**{r_title}**")
-                            daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title} (전체 대표)", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                            for sr_id, sr_title in r_subs:
-                                daily_routine_checked_dict[str(sr_id)] = st.checkbox(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}", value=current_day_logs.get((str(sr_id), today_str), False), key=f"s_daily_{selected_student}_{sr_id}")
-                        else:
-                            daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
                         st.divider()
                 if daily_routine_checked_dict:
                     save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
@@ -1162,17 +1134,16 @@ else:
                             st.success("루틴 과제가 등록되었습니다!")
                             st.rerun()
                 
-                current_routines = get_student_daily_routines_parent(selected_hw_student, parent_id=None)
+                current_routines = get_student_daily_routines(selected_hw_student)
                 if current_routines:
                     st.markdown("---")
                     st.markdown("##### 📋 현재 등록된 루틴 과제 목록")
+                    
+                    # 루틴 삭제 처리 (Form 바깥에 배치하여 즉시 정상 삭제되도록 수정)
                     for r_id, r_title in current_routines:
                         col_r1, col_r2 = st.columns([5, 1])
                         with col_r1:
                             st.markdown(f"📌 **{r_title}**")
-                            sub_r = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
-                            for sr_id, sr_title in sub_r:
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
                         with col_r2:
                             if st.button("🗑️ 삭제", key=f"del_routine_{r_id}"):
                                 delete_daily_routine(r_id)
@@ -1187,8 +1158,6 @@ else:
                     date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
                     
                     for r_id, r_title in current_routines:
-                        r_subs = get_student_daily_routines_parent(selected_hw_student, parent_id=r_id)
-                        
                         st.markdown(f"**📌 {r_title}**")
                         cols = st.columns(7)
                         for idx, d_str in enumerate(date_columns):
@@ -1200,27 +1169,11 @@ else:
                                 cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
                                 def_val = cur_logs.get((str(r_id), d_str), False)
                                 
-                                # 💡 부모 루틴 키에 'parent' 접두사 추가하여 자식과 키 중복 원천 차단
-                                chk_key = f"auto_mat_parent_{selected_hw_student}_{r_id}_{d_str}"
+                                chk_key = f"auto_mat_routine_{selected_hw_student}_{r_id}_{d_str}"
                                 new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
                                 if new_val != def_val:
                                     save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
                                     st.rerun()
-                        
-                        for sr_id, sr_title in r_subs:
-                            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;└ {sr_title}")
-                            sub_cols = st.columns(7)
-                            for idx, d_str in enumerate(date_columns):
-                                with sub_cols[idx]:
-                                    cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
-                                    def_val = cur_logs.get((str(sr_id), d_str), False)
-                                    
-                                    # 💡 자식 루틴 키에 'sub' 접두사 추가
-                                    chk_key = f"auto_mat_sub_{selected_hw_student}_{sr_id}_{d_str}"
-                                    new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
-                                    if new_val != def_val:
-                                        save_single_routine_log(selected_hw_student, sr_id, d_str, new_val)
-                                        st.rerun()
                         st.markdown("")
 
             st.markdown("---")
