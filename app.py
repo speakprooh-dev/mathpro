@@ -408,7 +408,6 @@ def delete_notice(notice_id):
     conn.commit()
     conn.close()
 
-# 💡 하위 개념을 제거하고 단일 항목으로 등록하도록 단순화된 루틴 함수
 def get_student_daily_routines(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1139,16 +1138,17 @@ else:
                     st.markdown("---")
                     st.markdown("##### 📋 현재 등록된 루틴 과제 목록")
                     
-                    # 루틴 삭제 처리 (Form 바깥에 배치하여 즉시 정상 삭제되도록 수정)
+                    # 💡 각 루틴별로 독립된 폼(Form)을 부여하여 삭제 버튼이 확실하게 동작하도록 수정
                     for r_id, r_title in current_routines:
-                        col_r1, col_r2 = st.columns([5, 1])
-                        with col_r1:
-                            st.markdown(f"📌 **{r_title}**")
-                        with col_r2:
-                            if st.button("🗑️ 삭제", key=f"del_routine_{r_id}"):
-                                delete_daily_routine(r_id)
-                                st.success("삭제되었습니다!")
-                                st.rerun()
+                        with st.form(f"routine_del_form_{r_id}"):
+                            col_r1, col_r2 = st.columns([5, 1])
+                            with col_r1:
+                                st.markdown(f"📌 **{r_title}**")
+                            with col_r2:
+                                if st.form_submit_button("🗑️ 삭제"):
+                                    delete_daily_routine(r_id)
+                                    st.success("삭제되었습니다!")
+                                    st.rerun()
 
                     st.markdown("---")
                     st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
