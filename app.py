@@ -159,6 +159,7 @@ def init_db():
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_unique ON student_wrong_entries (student_name, unit_code)')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_links_unique ON problem_links (full_code)')
         except Exception:
             pass
 
@@ -274,6 +275,7 @@ def get_chapter_types(chapter_id):
     conn.close()
     return rows
 
+# 🛡️ SQLite / Postgres 겸용 안전한 문제별 해설 링크 저장 함수
 def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
     if len(full_code) < 4:
@@ -281,14 +283,21 @@ def save_problem_link(full_code, video_url):
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
     
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
-        c.execute('''
-            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(full_code) DO UPDATE SET video_url = ?
-        ''', (full_code, unit_code, prob_num, video_url, video_url))
+        if db_type == "sqlite":
+            c.execute("DELETE FROM problem_links WHERE full_code = ?", (full_code,))
+            c.execute('''
+                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
+                VALUES (?, ?, ?, ?)
+            ''', (full_code, unit_code, prob_num, video_url))
+        else:
+            c.execute('''
+                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(full_code) DO UPDATE SET video_url = ?
+            ''', (full_code, unit_code, prob_num, video_url, video_url))
         conn.commit()
         success = True
     except Exception:
@@ -296,11 +305,12 @@ def save_problem_link(full_code, video_url):
     conn.close()
     return success
 
+# 🛡️ SQLite / Postgres 겸용 안전한 해설 링크 일괄 저장 함수
 def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
     success_count = 0
     fail_count = 0
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     
     for line in lines:
@@ -315,11 +325,18 @@ def bulk_save_problem_links(text_data):
                 unit_code = full_code[:-3]
                 prob_num = full_code[-3:]
                 try:
-                    c.execute('''
-                        INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-                        VALUES (?, ?, ?, ?)
-                        ON CONFLICT(full_code) DO UPDATE SET video_url = ?
-                    ''', (full_code, unit_code, prob_num, video_url, video_url))
+                    if db_type == "sqlite":
+                        c.execute("DELETE FROM problem_links WHERE full_code = ?", (full_code,))
+                        c.execute('''
+                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
+                            VALUES (?, ?, ?, ?)
+                        ''', (full_code, unit_code, prob_num, video_url))
+                    else:
+                        c.execute('''
+                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
+                            VALUES (?, ?, ?, ?)
+                            ON CONFLICT(full_code) DO UPDATE SET video_url = ?
+                        ''', (full_code, unit_code, prob_num, video_url, video_url))
                     success_count += 1
                 except Exception:
                     fail_count += 1
@@ -632,7 +649,6 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     conn.commit()
     conn.close()
 
-# 🛡️ SQLite / Postgres 겸용 안전한 숙제 체크 저장 함수
 def save_single_homework_progress(student_name, student_hw_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -659,7 +675,6 @@ def get_student_wrong_entry(student_name, unit_code):
     conn.close()
     return row[0] if row else ""
 
-# 🛡️ SQLite / Postgres 겸용 안전한 오답노트 저장 함수
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -977,8 +992,6 @@ if not st.session_state["teacher_authenticated"]:
                         saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
                         final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
                         save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
-                        
-                        # 💡 토스트 메시지로 저장 완료를 눈에 띄게 표시
                         st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
                         st.success("저장되었습니다!")
                         st.rerun()
@@ -1466,14 +1479,21 @@ else:
                 with col_pl2: v_url_in = st.text_input("네이버 카페 URL")
                 if st.form_submit_button("➕ 개별 등록", type="primary"):
                     if f_code_in.strip() and v_url_in.strip():
-                        save_problem_link(f_code_in.strip(), v_url_in.strip())
-                        st.success("저장되었습니다!")
-                        st.rerun()
+                        if save_problem_link(f_code_in.strip(), v_url_in.strip()):
+                            st.toast("🎥 해설 링크가 안전하게 등록되었습니다!", icon="✅")
+                            st.success("저장되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("등록 실패: 문제 번호가 4자리 이상인지, 올바른 형식인지 확인해 주세요.")
+                    else:
+                        st.warning("문제 번호와 네이버 카페 URL을 모두 입력해 주세요.")
+            
             with st.form("bulk_problem_link_form"):
                 bulk_txt = st.text_area("일괄 등록 (줄바꿈 입력)", placeholder="B1353015 https://cafe.naver.com/.../123")
                 if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
                     if bulk_txt.strip():
                         s_cnt, f_cnt = bulk_save_problem_links(bulk_txt)
+                        st.toast(f"🎥 성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)", icon="✅")
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
         with col_link_tab2:
