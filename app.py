@@ -597,7 +597,6 @@ def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=
     conn, _ = get_db_connection()
     c = conn.cursor()
     
-    # 지시사항/메시지가 있으면 가장 첫 번째 항목으로 삽입
     if message_text.strip():
         msg_header = f"💬 [선생님 메시지]: {message_text.strip()}"
         c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, msg_header))
@@ -840,7 +839,6 @@ if not st.session_state["teacher_authenticated"]:
         completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
         m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
 
-        # 선생님 메시지 항목은 전체 숙제 개수 통계에서 제외
         actual_hws_flat = [h for h in all_hws_flat if not h[2].startswith("💬 [선생님 메시지]:")]
         total_h = len(actual_hws_flat)
         completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
@@ -952,7 +950,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 with st.container(border=True):
                     for h_idx, (h_id, title) in enumerate(hws):
-                        # 💡 선생님 메시지는 강조 알림 박스로 표시 (체크박스 제외)
                         if title.startswith("💬 [선생님 메시지]:"):
                             msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
                             st.info(f"📌 **선생님의 한마디**: {msg_content}")
@@ -1203,7 +1200,8 @@ else:
                                 cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
                                 def_val = cur_logs.get((str(r_id), d_str), False)
                                 
-                                chk_key = f"auto_mat_{selected_hw_student}_{r_id}_{d_str}"
+                                # 💡 부모 루틴 키에 'parent' 접두사 추가하여 자식과 키 중복 원천 차단
+                                chk_key = f"auto_mat_parent_{selected_hw_student}_{r_id}_{d_str}"
                                 new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
                                 if new_val != def_val:
                                     save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
@@ -1217,7 +1215,8 @@ else:
                                     cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
                                     def_val = cur_logs.get((str(sr_id), d_str), False)
                                     
-                                    chk_key = f"auto_mat_{selected_hw_student}_{sr_id}_{d_str}"
+                                    # 💡 자식 루틴 키에 'sub' 접두사 추가
+                                    chk_key = f"auto_mat_sub_{selected_hw_student}_{sr_id}_{d_str}"
                                     new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
                                     if new_val != def_val:
                                         save_single_routine_log(selected_hw_student, sr_id, d_str, new_val)
@@ -1281,13 +1280,10 @@ else:
 
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
-                
-                # 💡 [새로운 입력란] 학생에게 전하는 메시지/학습 지침
                 teacher_msg_input = st.text_input(
                     "💬 학생에게 전하는 메시지 / 학습 지침 (선택)", 
                     placeholder="예: 개념 노트 복습 먼저 하고 풀어보자! 화이팅 🔥"
                 )
-                
                 hw_text_area = st.text_area(
                     "날짜별 과제 내용 입력", 
                     key="hw_text_area_input",
