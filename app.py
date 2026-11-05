@@ -1520,16 +1520,16 @@ else:
                     end_idx = start_idx + items_per_page
                     page_units = unit_keys[start_idx:end_idx]
                     
-                    for u_code in page_units:
+                    for u_idx, u_code in enumerate(page_units):
                         u_items = grouped_links[u_code]
                         with st.expander(f"📂 단원코드: [{u_code}] ({len(u_items)}개 문제)"):
-                            for l_id, f_code, v_url in u_items:
+                            for item_idx, (l_id, f_code, v_url) in enumerate(u_items):
                                 col_li_info, col_li_del = st.columns([5, 1])
                                 with col_li_info:
                                     st.markdown(f"📌 **{f_code}** | 🔗 [{v_url}]({v_url})")
                                 with col_li_del:
-                                    # 💡 키 중복 방지를 위해 구분자(page) 적용
-                                    if st.button("🗑️", key=f"del_link_page_{l_id}"):
+                                    # 💡 단원 코드와 인덱스를 결합하여 키 중복 원천 차단
+                                    if st.button("🗑️", key=f"del_page_unit_{u_code}_{l_id}_{item_idx}"):
                                         delete_problem_link(l_id)
                                         st.rerun()
                     
@@ -1547,14 +1547,14 @@ else:
                                 st.session_state["link_page"] += 1
                                 st.rerun()
                 else:
-                    for l_id, f_code, v_url, u_code in filtered:
+                    for item_idx, (l_id, f_code, v_url, u_code) in enumerate(filtered):
                         with st.container(border=True):
                             col_li_info, col_li_del = st.columns([5, 1])
                             with col_li_info:
                                 st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
                             with col_li_del:
-                                # 💡 키 중복 방지를 위해 구분자(search) 적용
-                                if st.button("🗑️", key=f"del_link_search_{l_id}"):
+                                # 💡 검색 결과에서도 순번을 결합하여 키 중복 방지
+                                if st.button("🗑️", key=f"del_search_item_{u_code}_{l_id}_{item_idx}"):
                                     delete_problem_link(l_id)
                                     st.rerun()
             else:
