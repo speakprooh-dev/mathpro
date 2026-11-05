@@ -275,7 +275,6 @@ def get_chapter_types(chapter_id):
     conn.close()
     return rows
 
-# 🛡️ SQLite / Postgres 겸용 안전한 문제별 해설 링크 저장 함수
 def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
     if len(full_code) < 4:
@@ -305,7 +304,6 @@ def save_problem_link(full_code, video_url):
     conn.close()
     return success
 
-# 🛡️ SQLite / Postgres 겸용 안전한 해설 링크 일괄 저장 함수
 def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
     success_count = 0
@@ -1530,7 +1528,8 @@ else:
                                 with col_li_info:
                                     st.markdown(f"📌 **{f_code}** | 🔗 [{v_url}]({v_url})")
                                 with col_li_del:
-                                    if st.button("🗑️", key=f"del_link_{l_id}"):
+                                    # 💡 키 중복 방지를 위해 구분자(page) 적용
+                                    if st.button("🗑️", key=f"del_link_page_{l_id}"):
                                         delete_problem_link(l_id)
                                         st.rerun()
                     
@@ -1554,7 +1553,8 @@ else:
                             with col_li_info:
                                 st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
                             with col_li_del:
-                                if st.button("🗑️", key=f"del_link_{l_id}"):
+                                # 💡 키 중복 방지를 위해 구분자(search) 적용
+                                if st.button("🗑️", key=f"del_link_search_{l_id}"):
                                     delete_problem_link(l_id)
                                     st.rerun()
             else:
