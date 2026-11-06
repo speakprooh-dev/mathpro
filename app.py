@@ -84,8 +84,28 @@ def create_excel_backup():
                 pass
     return output.getvalue()
 
+def save_excel_to_local_drive(excel_bytes, file_name=None):
+    """
+    PC에 마운트된 구글 드라이브 폴더로 엑셀 파일을 백업 저장합니다.
+    경로: G:\내 드라이브\MathPro (drive)\온라인과제\New folder\백업
+    """
+    try:
+        backup_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\New folder\백업"
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir, exist_ok=True)
+            
+        if not file_name:
+            file_name = f"MathPro_Backup_{get_korean_today()}.xlsx"
+            
+        file_path = os.path.join(backup_dir, file_name)
+        with open(file_path, "wb") as f:
+            f.write(excel_bytes)
+        return True, file_path
+    except Exception as e:
+        return False, str(e)
+
 def upload_excel_to_google_drive(excel_bytes, file_name):
-    """지정된 구글 드라이브 폴더로 엑셀 파일을 업로드합니다."""
+    """지정된 구글 드라이브 폴더로 API를 통해 엑셀 파일을 업로드합니다."""
     try:
         if "gcp_service_account" not in st.secrets:
             return False, "Streamlit Secrets에 gcp_service_account 설정이 없습니다."
@@ -728,7 +748,7 @@ with st.sidebar:
         
         st.markdown("##### 📥/📤 데이터 백업 및 복구")
         
-        # 1. 기존 다운로드 버튼
+        # 1. 브라우저 바로 다운로드 버튼
         st.download_button(
             label="📥 전체 데이터 엑셀 백업하기",
             data=create_excel_backup(),
@@ -736,9 +756,20 @@ with st.sidebar:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
+
+        # 2. 고정된 로컬 구글 드라이브 폴더로 백업하는 버튼
+        if st.button("💾 PC 구글 드라이브 폴더로 지정 백업", use_container_width=True):
+            excel_bytes = create_excel_backup()
+            now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            file_name = f"MathPro_Backup_{now_str}.xlsx"
+            success, res_msg = save_excel_to_local_drive(excel_bytes, file_name)
+            if success:
+                st.success(f"백업 성공!\n\n**저장 경로:**\n`{res_msg}`")
+            else:
+                st.error(f"지정 폴더 백업 실패: {res_msg}")
         
-        # 2. 구글 드라이브 직행 백업 버튼 추가
-        if st.button("☁️ 구글 드라이브에 즉시 백업", use_container_width=True):
+        # 3. 구글 드라이브 API 직행 백업 버튼
+        if st.button("☁️ 구글 드라이브 API 즉시 백업", use_container_width=True):
             with st.spinner("엑셀 파일을 생성하여 지정된 구글 드라이브 폴더로 전송 중입니다..."):
                 excel_data = create_excel_backup()
                 now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
