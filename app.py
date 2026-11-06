@@ -1302,8 +1302,90 @@ else:
                 wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in rows]
             
             if wrong_rows_all:
+                # ----------------------------------------------------
+                # 📊 [추가된 기능] 학생별 총 문제수 및 검색 조건 내 미등록(빨간색) 개수 계산
+                # ----------------------------------------------------
+                total_student_counts = {}
+                current_filtered_missing_count = 0
+                
+                # 먼저 필터링 전후의 통계 데이터를 산출합니다.
+                # (날짜 및 주간별 모아보기 등에서 현재 화면에 노출되는 목록을 정확히 반영하기 위함)
+                
+                # 아래 필터링 로직에 맞춰 렌더링될 데이터셋을 먼저 구성하기 위해 로직을 분리합니다.
+                pass # (아래 본문 렌더링 시 실시간 카운트 집계)
+                
                 if wrong_view_mode == "📂 단원별 보기":
+                    target_rows = wrong_rows_all
+                elif wrong_view_mode == "📅 날짜별 보기":
+                    available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
+                    selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
+                    
+                    if not available_dates:
+                        target_rows = []
+                    elif selected_date_filter == "전체 날짜 보기 (최근순)":
+                        target_rows = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
+                    else:
+                        target_rows = [r for r in wrong_rows_all if r[3] == selected_date_filter]
+                elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
+                    def get_week_range_str(date_str):
+                        try:
+                            d = date.fromisoformat(date_str)
+                            start_week = d - timedelta(days=d.weekday())
+                            end_week = start_week + timedelta(days=6)
+                            return f"{start_week} ~ {end_week} (월~일)"
+                        except Exception:
+                            return "날짜 미상 주간"
+
+                    weeks_dict = {}
                     for s_name, u_code, nums_txt, u_date in wrong_rows_all:
+                        w_key = get_week_range_str(u_date) if u_date else "날짜 미상 주간"
+                        weeks_dict.setdefault(w_key, []).append((s_name, u_code, nums_txt, u_date))
+
+                    sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
+                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
+                    target_rows = weeks_dict.get(selected_week, []) if selected_week else []
+                else: # 해설 링크 없는 문제 모아보기
+                    target_rows = wrong_rows_all
+
+                # 📌 1. 현재 검색(모아보기) 조건에 맞는 데이터 기준 전체 학생별 총 문제 수 집계
+                summary_student_counts = {}
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        cnt = len(parsed_s)
+                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + cnt
+                
+                # 📌 2. 현재 검색 조건에 부합하는 해설 링크 없는 문제(빨간색) 총 개수 계산
+                search_missing_total = 0
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        for n in parsed_s:
+                            if not get_problem_link_by_full(f"{u_code}{n:03d}"):
+                                search_missing_total += 1
+
+                # 📊 상단 요약 통계 대시보드 박스 출력
+                with st.container(border=True):
+                    st.markdown("##### 📈 현재 검색 조건 통계 요약")
+                    col_stat1, col_stat2 = st.columns(2)
+                    with col_stat1:
+                        st.metric(label="🚨 검색 조건 내 해설 링크 누락(빨간색)", value=f"{search_missing_total}개")
+                    with col_stat2:
+                        total_sum_all = sum(summary_student_counts.values())
+                        st.metric(label="📚 검색 조건 내 전체 오답 문제", value=f"{total_sum_all}개")
+                    
+                    if summary_student_counts:
+                        st.markdown("**👤 학생별 총 오답 문제 수 (링크 유무 무관):**")
+                        student_stat_strs = [f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]
+                        st.markdown(" | ".join(student_stat_strs))
+                
+                st.markdown("---")
+
+                # ----------------------------------------------------
+                # 🖥️ 본문 렌더링 파트
+                # ----------------------------------------------------
+                if wrong_view_mode == "📂 단원별 보기":
+                    for s_name, u_code, nums_txt, u_date in target_rows:
                         with st.container(border=True):
                             parsed_s = parse_numbers(nums_txt)
                             if parsed_s:
@@ -1318,76 +1400,39 @@ else:
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "📅 날짜별 보기":
-                    available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
-                    
-                    if available_dates:
-                        date_filter_options = ["전체 날짜 보기 (최근순)"] + available_dates
-                        selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", date_filter_options)
-                        
-                        if selected_date_filter == "전체 날짜 보기 (최근순)":
-                            filtered_by_date_rows = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
-                        else:
-                            filtered_by_date_rows = [r for r in wrong_rows_all if r[3] == selected_date_filter]
-                        
-                        for s_name, u_code, nums_txt, u_date in filtered_by_date_rows:
-                            date_label = u_date if u_date else "날짜 미상"
-                            with st.container(border=True):
-                                parsed_s = parse_numbers(nums_txt)
-                                if parsed_s:
-                                    st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                    colored_num_tags = []
-                                    for n in sorted(list(parsed_s)):
-                                        f_code = f"{u_code}{n:03d}"
-                                        if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                        else:
-                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                    st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                    else:
-                        st.info("기록된 날짜 정보가 없습니다.")
+                    for s_name, u_code, nums_txt, u_date in target_rows:
+                        date_label = u_date if u_date else "날짜 미상"
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
-                    def get_week_range_str(date_str):
-                        try:
-                            d = date.fromisoformat(date_str)
-                            start_week = d - timedelta(days=d.weekday())
-                            end_week = start_week + timedelta(days=6)
-                            return f"{start_week} ~ {end_week} (월~일)"
-                        except Exception:
-                            return "날짜 미상 주간"
-
-                    weeks_dict = {}
-                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
-                        if not u_date:
-                            w_key = "날짜 미상 주간"
-                        else:
-                            w_key = get_week_range_str(u_date)
-                        weeks_dict.setdefault(w_key, []).append((s_name, u_code, nums_txt, u_date))
-
-                    sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
-                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
-
-                    if selected_week:
-                        st.markdown(f"#### 📌 선택 주간: {selected_week}")
-                        st.markdown("---")
-                        week_items = weeks_dict[selected_week]
-                        for s_name, u_code, nums_txt, u_date in week_items:
-                            with st.container(border=True):
-                                parsed_s = parse_numbers(nums_txt)
-                                if parsed_s:
-                                    st.markdown(f"##### 👤 **{s_name}** | 📅 기록일: `{u_date}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                    colored_num_tags = []
-                                    for n in sorted(list(parsed_s)):
-                                        f_code = f"{u_code}{n:03d}"
-                                        if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                        else:
-                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                    st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                    for s_name, u_code, nums_txt, u_date in target_rows:
+                        with st.container(border=True):
+                            parsed_s = parse_numbers(nums_txt)
+                            if parsed_s:
+                                st.markdown(f"##### 👤 **{s_name}** | 📅 기록일: `{u_date}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
+                                colored_num_tags = []
+                                for n in sorted(list(parsed_s)):
+                                    f_code = f"{u_code}{n:03d}"
+                                    if get_problem_link_by_full(f_code):
+                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                    else:
+                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
                     has_missing = False
-                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
+                    for s_name, u_code, nums_txt, u_date in target_rows:
                         parsed_s = parse_numbers(nums_txt)
                         missing_nums = []
                         if parsed_s:
