@@ -87,7 +87,7 @@ def create_excel_backup():
 def save_excel_to_local_drive(excel_bytes, file_name=None):
     """
     PC에 마운트된 구글 드라이브 폴더로 엑셀 파일을 백업 저장합니다.
-    경로: G:\내 드라이브\MathPro (drive)\온라인과제\New folder\백업
+    경로 앞에 r을 붙여 유니코드 이스케이프 오류를 방지합니다.
     """
     try:
         backup_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\New folder\백업"
