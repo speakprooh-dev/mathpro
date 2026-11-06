@@ -86,7 +86,7 @@ def create_excel_backup():
 
 def save_excel_to_local_drive():
     """
-    PC에 마운트된 구글 드라이브 지정 폴더로 엑셀 파일 전체를 즉시 백업 저장합니다.
+    PC에 마운트된 구글 드라이브 지정 폴더로 엑셀 파일을 즉시 백업 저장하고 디스크 동기화를 강제합니다.
     """
     try:
         backup_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\New folder\백업"
@@ -98,45 +98,14 @@ def save_excel_to_local_drive():
         file_path = os.path.join(backup_dir, file_name)
         
         excel_data = create_excel_backup()
+        
+        # 파일을 쓰고 디스크 쓰기 강제 동기화 (G 드라이브 누락 방지)
         with open(file_path, "wb") as f:
             f.write(excel_data)
+            f.flush()
+            os.fsync(f.fileno())
             
         return True, file_path
-    except Exception as e:
-        return False, str(e)
-
-def upload_excel_to_google_drive(excel_bytes, file_name):
-    """지정된 구글 드라이브 폴더로 엑셀 파일을 업로드합니다."""
-    try:
-        if "gcp_service_account" not in st.secrets:
-            return False, "Streamlit Secrets에 gcp_service_account 설정이 없습니다."
-        
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=['https://www.googleapis.com/auth/drive']
-        )
-        
-        service = build('drive', 'v3', credentials=creds)
-        folder_id = st.secrets["gcp_service_account"]["folder_id"]
-        
-        file_metadata = {
-            'name': file_name,
-            'parents': [folder_id]
-        }
-        
-        media = MediaIoBaseUpload(
-            io.BytesIO(excel_bytes),
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            resumable=True
-        )
-        
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        
-        return True, "성공"
     except Exception as e:
         return False, str(e)
 
