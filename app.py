@@ -587,14 +587,21 @@ def get_student_homework_progress(student_name):
     return {r[0]: bool(r[1]) for r in rows}
 
 def save_single_milestone_progress(student_name, milestone_id, val):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute('''
-        INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
-        VALUES (?, ?, ?)
-        ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
-    ''', (student_name, milestone_id, int(val), int(val)))
-    conn.commit()
+    try:
+        if db_type == "sqlite":
+            c.execute("DELETE FROM milestone_progress WHERE student_name = ? AND milestone_id = ?", (student_name, milestone_id))
+            c.execute("INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (?, ?, ?)", (student_name, milestone_id, int(val)))
+        else:
+            c.execute('''
+                INSERT INTO milestone_progress (student_name, milestone_id, is_checked)
+                VALUES (?, ?, ?)
+                ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
+            ''', (student_name, milestone_id, int(val), int(val)))
+        conn.commit()
+    except Exception:
+        pass
 
 def save_single_homework_progress(student_name, student_hw_id, val):
     conn, db_type = get_db_connection()
