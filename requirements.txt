@@ -1,5 +1,8 @@
 streamlit
 pandas
-sqlalchemy
-psycopg2-binary
 openpyxl
+psycopg2-binary
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
