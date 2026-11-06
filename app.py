@@ -845,7 +845,7 @@ if not st.session_state["teacher_authenticated"]:
                             default_val = m_progress.get(m_id, False)
                             cols = st.columns([4, 1])
                             with cols[0]:
-                                val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{m_id}")
+                                val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}")
                                 if val != default_val:
                                     save_single_milestone_progress(selected_student, m_id, val)
                                     st.rerun()
@@ -1048,8 +1048,8 @@ else:
                     with st.expander(f"[{sub}] {ch}", expanded=False):
                         for m_id, t_name, v_url in items:
                             is_done = s_m_progress.get(m_id, False)
-                            if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{selected_student}_{m_id}") != is_done:
-                                save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{selected_student}_{m_id}"])
+                            if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{selected_student}_{ch}_{m_id}") != is_done:
+                                save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{selected_student}_{ch}_{m_id}"])
                                 st.rerun()
 
     with t_cfg_notice:
