@@ -1138,6 +1138,7 @@ else:
                     st.markdown("---")
                     st.markdown("##### 📋 현재 등록된 루틴 과제 목록 (삭제할 항목 선택)")
                     
+                    # 💡 st.form을 완전히 제거하고 일반 버튼과 체크박스로 구성하여 클릭 즉시 100% 정상 삭제되도록 수정
                     routines_to_delete = []
                     for r_id, r_title in current_routines:
                         if st.checkbox(f"📌 {r_title}", key=f"chk_del_routine_{r_id}"):
@@ -1313,12 +1314,7 @@ else:
         if student_list:
             chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
             
-            # 💡 '주간별(월~일) 한 주 모아보기' 옵션이 추가된 모아보기 방식 선택
-            wrong_view_mode = st.radio(
-                "모아보기 방식 선택", 
-                ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], 
-                horizontal=True
-            )
+            wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 최근 날짜별 / 날짜별 보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
             
             conn, _ = get_db_connection()
             c = conn.cursor()
@@ -1347,7 +1343,7 @@ else:
                                         colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
                                 st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
-                elif wrong_view_mode == "📅 날짜별 보기":
+                elif wrong_view_mode == "📅 최근 날짜별 / 날짜별 보기":
                     available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
                     
                     if available_dates:
@@ -1375,48 +1371,6 @@ else:
                                     st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                     else:
                         st.info("기록된 날짜 정보가 없습니다.")
-                
-                elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
-                    # 날짜별로 월요일부터 일요일까지의 주간 구간을 계산하여 매핑
-                    def get_week_range_str(date_str):
-                        try:
-                            d = date.fromisoformat(date_str)
-                            # 월요일(0)부터 일요일(6) 기준 주간 시작일과 종료일 계산
-                            start_week = d - timedelta(days=d.weekday())
-                            end_week = start_week + timedelta(days=6)
-                            return f"{start_week} ~ {end_week} (월~일)"
-                        except Exception:
-                            return "날짜 미상 주간"
-
-                    # 주간별로 오답 항목들을 그룹화
-                    weeks_dict = {}
-                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
-                        if not u_date:
-                            w_key = "날짜 미상 주간"
-                        else:
-                            w_key = get_week_range_str(u_date)
-                        weeks_dict.setdefault(w_key, []).append((s_name, u_code, nums_txt, u_date))
-
-                    sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
-                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
-
-                    if selected_week:
-                        st.markdown(f"#### 📌 선택 주간: {selected_week}")
-                        st.markdown("---")
-                        week_items = weeks_dict[selected_week]
-                        for s_name, u_code, nums_txt, u_date in week_items:
-                            with st.container(border=True):
-                                parsed_s = parse_numbers(nums_txt)
-                                if parsed_s:
-                                    st.markdown(f"##### 👤 **{s_name}** | 📅 기록일: `{u_date}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                    colored_num_tags = []
-                                    for n in sorted(list(parsed_s)):
-                                        f_code = f"{u_code}{n:03d}"
-                                        if get_problem_link_by_full(f_code):
-                                            colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                        else:
-                                            colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                    st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
                 
                 elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
                     has_missing = False
