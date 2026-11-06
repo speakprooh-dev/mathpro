@@ -1364,7 +1364,7 @@ else:
                             if not get_problem_link_by_full(f"{u_code}{n:03d}"):
                                 search_missing_total += 1
 
-                # 📊 상단 요약 통계 대시보드 박스 (컴팩트하게 수정)
+                # 📊 상단 요약 통계 대시보드 박스 (라이트/다크모드 자동 대응)
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
                     
@@ -1373,7 +1373,7 @@ else:
                         <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">
                             📈 현재 검색 조건 통계 요약
                         </div>
-                        <div style="font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 8px;">
+                        <div style="font-size: 13px; margin-bottom: 8px;">
                             🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
                             📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
                         </div>
