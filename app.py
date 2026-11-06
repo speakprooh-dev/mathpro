@@ -841,11 +841,17 @@ if not st.session_state["teacher_authenticated"]:
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
-                        for m_id, t_name, v_url in items:
+                        # 💡 enumerate를 사용하여 각 항목에 고유한 순서 번호(idx)를 부여합니다.
+                        for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
                             cols = st.columns([4, 1])
                             with cols[0]:
-                                val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}")
+                                # 💡 key에 단원명(ch)과 순서 번호(idx)를 함께 조합하여 중복을 원천 차단합니다.
+                                val = st.checkbox(
+                                    f"{t_name}", 
+                                    value=default_val, 
+                                    key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
+                                )
                                 if val != default_val:
                                     save_single_milestone_progress(selected_student, m_id, val)
                                     st.rerun()
