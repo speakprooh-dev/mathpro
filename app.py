@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정
+# ☁️ Supabase URL 방식 연동 설정 (캐싱 적용)
 # ==========================================
 try:
     import psycopg2
@@ -17,7 +17,12 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
+@st.cache_resource
 def get_db_connection():
+    """
+    st.cache_resource를 통해 DB 연결 객체를 캐싱합니다.
+    Streamlit 앱이 재실행되어도 Supabase/SQLite 연결을 재사용하여 속도를 획기적으로 개선합니다.
+    """
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
@@ -46,7 +51,7 @@ def get_db_connection():
             pass
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
-    return sqlite3.connect(DB_PATH, timeout=30), "sqlite"
+    return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
 def get_korean_today():
     try:
@@ -74,7 +79,6 @@ def create_excel_backup():
                 df.to_excel(writer, sheet_name=table, index=False)
             except Exception:
                 pass
-        conn.close()
     return output.getvalue()
 
 def restore_from_excel(uploaded_file):
@@ -88,7 +92,6 @@ def restore_from_excel(uploaded_file):
             except Exception:
                 pass
         conn.commit()
-        conn.close()
         return True, "데이터베이스가 성공적으로 복구되었습니다!"
     except Exception as e:
         return False, f"복구 중 오류 발생: {str(e)}"
@@ -172,7 +175,6 @@ def init_db():
                 except Exception:
                     pass
         conn.commit()
-        conn.close()
     except Exception:
         pass
 
@@ -184,7 +186,6 @@ def get_students():
         c = conn.cursor()
         c.execute("SELECT name FROM students ORDER BY name")
         rows = c.fetchall()
-        conn.close()
         return [r[0] for r in rows]
     except Exception:
         return []
@@ -194,7 +195,6 @@ def get_student_drive_url(name):
     c = conn.cursor()
     c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
     row = c.fetchone()
-    conn.close()
     return row[0] if row and row[0] else ""
 
 def update_student_drive_url(name, drive_url):
@@ -202,7 +202,6 @@ def update_student_drive_url(name, drive_url):
     c = conn.cursor()
     c.execute("UPDATE students SET drive_url = ? WHERE name = ?", (drive_url, name))
     conn.commit()
-    conn.close()
 
 def add_student(name):
     conn, _ = get_db_connection()
@@ -213,7 +212,6 @@ def add_student(name):
         success = True
     except Exception:
         success = False
-    conn.close()
     return success
 
 def delete_student(name):
@@ -230,14 +228,12 @@ def delete_student(name):
     c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
     conn.commit()
-    conn.close()
 
 def get_subjects():
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, name FROM subjects ORDER BY id")
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def add_subject(name):
@@ -249,7 +245,6 @@ def add_subject(name):
         success = True
     except Exception:
         success = False
-    conn.close()
     return success
 
 def get_chapters():
@@ -257,7 +252,6 @@ def get_chapters():
     c = conn.cursor()
     c.execute("SELECT id, subject, name FROM chapters")
     rows = c.fetchall()
-    conn.close()
     
     def natural_sort_key(ch):
         subject, name = ch[1], ch[2]
@@ -272,7 +266,6 @@ def get_chapter_types(chapter_id):
     c = conn.cursor()
     c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def save_problem_link(full_code, video_url):
@@ -301,7 +294,6 @@ def save_problem_link(full_code, video_url):
         success = True
     except Exception:
         success = False
-    conn.close()
     return success
 
 def bulk_save_problem_links(text_data):
@@ -343,7 +335,6 @@ def bulk_save_problem_links(text_data):
         else:
             fail_count += 1
     conn.commit()
-    conn.close()
     return success_count, fail_count
 
 def get_problem_links_by_unit(unit_code):
@@ -351,7 +342,6 @@ def get_problem_links_by_unit(unit_code):
     c = conn.cursor()
     c.execute("SELECT full_code, video_url FROM problem_links WHERE unit_code = ? ORDER BY full_code", (unit_code.upper(),))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def get_problem_link_by_full(full_code):
@@ -359,7 +349,6 @@ def get_problem_link_by_full(full_code):
     c = conn.cursor()
     c.execute("SELECT video_url FROM problem_links WHERE full_code = ?", (full_code.upper(),))
     row = c.fetchone()
-    conn.close()
     return row[0] if row else ""
 
 def get_all_problem_links():
@@ -367,7 +356,6 @@ def get_all_problem_links():
     c = conn.cursor()
     c.execute("SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code")
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def delete_problem_link(link_id):
@@ -375,7 +363,6 @@ def delete_problem_link(link_id):
     c = conn.cursor()
     c.execute("DELETE FROM problem_links WHERE id = ?", (link_id,))
     conn.commit()
-    conn.close()
 
 def add_notice(student_name, title, content):
     conn, _ = get_db_connection()
@@ -383,14 +370,12 @@ def add_notice(student_name, title, content):
     today_str = str(get_korean_today())
     c.execute("INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
     conn.commit()
-    conn.close()
 
 def get_notices_for_student(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def get_all_notices():
@@ -398,7 +383,6 @@ def get_all_notices():
     c = conn.cursor()
     c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def delete_notice(notice_id):
@@ -406,14 +390,12 @@ def delete_notice(notice_id):
     c = conn.cursor()
     c.execute("DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
-    conn.close()
 
 def get_student_daily_routines(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def bulk_insert_daily_routines(student_name, text_data):
@@ -428,7 +410,6 @@ def bulk_insert_daily_routines(student_name, text_data):
         c.execute("INSERT INTO daily_routines (student_name, title) VALUES (?, ?)", (student_name, title))
         added_count += 1
     conn.commit()
-    conn.close()
     return added_count
 
 def delete_daily_routine(r_id):
@@ -437,7 +418,6 @@ def delete_daily_routine(r_id):
     c.execute("DELETE FROM daily_routines WHERE id = ?", (r_id,))
     c.execute("DELETE FROM daily_routine_logs WHERE routine_id = ?", (str(r_id),))
     conn.commit()
-    conn.close()
 
 def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     conn, _ = get_db_connection()
@@ -448,7 +428,6 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
         ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
     ''', (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
     conn.commit()
-    conn.close()
 
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn, _ = get_db_connection()
@@ -460,14 +439,12 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
             ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
         ''', (student_name, str(routine_id_str), log_date, int(val), int(val)))
     conn.commit()
-    conn.close()
 
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
     rows = c.fetchall()
-    conn.close()
     log_map = {}
     for r_id, val in rows:
         log_map[(str(r_id), target_date_str)] = bool(val)
@@ -483,7 +460,6 @@ def get_routine_completion_rate(student_name, days_limit=7):
     c.execute("SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
     total_routines_count = c.fetchone()[0]
     if total_routines_count == 0:
-        conn.close()
         return 0, 0, 0
     total_expected = total_routines_count * days_limit
     
@@ -492,7 +468,6 @@ def get_routine_completion_rate(student_name, days_limit=7):
         WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
     """, (student_name, start_date_str, today_str))
     completed_count = c.fetchone()[0]
-    conn.close()
     
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
@@ -502,7 +477,6 @@ def get_homework_templates():
     c = conn.cursor()
     c.execute("SELECT id, title FROM homework_templates ORDER BY id")
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def add_homework_template(title):
@@ -510,14 +484,12 @@ def add_homework_template(title):
     c = conn.cursor()
     c.execute("INSERT INTO homework_templates (title) VALUES (?)", (title,))
     conn.commit()
-    conn.close()
 
 def delete_homework_template(t_id):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
-    conn.close()
 
 def get_student_milestones(student_name):
     conn, _ = get_db_connection()
@@ -528,7 +500,6 @@ def get_student_milestones(student_name):
         FROM milestones m WHERE m.student_name = ?
     """, (student_name,))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def assign_chapters_to_student(student_name, chapter_ids):
@@ -549,14 +520,12 @@ def assign_chapters_to_student(student_name, chapter_ids):
             if (ch_name, t_name) not in existing:
                 c.execute("INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", (student_name, sub, ch_name, t_name))
     conn.commit()
-    conn.close()
 
 def get_student_homework_dates(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return [r[0] for r in rows]
 
 def get_student_homework_by_date(student_name, hw_date):
@@ -564,7 +533,6 @@ def get_student_homework_by_date(student_name, hw_date):
     c = conn.cursor()
     c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def get_all_student_homework(student_name):
@@ -572,7 +540,6 @@ def get_all_student_homework(student_name):
     c = conn.cursor()
     c.execute("SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return rows
 
 def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
@@ -590,7 +557,6 @@ def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=
             continue
         c.execute("INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, line_str))
     conn.commit()
-    conn.close()
 
 def update_student_homework_by_date(student_name, hw_date, text_data):
     conn, _ = get_db_connection()
@@ -598,7 +564,6 @@ def update_student_homework_by_date(student_name, hw_date, text_data):
     c.execute("DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
     conn.commit()
-    conn.close()
     bulk_insert_student_homework(student_name, hw_date, text_data)
 
 def delete_student_homework_date(student_name, hw_date):
@@ -606,14 +571,12 @@ def delete_student_homework_date(student_name, hw_date):
     c = conn.cursor()
     c.execute("DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     conn.commit()
-    conn.close()
 
 def get_milestone_progress(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return {r[0]: bool(r[1]) for r in rows}
 
 def get_student_homework_progress(student_name):
@@ -621,7 +584,6 @@ def get_student_homework_progress(student_name):
     c = conn.cursor()
     c.execute("SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     rows = c.fetchall()
-    conn.close()
     return {r[0]: bool(r[1]) for r in rows}
 
 def save_single_milestone_progress(student_name, milestone_id, val):
@@ -633,7 +595,6 @@ def save_single_milestone_progress(student_name, milestone_id, val):
         ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
     ''', (student_name, milestone_id, int(val), int(val)))
     conn.commit()
-    conn.close()
 
 def save_single_homework_progress(student_name, student_hw_id, val):
     conn, db_type = get_db_connection()
@@ -651,14 +612,12 @@ def save_single_homework_progress(student_name, student_hw_id, val):
         conn.commit()
     except Exception:
         pass
-    conn.close()
 
 def get_student_wrong_entry(student_name, unit_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
     row = c.fetchone()
-    conn.close()
     return row[0] if row else ""
 
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
@@ -678,7 +637,6 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
         conn.commit()
     except Exception:
         pass
-    conn.close()
 
 def parse_numbers(text):
     if not text:
@@ -984,7 +942,6 @@ if not st.session_state["teacher_authenticated"]:
                 c = conn.cursor()
                 c.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
                 saved_rows = c.fetchall()
-                conn.close()
                 
                 saved_units_list = [r[0] for r in saved_rows]
                 
@@ -1313,7 +1270,6 @@ else:
         if student_list:
             chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
             
-            # 💡 '주간별(월~일) 한 주 모아보기' 옵션이 추가된 모아보기 방식 선택
             wrong_view_mode = st.radio(
                 "모아보기 방식 선택", 
                 ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], 
@@ -1329,7 +1285,6 @@ else:
                 c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 rows = c.fetchall()
                 wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in rows]
-            conn.close()
             
             if wrong_rows_all:
                 if wrong_view_mode == "📂 단원별 보기":
@@ -1377,18 +1332,15 @@ else:
                         st.info("기록된 날짜 정보가 없습니다.")
                 
                 elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
-                    # 날짜별로 월요일부터 일요일까지의 주간 구간을 계산하여 매핑
                     def get_week_range_str(date_str):
                         try:
                             d = date.fromisoformat(date_str)
-                            # 월요일(0)부터 일요일(6) 기준 주간 시작일과 종료일 계산
                             start_week = d - timedelta(days=d.weekday())
                             end_week = start_week + timedelta(days=6)
                             return f"{start_week} ~ {end_week} (월~일)"
                         except Exception:
                             return "날짜 미상 주간"
 
-                    # 주간별로 오답 항목들을 그룹화
                     weeks_dict = {}
                     for s_name, u_code, nums_txt, u_date in wrong_rows_all:
                         if not u_date:
@@ -1449,7 +1401,6 @@ else:
         c = conn.cursor()
         c.execute("SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
         all_hw_dates = [r[0] for r in c.fetchall()]
-        conn.close()
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
