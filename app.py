@@ -1350,7 +1350,6 @@ else:
                     else:
                         st.warning("단원 이름을 입력해 주세요.")
 
-            # 💡 [복구 완료] 단원별 세부 유형 및 해설 링크 관리 (수정/삭제 기능 포함)
             st.markdown("---")
             st.markdown("##### ✏️ 등록된 단원별 세부 유형 및 해설 링크 관리 (수정/삭제)")
             st.caption("과목과 단원을 선택하여 하위 유형에 해설 영상 링크를 연결하거나 유형 이름을 수정·삭제할 수 있습니다.")
@@ -1364,7 +1363,6 @@ else:
                 selected_ch_id = st.selectbox("관리할 단원 선택", options=list(ch_options.keys()), format_func=lambda x: ch_options[x], key="manage_edit_ch_sel")
                 
                 if selected_ch_id:
-                    # 단원 삭제 버튼
                     col_ch_del1, col_ch_del2 = st.columns([4, 1])
                     with col_ch_del2:
                         if st.button("🗑️ 단원 삭제", key=f"del_chapter_btn_{selected_ch_id}", type="secondary"):
@@ -1378,33 +1376,34 @@ else:
                     
                     types_rows = get_chapter_types(selected_ch_id)
                     if types_rows:
-                        st.markdown("###### 📌 하위 세부 유형 목록 및 해설 링크 설정")
-                        for t_id, t_name, t_vurl in types_rows:
-                            with st.container(border=True):
-                                with st.form(f"edit_type_form_{t_id}"):
-                                    col_t1, col_t2 = st.columns([2, 3])
-                                    with col_t1:
-                                        edited_t_name = st.text_input("유형 이름", value=t_name, key=f"t_name_{t_id}")
-                                    with col_t2:
-                                        edited_t_url = st.text_input("해설 영상 링크 (URL)", value=t_vurl, key=f"t_url_{t_id}", placeholder="https://...")
-                                    
-                                    col_b1, col_b2 = st.columns(2)
-                                    with col_b1:
-                                        if st.form_submit_button("💾 유형 정보 수정 저장", type="primary"):
-                                            conn, _ = get_db_connection()
-                                            c = conn.cursor()
-                                            c.execute("UPDATE chapter_types SET name = ?, video_url = ? WHERE id = ?", (edited_t_name.strip(), edited_t_url.strip(), t_id))
-                                            conn.commit()
-                                            st.success("수정 완료!")
-                                            st.rerun()
-                                    with col_b2:
-                                        if st.form_submit_button("🗑️ 해당 유형 삭제"):
-                                            conn, _ = get_db_connection()
-                                            c = conn.cursor()
-                                            c.execute("DELETE FROM chapter_types WHERE id = ?", (t_id,))
-                                            conn.commit()
-                                            st.success("삭제 완료!")
-                                            st.rerun()
+                        # 💡 여기에 st.expander를 적용하여 기본적으로 접혀 있도록 수정함
+                        with st.expander("📌 하위 세부 유형 목록 및 해설 링크 설정", expanded=False):
+                            for t_id, t_name, t_vurl in types_rows:
+                                with st.container(border=True):
+                                    with st.form(f"edit_type_form_{t_id}"):
+                                        col_t1, col_t2 = st.columns([2, 3])
+                                        with col_t1:
+                                            edited_t_name = st.text_input("유형 이름", value=t_name, key=f"t_name_{t_id}")
+                                        with col_t2:
+                                            edited_t_url = st.text_input("해설 영상 링크 (URL)", value=t_vurl, key=f"t_url_{t_id}", placeholder="https://...")
+                                        
+                                        col_b1, col_b2 = st.columns(2)
+                                        with col_b1:
+                                            if st.form_submit_button("💾 유형 정보 수정 저장", type="primary"):
+                                                conn, _ = get_db_connection()
+                                                c = conn.cursor()
+                                                c.execute("UPDATE chapter_types SET name = ?, video_url = ? WHERE id = ?", (edited_t_name.strip(), edited_t_url.strip(), t_id))
+                                                conn.commit()
+                                                st.success("수정 완료!")
+                                                st.rerun()
+                                        with col_b2:
+                                            if st.form_submit_button("🗑️ 해당 유형 삭제"):
+                                                conn, _ = get_db_connection()
+                                                c = conn.cursor()
+                                                c.execute("DELETE FROM chapter_types WHERE id = ?", (t_id,))
+                                                conn.commit()
+                                                st.success("삭제 완료!")
+                                                st.rerun()
                     else:
                         st.info("등록된 세부 유형이 없습니다. 위에서 단원 등록 시 세부 유형을 함께 등록해 주세요.")
             else:
