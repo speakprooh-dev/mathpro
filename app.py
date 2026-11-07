@@ -639,7 +639,6 @@ def get_student_homework_progress(student_name):
     rows = c.fetchall()
     return {r[0]: bool(r[1]) for r in rows}
 
-# 💡 SQLite 및 Postgres 안전 호환 함수
 def save_single_milestone_progress(student_name, milestone_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -736,7 +735,6 @@ student_list = get_students()
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
-# 📌 학생 접속 로그 저장 실행
 if url_student and url_student in student_list:
     log_student_visit(url_student)
 
@@ -1084,9 +1082,8 @@ else:
         "🔍 5. 오답노트 모아보기",
         "📊 6. 전체 숙제 매트릭스",
         "🎥 7. 해설 링크 관리",
-        "📈 8. 실시간 학습 참여 현황"  # <-- 부드러운 표현으로 변경
+        "📈 8. 실시간 학습 참여 현황"
     ])
-
 
     with t_cfg_student:
         st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
@@ -1320,7 +1317,6 @@ else:
         
         subjects_data = get_subjects()
         
-        # 📂 단원 및 세부 유형 추가·관리 섹션 복구
         if subjects_data:
             st.markdown("---")
             st.markdown("##### 📂 단원 및 세부 유형 관리")
@@ -1446,7 +1442,6 @@ else:
                             if not get_problem_link_by_full(f"{u_code}{n:03d}"):
                                 search_missing_total += 1
 
-                # 📊 상단 요약 통계 대시보드 박스 (라이트/다크모드 대응)
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
                     
@@ -1677,11 +1672,8 @@ else:
             else:
                 st.info("등록된 해설 링크가 없습니다.")
 
-    # ----------------------------------------------------
-    # 👁️ 8. 선생님 전용 [학생 접속 기록 통계] 탭
-    # ----------------------------------------------------
     with t_cfg_stats:
-        st.markdown("#### 👁️ 학생 앱 접속 현황 및 출석 통계")
+        st.markdown("#### 📈 실시간 학습 참여 현황")
         st.caption("학생들이 접속한 이력을 실시간으로 추적하여 학습 참여도를 파악할 수 있습니다.")
         
         today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
