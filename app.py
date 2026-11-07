@@ -547,7 +547,6 @@ def delete_homework_template(t_id):
 def get_student_milestones(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    # 💡 수정된 부분: chapter_types 테이블의 video_url을 정확히 조인하여 가져옵니다.
     c.execute("""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
                COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
@@ -1320,7 +1319,7 @@ else:
         
         if subjects_data:
             st.markdown("---")
-            st.markdown("##### 📂 단원 및 세부 유형 관리")
+            st.markdown("##### 📂 단원 및 세부 유형 등록")
             
             with st.form("add_chapter_and_type_form"):
                 target_subject = st.selectbox("과목 선택", [s[1] for s in subjects_data], key="manage_chapter_sub_sel")
@@ -1350,6 +1349,66 @@ else:
                             st.error(f"등록 중 오류 발생: {str(e)}")
                     else:
                         st.warning("단원 이름을 입력해 주세요.")
+
+            # 💡 [복구 완료] 단원별 세부 유형 및 해설 링크 관리 (수정/삭제 기능 포함)
+            st.markdown("---")
+            st.markdown("##### ✏️ 등록된 단원별 세부 유형 및 해설 링크 관리 (수정/삭제)")
+            st.caption("과목과 단원을 선택하여 하위 유형에 해설 영상 링크를 연결하거나 유형 이름을 수정·삭제할 수 있습니다.")
+            
+            selected_manage_sub = st.selectbox("관리할 과목 선택", [s[1] for s in subjects_data], key="manage_edit_sub_sel")
+            all_chapters = get_chapters()
+            sub_chapters = [ch for ch in all_chapters if ch[1] == selected_manage_sub]
+            
+            if sub_chapters:
+                ch_options = {ch[0]: ch[2] for ch in sub_chapters}
+                selected_ch_id = st.selectbox("관리할 단원 선택", options=list(ch_options.keys()), format_func=lambda x: ch_options[x], key="manage_edit_ch_sel")
+                
+                if selected_ch_id:
+                    # 단원 삭제 버튼
+                    col_ch_del1, col_ch_del2 = st.columns([4, 1])
+                    with col_ch_del2:
+                        if st.button("🗑️ 단원 삭제", key=f"del_chapter_btn_{selected_ch_id}", type="secondary"):
+                            conn, _ = get_db_connection()
+                            c = conn.cursor()
+                            c.execute("DELETE FROM chapter_types WHERE chapter_id = ?", (selected_ch_id,))
+                            c.execute("DELETE FROM chapters WHERE id = ?", (selected_ch_id,))
+                            conn.commit()
+                            st.success("단원이 삭제되었습니다!")
+                            st.rerun()
+                    
+                    types_rows = get_chapter_types(selected_ch_id)
+                    if types_rows:
+                        st.markdown("###### 📌 하위 세부 유형 목록 및 해설 링크 설정")
+                        for t_id, t_name, t_vurl in types_rows:
+                            with st.container(border=True):
+                                with st.form(f"edit_type_form_{t_id}"):
+                                    col_t1, col_t2 = st.columns([2, 3])
+                                    with col_t1:
+                                        edited_t_name = st.text_input("유형 이름", value=t_name, key=f"t_name_{t_id}")
+                                    with col_t2:
+                                        edited_t_url = st.text_input("해설 영상 링크 (URL)", value=t_vurl, key=f"t_url_{t_id}", placeholder="https://...")
+                                    
+                                    col_b1, col_b2 = st.columns(2)
+                                    with col_b1:
+                                        if st.form_submit_button("💾 유형 정보 수정 저장", type="primary"):
+                                            conn, _ = get_db_connection()
+                                            c = conn.cursor()
+                                            c.execute("UPDATE chapter_types SET name = ?, video_url = ? WHERE id = ?", (edited_t_name.strip(), edited_t_url.strip(), t_id))
+                                            conn.commit()
+                                            st.success("수정 완료!")
+                                            st.rerun()
+                                    with col_b2:
+                                        if st.form_submit_button("🗑️ 해당 유형 삭제"):
+                                            conn, _ = get_db_connection()
+                                            c = conn.cursor()
+                                            c.execute("DELETE FROM chapter_types WHERE id = ?", (t_id,))
+                                            conn.commit()
+                                            st.success("삭제 완료!")
+                                            st.rerun()
+                    else:
+                        st.info("등록된 세부 유형이 없습니다. 위에서 단원 등록 시 세부 유형을 함께 등록해 주세요.")
+            else:
+                st.info("해당 과목에 등록된 단원이 없습니다.")
 
         if subjects_data and student_list:
             st.divider()
