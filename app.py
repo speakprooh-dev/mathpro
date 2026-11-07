@@ -547,9 +547,10 @@ def delete_homework_template(t_id):
 def get_student_milestones(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
+    # 💡 수정된 부분: chapter_types 테이블의 video_url을 정확히 조인하여 가져옵니다.
     c.execute("""
         SELECT m.id, m.subject, m.chapter, m.type_name, 
-               (SELECT t.video_url FROM chapter_types t WHERE t.name = m.type_name LIMIT 1) as video_url
+               COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
         FROM milestones m WHERE m.student_name = ?
     """, (student_name,))
     rows = c.fetchall()
