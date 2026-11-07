@@ -1052,11 +1052,15 @@ else:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 for (sub, ch), items in grouped_t_milestones.items():
                     with st.expander(f"[{sub}] {ch}", expanded=False):
-                        for m_id, t_name, v_url in items:
+                        # 💡 enumerate를 사용하여 고유 인덱스(idx)를 부여합니다.
+                        for idx, (m_id, t_name, v_url) in enumerate(items):
                             is_done = s_m_progress.get(m_id, False)
-                            if st.checkbox(f"{t_name}", value=is_done, key=f"t_milestone_{selected_student}_{ch}_{m_id}") != is_done:
-                                save_single_milestone_progress(selected_student, m_id, st.session_state[f"t_milestone_{selected_student}_{ch}_{m_id}"])
+                            # 💡 key에 단원명(ch)과 인덱스(idx)를 함께 조합합니다.
+                            chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
+                            if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
+                                save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
                                 st.rerun()
+
 
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
