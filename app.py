@@ -19,10 +19,6 @@ except ImportError:
 
 @st.cache_resource
 def get_db_connection():
-    """
-    st.cache_resource를 통해 DB 연결 객체를 캐싱합니다.
-    Streamlit 앱이 재실행되어도 Supabase/SQLite 연결을 재사용하여 속도를 획기적으로 개선합니다.
-    """
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
@@ -60,6 +56,13 @@ def get_korean_today():
     except Exception:
         return date.today()
 
+def get_korean_now_str():
+    try:
+        kst = timezone(timedelta(hours=9))
+        return datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 # ==========================================
 # 📥/📤 엑셀 백업 및 복구 장치
 # ==========================================
@@ -71,7 +74,7 @@ def create_excel_backup():
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
             "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates",
-            "daily_routines", "daily_routine_logs", "notices"
+            "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
         for table in tables:
             try:
@@ -140,6 +143,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
+            c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
         else:
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)')
@@ -157,6 +161,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
+            c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
 
         try:
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
@@ -179,6 +184,53 @@ def init_db():
         pass
 
 init_db()
+
+# ----------------------------------------------------
+# 👁️ 접속 로그 기록 기능
+# ----------------------------------------------------
+def log_student_visit(student_name):
+    if not student_name or st.session_state.get("teacher_authenticated", False):
+        return
+    
+    session_key = f"visited_{student_name}_{get_korean_today()}"
+    if not st.session_state.get(session_key, False):
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        now_str = get_korean_now_str()
+        today_str = str(get_korean_today())
+        c.execute("INSERT INTO visitor_logs (student_name, visit_date, visit_time) VALUES (?, ?, ?)", (student_name, today_str, now_str))
+        conn.commit()
+        st.session_state[session_key] = True
+
+def get_visitor_stats():
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    
+    today_str = str(get_korean_today())
+    c.execute("SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
+    today_active_students = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM visitor_logs")
+    total_visit_count = c.fetchone()[0]
+    
+    c.execute("""
+        SELECT student_name, MAX(visit_time) as last_visit, COUNT(*) as visit_count 
+        FROM visitor_logs 
+        GROUP BY student_name 
+        ORDER BY last_visit DESC
+    """)
+    student_summary = c.fetchall()
+    
+    c.execute("""
+        SELECT visit_date, COUNT(DISTINCT student_name) as student_cnt, COUNT(*) as total_cnt
+        FROM visitor_logs
+        GROUP BY visit_date
+        ORDER BY visit_date DESC
+        LIMIT 7
+    """)
+    recent_daily_logs = c.fetchall()
+    
+    return today_active_students, total_visit_count, student_summary, recent_daily_logs
 
 def get_students():
     try:
@@ -227,6 +279,7 @@ def delete_student(name):
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM visitor_logs WHERE student_name = ?", (name,))
     conn.commit()
 
 def get_subjects():
@@ -586,6 +639,7 @@ def get_student_homework_progress(student_name):
     rows = c.fetchall()
     return {r[0]: bool(r[1]) for r in rows}
 
+# 💡 SQLite 및 Postgres 안전 호환 함수
 def save_single_milestone_progress(student_name, milestone_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -682,6 +736,10 @@ student_list = get_students()
 query_params = st.query_params
 url_student = query_params.get("student", None)
 
+# 📌 학생 접속 로그 저장 실행
+if url_student and url_student in student_list:
+    log_student_visit(url_student)
+
 # ----------------------------------------------------
 # 🧭 사이드바 구성 (선생님 로그인 버튼 하단 배치)
 # ----------------------------------------------------
@@ -697,7 +755,6 @@ with st.sidebar:
         
         st.markdown("##### 📥/📤 데이터 백업 및 복구")
         
-        # 기존 브라우저 다운로드 버튼으로 원상복구
         st.download_button(
             label="📥 전체 데이터 엑셀 백업하기",
             data=create_excel_backup(),
@@ -718,7 +775,7 @@ with st.sidebar:
                         st.error(msg)
         st.divider()
 
-    st.markdown("<br>" * 5, unsafe_allow_html=True)
+    st.markdown("<br>" * 3, unsafe_allow_html=True)
     st.markdown("---")
     
     if not st.session_state["teacher_authenticated"]:
@@ -841,12 +898,10 @@ if not st.session_state["teacher_authenticated"]:
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
-                        # 💡 enumerate를 사용하여 각 항목에 고유한 순서 번호(idx)를 부여합니다.
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
                             cols = st.columns([4, 1])
                             with cols[0]:
-                                # 💡 key에 단원명(ch)과 순서 번호(idx)를 함께 조합하여 중복을 원천 차단합니다.
                                 val = st.checkbox(
                                     f"{t_name}", 
                                     value=default_val, 
@@ -1021,14 +1076,15 @@ else:
     st.divider()
     st.markdown("### ⚙️ 통합 관리 대시보드")
     
-    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links = st.tabs([
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats = st.tabs([
         "👤 1. [개별] 학생 진도 관리", 
         "📢 2. 공지사항 관리",
         "📅 3. 개별 과제 관리", 
         "📚 4. 커리큘럼 진도 배정", 
         "🔍 5. 오답노트 모아보기",
         "📊 6. 전체 숙제 매트릭스",
-        "🎥 7. 해설 링크 관리"
+        "🎥 7. 해설 링크 관리",
+        "👁️ 8. 학생 접속 기록"
     ])
 
     with t_cfg_student:
@@ -1052,15 +1108,12 @@ else:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 for (sub, ch), items in grouped_t_milestones.items():
                     with st.expander(f"[{sub}] {ch}", expanded=False):
-                        # 💡 enumerate를 사용하여 고유 인덱스(idx)를 부여합니다.
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             is_done = s_m_progress.get(m_id, False)
-                            # 💡 key에 단원명(ch)과 인덱스(idx)를 함께 조합합니다.
                             chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
                             if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
                                 save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
                                 st.rerun()
-
 
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
@@ -1141,7 +1194,7 @@ else:
                         for idx, d_str in enumerate(date_columns):
                             with cols[idx]:
                                 day_name = get_weekday_kr(d_str)[:1]
-                                short_date = d_str[5:] # MM-DD
+                                short_date = d_str[5:]
                                 st.caption(f"{short_date}({day_name})")
                                 
                                 cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
@@ -1256,19 +1309,57 @@ else:
 
     with t_cfg_curriculum:
         st.markdown("#### 📚 과목 / 단원 / 세부 유형 폴더형 통합 관리")
+        
         with st.form("unified_sub_form"):
             new_sub_input = st.text_input("새 과목 추가")
-            if st.form_submit_button("과목 등록"):
+            if st.form_submit_button("과목 등록", type="primary"):
                 if new_sub_input.strip() and add_subject(new_sub_input.strip()):
-                    st.success("등록되었습니다!")
+                    st.success("과목이 등록되었습니다!")
                     st.rerun()
         
         subjects_data = get_subjects()
+        
+        # 📂 단원 및 세부 유형 추가·관리 섹션 복구
+        if subjects_data:
+            st.markdown("---")
+            st.markdown("##### 📂 단원 및 세부 유형 관리")
+            
+            with st.form("add_chapter_and_type_form"):
+                target_subject = st.selectbox("과목 선택", [s[1] for s in subjects_data], key="manage_chapter_sub_sel")
+                new_ch_name = st.text_input("새 단원 이름 (예: 6. 함수)", placeholder="예: 6. 함수")
+                new_types_txt = st.text_area("세부 유형 항목 (줄바꿈으로 여러 개 입력)", placeholder="- 개념 정리\n- 대표 유형\n- 심화 문제")
+                
+                if st.form_submit_button("➕ 단원 및 세부 유형 일괄 등록", type="primary"):
+                    if new_ch_name.strip():
+                        conn, _ = get_db_connection()
+                        c = conn.cursor()
+                        try:
+                            c.execute("INSERT INTO chapters (subject, name) VALUES (?, ?)", (target_subject, new_ch_name.strip()))
+                            ch_id = c.lastrowid
+                            
+                            types_list = [t.strip() for t in new_types_txt.split('\n') if t.strip()]
+                            if not types_list:
+                                types_list = ["단원 기본 학습"]
+                                
+                            for t_name in types_list:
+                                clean_t_name = t_name.lstrip('-•*└\t ').strip()
+                                if clean_t_name:
+                                    c.execute("INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (ch_id, clean_t_name, ""))
+                            conn.commit()
+                            st.success("단원과 세부 유형이 성공적으로 등록되었습니다!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"등록 중 오류 발생: {str(e)}")
+                    else:
+                        st.warning("단원 이름을 입력해 주세요.")
+
         if subjects_data and student_list:
             st.divider()
+            st.markdown("##### 🎯 학생별 커리큘럼 단원 일괄 배정")
             selected_assign_student = st.selectbox("진도를 배정할 학생 선택", student_list, key="tab4_stu_sel")
             all_chapters = get_chapters()
             assigned_chapters = {m[2] for m in get_student_milestones(selected_assign_student)}
+            
             with st.form("assign_chapters_form"):
                 selected_ch_ids = []
                 for sub_id, sub_name in subjects_data:
@@ -1306,18 +1397,6 @@ else:
                 wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in rows]
             
             if wrong_rows_all:
-                # ----------------------------------------------------
-                # 📊 [추가된 기능] 학생별 총 문제수 및 검색 조건 내 미등록(빨간색) 개수 계산
-                # ----------------------------------------------------
-                total_student_counts = {}
-                current_filtered_missing_count = 0
-                
-                # 먼저 필터링 전후의 통계 데이터를 산출합니다.
-                # (날짜 및 주간별 모아보기 등에서 현재 화면에 노출되는 목록을 정확히 반영하기 위함)
-                
-                # 아래 필터링 로직에 맞춰 렌더링될 데이터셋을 먼저 구성하기 위해 로직을 분리합니다.
-                pass # (아래 본문 렌더링 시 실시간 카운트 집계)
-                
                 if wrong_view_mode == "📂 단원별 보기":
                     target_rows = wrong_rows_all
                 elif wrong_view_mode == "📅 날짜별 보기":
@@ -1348,10 +1427,9 @@ else:
                     sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                     selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
                     target_rows = weeks_dict.get(selected_week, []) if selected_week else []
-                else: # 해설 링크 없는 문제 모아보기
+                else:
                     target_rows = wrong_rows_all
 
-                # 📌 1. 현재 검색(모아보기) 조건에 맞는 데이터 기준 전체 학생별 총 문제 수 집계
                 summary_student_counts = {}
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
@@ -1359,7 +1437,6 @@ else:
                         cnt = len(parsed_s)
                         summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + cnt
                 
-                # 📌 2. 현재 검색 조건에 부합하는 해설 링크 없는 문제(빨간색) 총 개수 계산
                 search_missing_total = 0
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
@@ -1368,7 +1445,7 @@ else:
                             if not get_problem_link_by_full(f"{u_code}{n:03d}"):
                                 search_missing_total += 1
 
-                # 📊 상단 요약 통계 대시보드 박스 (라이트/다크모드 자동 대응)
+                # 📊 상단 요약 통계 대시보드 박스 (라이트/다크모드 대응)
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
                     
@@ -1392,9 +1469,6 @@ else:
                 
                 st.markdown("---")
 
-                # ----------------------------------------------------
-                # 🖥️ 본문 렌더링 파트
-                # ----------------------------------------------------
                 if wrong_view_mode == "📂 단원별 보기":
                     for s_name, u_code, nums_txt, u_date in target_rows:
                         with st.container(border=True):
@@ -1601,3 +1675,39 @@ else:
                                     st.rerun()
             else:
                 st.info("등록된 해설 링크가 없습니다.")
+
+    # ----------------------------------------------------
+    # 👁️ 8. 선생님 전용 [학생 접속 기록 통계] 탭
+    # ----------------------------------------------------
+    with t_cfg_stats:
+        st.markdown("#### 👁️ 학생 앱 접속 현황 및 출석 통계")
+        st.caption("학생들이 접속한 이력을 실시간으로 추적하여 학습 참여도를 파악할 수 있습니다.")
+        
+        today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
+        
+        col_st1, col_st2 = st.columns(2)
+        with col_st1:
+            st.metric(label="📌 오늘 접속한 학생 수", value=f"{today_active_cnt}명")
+        with col_st2:
+            st.metric(label="📈 누적 총 접속 횟수", value=f"{total_visits}회")
+            
+        st.markdown("---")
+        
+        st.markdown("##### 👤 학생별 최근 접속 일시 및 누적 횟수")
+        if s_summary:
+            for s_name, last_time, v_count in s_summary:
+                with st.container(border=True):
+                    col_ss1, col_ss2 = st.columns([3, 1])
+                    with col_ss1:
+                        st.markdown(f"👤 **{s_name}**")
+                        st.caption(f"🕒 최근 접속: {last_time}")
+                    with col_ss2:
+                        st.markdown(f"<div style='text-align:right; margin-top:8px;'><b>총 {v_count}회 접속</b></div>", unsafe_allow_html=True)
+        else:
+            st.info("아직 저장된 학생 접속 기록이 없습니다.")
+            
+        if daily_logs:
+            st.markdown("---")
+            st.markdown("##### 📅 최근 7일 일자별 접속 요약")
+            df_logs = pd.DataFrame(daily_logs, columns=["날짜", "접속 학생 수 (명)", "총 방문 횟수 (회)"])
+            st.dataframe(df_logs, use_container_width=True, hide_index=True)
