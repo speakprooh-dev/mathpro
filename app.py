@@ -542,6 +542,42 @@ def get_routine_completion_rate(student_name, days_limit=7):
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
 
+# 아이디어 3: 연속 스트릭 계산 함수
+def get_student_routine_streak(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines = c.fetchone()[0]
+    if total_routines == 0:
+        return 0
+    
+    streak = 0
+    check_date = get_korean_today()
+    while True:
+        d_str = str(check_date)
+        c.execute("SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+        r_cnt = c.fetchone()[0]
+        if r_cnt == 0:
+            break
+        
+        c.execute("""
+            SELECT COUNT(*) FROM daily_routine_logs 
+            WHERE student_name = ? AND log_date = ? AND is_checked = 1
+        """, (student_name, d_str))
+        done_cnt = c.fetchone()[0]
+        
+        if done_cnt >= r_cnt:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            # 오늘 날짜인데 아직 안 끝냈을 수도 있으므로 어제까지는 연속이었다면 봐줌
+            if check_date == get_korean_today():
+                check_date -= timedelta(days=1)
+                continue
+            else:
+                break
+    return streak
+
 def get_homework_templates():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -852,6 +888,31 @@ if not st.session_state["teacher_authenticated"]:
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # 💡 아이디어 1 & 3: 접속 시 미체크 항목 알림 배너 및 연속 스트릭 표시
+        today_str_check = str(get_korean_today())
+        routines_chk_list = get_student_daily_routines(selected_student)
+        today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
+        unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
+        current_streak = get_student_routine_streak(selected_student)
+
+        if unchecked_count > 0:
+            st.markdown(
+                f'<div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
+                f'<div style="font-size: 14px; font-weight: bold; color: #EF4444;">🚨 오늘 아직 완료하지 않은 루틴 과제가 <u>{unchecked_count}개</u> 있습니다!</div>'
+                f'<div style="font-size: 12px; margin-top: 4px; color: inherit;">"날짜별 숙제" 탭에서 오늘 루틴을 체크하고 완료해 주세요! 🔥</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            if routines_chk_list:
+                st.markdown(
+                    f'<div style="background-color: rgba(16, 185, 129, 0.1); border-left: 4px solid #10B981; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 14px; font-weight: bold; color: #10B981;">🎉 완벽합니다! 오늘의 모든 루틴 과제를 완료하셨습니다!</div>'
+                    f'<div style="font-size: 13px; margin-top: 4px;">🔥 현재 연속 스트릭: <b>{current_streak}일째</b> 진행 중! 계속 멋진 모습을 보여주세요!</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
         student_notices = get_notices_for_student(selected_student)
         if student_notices:
             with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
@@ -911,14 +972,14 @@ if not st.session_state["teacher_authenticated"]:
             st.caption(f"완료: {completed_h} / 총 {total_h}개")
 
         with st.container(border=True):
-            st.markdown("🔥 **루틴 달성률 (최근 7일)**")
+            st.markdown(f"🔥 **루틴 연속 달성 (스트릭: {current_streak}일 연속!)**")
             r_progress_val = (r_rate / 100) if r_rate <= 100 else 1.0
             cols_r = st.columns([4, 1])
             with cols_r[0]:
                 st.progress(r_progress_val)
             with cols_r[1]:
                 st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
-            st.caption(f"완료: {r_completed} / 총 {r_total}개")
+            st.caption(f"최근 7일 기준 완료: {r_completed} / 총 {r_total}개")
 
         st.divider()
 
@@ -1025,7 +1086,7 @@ if not st.session_state["teacher_authenticated"]:
                         st.warning("단원코드를 먼저 입력해 주세요.")
 
             st.markdown("")
-            # 2. 나의 오답노트 및 해설 바로가기 (아이콘 📝로 업그레이드)
+            # 2. 나의 오답노트 및 해설 바로가기
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
                 st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상을 바로 시청하세요.")
@@ -1691,6 +1752,32 @@ else:
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
+            # 💡 아이디어 2: 선생님 대시보드에 오늘 루틴 미체크 학생 실시간 요약 보드 추가
+            today_str_box = str(get_korean_today())
+            unchecked_students_today = []
+            for s_item in student_list:
+                r_list_s = get_student_daily_routines(s_item)
+                if r_list_s:
+                    log_map_s = get_student_daily_logs_by_date(s_item, today_str_box)
+                    done_all = all(log_map_s.get((str(r[0]), today_str_box), False) for r in r_list_s)
+                    if not done_all:
+                        unchecked_students_today.append(s_item)
+
+            if unchecked_students_today:
+                st.markdown(
+                    f'<div style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid #EF4444; padding: 10px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 13px; font-weight: bold; color: #EF4444;">🚨 오늘 루틴 미체크 학생 목록: <b>{", ".join(unchecked_students_today)}</b></div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 13px; font-weight: bold; color: #10B981;">🎉 오늘 모든 학생들이 루틴 과제를 완료했습니다!</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
             for s_idx_main, s_name in enumerate(student_list):
                 hws = get_student_homework_by_date(s_name, selected_matrix_date)
                 if hws:
