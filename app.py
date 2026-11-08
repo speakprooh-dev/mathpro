@@ -1074,7 +1074,6 @@ if not st.session_state["teacher_authenticated"]:
                         now_datetime = datetime.now()
                         
                         if parsed_nums:
-                            # 💡 쿼리 파라미터를 활용한 순수 HTML 형태의 완벽한 가로 한 줄 구현
                             query_params = st.query_params
                             for n in sorted(list(parsed_nums)):
                                 full_code = f"{view_target_code}{n:03d}"
@@ -1101,9 +1100,7 @@ if not st.session_state["teacher_authenticated"]:
                                 text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
                                 
                                 checkbox_checked_attr = "checked" if is_solved else ""
-                                current_base_url = get_base_url()
                                 
-                                # 순수 HTML 체크박스 (클릭 즉시 페이지가 리로드되며 체크 상태 반전)
                                 checkbox_html = f'''
                                 <input type="checkbox" {checkbox_checked_attr} 
                                     onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
@@ -1112,6 +1109,7 @@ if not st.session_state["teacher_authenticated"]:
                                 
                                 btn_html = f'<a href="{v_url}" target="_blank" style="padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;">🎥 해설 영상</a>' if v_url else '<span style="font-size:11px; color:gray;">준비중</span>'
 
+                                # 💡 핵심 수정: unsafe_allow_html=True 추가하여 HTML이 정상 렌더링되도록 수정
                                 st.markdown(
                                     f"""
                                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding: 4px 0;">
