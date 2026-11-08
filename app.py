@@ -73,7 +73,7 @@ def create_excel_backup():
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "student_homework", "milestone_progress", 
-            "student_homework_progress", "student_wrong_entries", "problem_links", "homework_templates",
+            "student_homework_progress", "student_wrong_entries", "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
         for table in tables:
@@ -141,7 +141,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date))')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
-            # 💡 학생별 오답 문제 개별 복습 완료 상태 저장 테이블 (student_name, full_code, is_solved)
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
@@ -165,6 +164,12 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
+
+        # 💡 기존 DB 호환을 위한 안전장치: updated_at 컬럼이 없으면 자동으로 추가
+        try:
+            c.execute("ALTER TABLE problem_links ADD COLUMN updated_at TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         try:
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
@@ -711,7 +716,6 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     except Exception:
         pass
 
-# 💡 학생별 개별 문제 복습 완료(혼자 해결함) 상태 가져오기 및 저장 함수
 def get_student_wrong_solved_status(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1067,7 +1071,6 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
                         parsed_nums = parse_numbers(existing_wrong)
                         
-                        # 💡 학생별 문제 복습 완료 상태 가져오기
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
@@ -1077,12 +1080,11 @@ if not st.session_state["teacher_authenticated"]:
                                 v_url, v_updated_at = get_problem_link_info(full_code)
                                 is_solved = solved_map.get(full_code, False)
                                 
-                                # 💡 알림(새 해설 업로드 후 24시간 이내인지 여부) 계산
                                 is_new_alert = False
                                 if v_url and v_updated_at:
                                     try:
                                         up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                        if (now_datetime - up_dt).total_seconds() <= 86400: # 24시간
+                                        if (now_datetime - up_dt).total_seconds() <= 86400:
                                             is_new_alert = True
                                     except Exception:
                                         pass
@@ -1101,7 +1103,6 @@ if not st.session_state["teacher_authenticated"]:
                                         
                                         st.markdown(f"**📌 {full_code}**{badge_html}", unsafe_allow_html=True)
                                         
-                                        # 💡 '혼자 해결함 / 복습 완료' 체크박스 (오답 기록은 지우지 않고 상태만 관리)
                                         chk_solved_key = f"solved_chk_{selected_student}_{full_code}"
                                         new_solved_val = st.checkbox("✅ 혼자 해결함 (복습 완료)", value=is_solved, key=chk_solved_key)
                                         if new_solved_val != is_solved:
