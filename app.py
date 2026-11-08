@@ -1074,7 +1074,7 @@ if not st.session_state["teacher_authenticated"]:
                         now_datetime = datetime.now()
                         
                         if parsed_nums:
-                            # 💡 체크박스 옆에 명확히 [복습 완료] 라벨을 붙여 직관적으로 개선
+                            # 💡 Streamlit 컬럼 대신 순수 HTML/CSS Flexbox를 사용하여 모바일에서도 절대 깨지지 않는 '완벽한 한 줄' 구현
                             for n in sorted(list(parsed_nums)):
                                 full_code = f"{view_target_code}{n:03d}"
                                 v_url, v_updated_at = get_problem_link_info(full_code)
@@ -1089,25 +1089,30 @@ if not st.session_state["teacher_authenticated"]:
                                     except Exception:
                                         pass
 
-                                # 뱃지 설정 (불필요한 '해설 등록됨' 제거, 새해설 및 링크 누락 여부만 표시)
-                                status_badge = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                                text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
-                                
+                                # 체크박스 상태 관리를 위한 고유 key
                                 chk_solved_key = f"solved_chk_{selected_student}_{full_code}"
                                 
-                                cols_row = st.columns([2.5, 3.5, 2.2])
-                                with cols_row[0]:
-                                    new_solved_val = st.checkbox("복습 완료", value=is_solved, key=chk_solved_key)
-                                    if new_solved_val != is_solved:
-                                        save_single_wrong_solved_status(selected_student, full_code, new_solved_val)
-                                        st.rerun()
-                                with cols_row[1]:
-                                    st.markdown(f'<div style="{text_style} font-size:14px; padding-top:6px;">{full_code}{status_badge}</div>', unsafe_allow_html=True)
-                                with cols_row[2]:
-                                    if v_url:
-                                        st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; border:1px solid rgba(128,128,128,0.3); margin-top:4px;">🎥 해설 영상</a>', unsafe_allow_html=True)
-                                    else:
-                                        st.markdown('<span style="font-size:11px; color:gray; padding-top:6px; display:inline-block;">준비중</span>', unsafe_allow_html=True)
+                                # 체크박스 기본 동작 처리 (상태 변경 시 즉시 반영)
+                                current_checkbox_val = st.checkbox(f"복습 완료 ({full_code})", value=is_solved, key=chk_solved_key)
+                                if current_checkbox_val != is_solved:
+                                    save_single_wrong_solved_status(selected_student, full_code, current_checkbox_val)
+                                    st.rerun()
+
+                                # HTML Flexbox로 [문제번호 + 새해설 배지 + 해설영상 버튼]을 체크박스 바로 아래에 한 줄로 나란히 밀착 배치
+                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
+                                text_style = "text-decoration: line-through; color: gray;" if current_checkbox_val else "font-weight: bold;"
+                                
+                                btn_html = f'<a href="{v_url}" target="_blank" style="padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;">🎥 해설 영상</a>' if v_url else '<span style="font-size:11px; color:gray;">준비중</span>'
+
+                                st.markdown(
+                                    f"""
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: -8px; margin-bottom: 8px; padding-left: 24px;">
+                                        <div style="{text_style} font-size: 14px;">{full_code}{badge_html}</div>
+                                        <div>{btn_html}</div>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
                                 
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
