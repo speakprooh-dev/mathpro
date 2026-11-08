@@ -165,7 +165,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
 
-        # 💡 기존 DB 호환을 위한 안전장치: updated_at 컬럼이 없으면 자동으로 추가
         try:
             c.execute("ALTER TABLE problem_links ADD COLUMN updated_at TEXT DEFAULT ''")
         except Exception:
@@ -871,7 +870,7 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("""
             - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
             - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 내가 혼자 해결한 문제는 **[혼자 해결함]** 체크를 해두어 체계적으로 복습을 관리할 수 있습니다.
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
             """)
 
         milestones = get_student_milestones(selected_student)
@@ -1103,8 +1102,9 @@ if not st.session_state["teacher_authenticated"]:
                                         
                                         st.markdown(f"**📌 {full_code}**{badge_html}", unsafe_allow_html=True)
                                         
+                                        # 💡 문구를 '복습 완료'로 수정
                                         chk_solved_key = f"solved_chk_{selected_student}_{full_code}"
-                                        new_solved_val = st.checkbox("✅ 혼자 해결함 (복습 완료)", value=is_solved, key=chk_solved_key)
+                                        new_solved_val = st.checkbox("✅ 복습 완료", value=is_solved, key=chk_solved_key)
                                         if new_solved_val != is_solved:
                                             save_single_wrong_solved_status(selected_student, full_code, new_solved_val)
                                             st.rerun()
