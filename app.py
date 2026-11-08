@@ -1045,7 +1045,10 @@ if not st.session_state["teacher_authenticated"]:
                     else:
                         st.warning("단원코드를 먼저 입력해 주세요.")
 
-                st.markdown("---")
+            st.markdown("")
+            with st.container(border=True):
+                st.markdown("##### 📂 3. 나의 오답노트 및 해설 바로가기")
+                st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상을 바로 시청하세요.")
 
                 conn, _ = get_db_connection()
                 c = conn.cursor()
@@ -1055,7 +1058,7 @@ if not st.session_state["teacher_authenticated"]:
                 saved_units_list = [r[0] for r in saved_rows]
                 
                 selected_existing_unit = st.selectbox(
-                    "📂 내가 저장한 단원 선택해서 보기", 
+                    "확인할 단원 선택", 
                     ["-- 저장된 단원을 선택하세요 --"] + saved_units_list,
                     key="saved_unit_select_box"
                 )
@@ -1067,7 +1070,8 @@ if not st.session_state["teacher_authenticated"]:
                 if view_target_code:
                     existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
                     if existing_wrong:
-                        st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
+                        st.markdown("---")
+                        st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
                         parsed_nums = parse_numbers(existing_wrong)
                         
                         solved_map = get_student_wrong_solved_status(selected_student)
@@ -1101,7 +1105,6 @@ if not st.session_state["teacher_authenticated"]:
                                 
                                 checkbox_checked_attr = "checked" if is_solved else ""
                                 
-                                # 💡 순수 HTML Flexbox를 활용해 체크박스, 텍스트, 버튼을 무조건 가로 한 줄에 완벽 밀착 정렬
                                 html_row_content = f'''
                                 <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
                                     <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
