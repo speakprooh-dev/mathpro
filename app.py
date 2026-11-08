@@ -870,7 +870,7 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("""
             - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
             - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 콤팩트한 리스트에서 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
             """)
 
         milestones = get_student_milestones(selected_student)
@@ -1074,46 +1074,52 @@ if not st.session_state["teacher_authenticated"]:
                         now_datetime = datetime.now()
                         
                         if parsed_nums:
-                            for n in sorted(list(parsed_nums)):
-                                full_code = f"{view_target_code}{n:03d}"
-                                v_url, v_updated_at = get_problem_link_info(full_code)
-                                is_solved = solved_map.get(full_code, False)
-                                
-                                is_new_alert = False
-                                if v_url and v_updated_at:
-                                    try:
-                                        up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                        if (now_datetime - up_dt).total_seconds() <= 86400:
-                                            is_new_alert = True
-                                    except Exception:
-                                        pass
+                            # 💡 콤팩트 리스트 형태로 오답 목록 출력 (세로 스크롤 압박 대폭 해소)
+                            with st.container(border=True):
+                                for n in sorted(list(parsed_nums)):
+                                    full_code = f"{view_target_code}{n:03d}"
+                                    v_url, v_updated_at = get_problem_link_info(full_code)
+                                    is_solved = solved_map.get(full_code, False)
+                                    
+                                    is_new_alert = False
+                                    if v_url and v_updated_at:
+                                        try:
+                                            up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                            if (now_datetime - up_dt).total_seconds() <= 86400:
+                                                is_new_alert = True
+                                        except Exception:
+                                            pass
 
-                                with st.container(border=True):
-                                    col_w1, col_w2 = st.columns([3, 2])
-                                    with col_w1:
-                                        badge_html = ""
-                                        if v_url:
-                                            if is_new_alert:
-                                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새 해설 업로드!</span>'
-                                            else:
-                                                badge_html = ' <span style="color:#0284C7; font-weight:bold; font-size:12px;">(🎥 해설 완료)</span>'
-                                        else:
-                                            badge_html = ' <span style="color:#DC2626; font-weight:bold; font-size:12px;">(🚨 링크 누락)</span>'
-                                        
-                                        st.markdown(f"**📌 {full_code}**{badge_html}", unsafe_allow_html=True)
-                                        
-                                        # 💡 문구를 '복습 완료'로 수정
+                                    # 한 줄 구성: [복습완료 체크] [문제번호 + 상태배지] [해설보기 링크]
+                                    cols_row = st.columns([1.5, 3.5, 2])
+                                    
+                                    with cols_row[0]:
                                         chk_solved_key = f"solved_chk_{selected_student}_{full_code}"
-                                        new_solved_val = st.checkbox("✅ 복습 완료", value=is_solved, key=chk_solved_key)
+                                        new_solved_val = st.checkbox("복습완료", value=is_solved, key=chk_solved_key, label_visibility="collapsed")
                                         if new_solved_val != is_solved:
                                             save_single_wrong_solved_status(selected_student, full_code, new_solved_val)
                                             st.rerun()
 
-                                    with col_w2:
+                                    with cols_row[1]:
+                                        badge_html = ""
                                         if v_url:
-                                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; border:1px solid rgba(128,128,128,0.3); padding:8px; border-radius:6px; text-decoration:none; font-weight:bold; text-align:center; margin-top:8px;">🎥 해설 영상 ➔</a>', unsafe_allow_html=True)
+                                            if is_new_alert:
+                                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>'
+                                            else:
+                                                badge_html = ' <span style="color:#0284C7; font-size:11px;">(해설완료)</span>'
                                         else:
-                                            st.markdown('<div style="border:1px solid rgba(128,128,128,0.3); padding:8px; border-radius:6px; text-align:center; color:gray; font-size:12px; margin-top:8px;">해설 준비중</div>', unsafe_allow_html=True)
+                                            badge_html = ' <span style="color:#DC2626; font-size:11px;">(링크누락)</span>'
+                                        
+                                        display_text = f"~~{full_code}~~" if is_solved else f"**{full_code}**"
+                                        st.markdown(f"{display_text}{badge_html}", unsafe_allow_html=True)
+
+                                    with cols_row[2]:
+                                        if v_url:
+                                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a>', unsafe_allow_html=True)
+                                        else:
+                                            st.markdown('<span style="font-size:11px; color:gray;">해설 준비중</span>', unsafe_allow_html=True)
+                                    
+                                    st.divider()
                     else:
                         st.info(f"현재 등록된 오답이 없습니다.")
     else:
