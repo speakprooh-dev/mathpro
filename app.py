@@ -1001,30 +1001,9 @@ if not st.session_state["teacher_authenticated"]:
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
             
+            # 1. 나의 오답 및 질문 번호 저장/수정
             with st.container(border=True):
-                st.markdown("##### 🔍 1. 해설 영상 즉시 검색하기")
-                st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
-                search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
-                if search_prob_input:
-                    if len(search_prob_input) >= 7:
-                        matched_url, _ = get_problem_link_info(search_prob_input)
-                        if matched_url:
-                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
-                        else:
-                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
-                    else:
-                        unit_results = get_problem_links_by_unit(search_prob_input)
-                        if unit_results:
-                            st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
-                            for f_code, v_url in unit_results:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
-                        else:
-                            st.info("단원코드 형식으로 올바르게 입력해 주세요.")
-
-            st.markdown("")
-            with st.container(border=True):
-                st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
+                st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
                 st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
                 
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
@@ -1046,8 +1025,9 @@ if not st.session_state["teacher_authenticated"]:
                         st.warning("단원코드를 먼저 입력해 주세요.")
 
             st.markdown("")
+            # 2. 나의 오답노트 및 해설 바로가기 (아이콘 📝로 업그레이드)
             with st.container(border=True):
-                st.markdown("##### 📂 3. 나의 오답노트 및 해설 바로가기")
+                st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
                 st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상을 바로 시청하세요.")
 
                 conn, _ = get_db_connection()
@@ -1123,6 +1103,29 @@ if not st.session_state["teacher_authenticated"]:
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info(f"현재 등록된 오답이 없습니다.")
+
+            st.markdown("")
+            # 3. 해설 영상 즉시 검색하기
+            with st.container(border=True):
+                st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
+                st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
+                search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
+                if search_prob_input:
+                    if len(search_prob_input) >= 7:
+                        matched_url, _ = get_problem_link_info(search_prob_input)
+                        if matched_url:
+                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                        else:
+                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+                    else:
+                        unit_results = get_problem_links_by_unit(search_prob_input)
+                        if unit_results:
+                            st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                            for f_code, v_url in unit_results:
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                        else:
+                            st.info("단원코드 형식으로 올바르게 입력해 주세요.")
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다. 링크를 확인해 주세요.")
 
