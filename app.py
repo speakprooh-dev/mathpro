@@ -542,7 +542,6 @@ def get_routine_completion_rate(student_name, days_limit=7):
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
 
-# 아이디어 3: 연속 스트릭 계산 함수
 def get_student_routine_streak(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -570,7 +569,6 @@ def get_student_routine_streak(student_name):
             streak += 1
             check_date -= timedelta(days=1)
         else:
-            # 오늘 날짜인데 아직 안 끝냈을 수도 있으므로 어제까지는 연속이었다면 봐줌
             if check_date == get_korean_today():
                 check_date -= timedelta(days=1)
                 continue
@@ -888,7 +886,6 @@ if not st.session_state["teacher_authenticated"]:
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # 💡 아이디어 1 & 3: 접속 시 미체크 항목 알림 배너 및 연속 스트릭 표시
         today_str_check = str(get_korean_today())
         routines_chk_list = get_student_daily_routines(selected_student)
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
@@ -1017,15 +1014,31 @@ if not st.session_state["teacher_authenticated"]:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
         with tab2:
+            # 💡 [개선] 날짜별 숙제 탭 상단에 오늘의 미완료 현황 배너 및 강력 유도 메시지 추가
+            today_obj = get_korean_today()
+            today_str = str(today_obj)
+            daily_routines_list = get_student_daily_routines(selected_student)
+            current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
+            
+            total_r_cnt = len(daily_routines_list)
+            done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
+            
+            st.markdown(
+                f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
+                f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
+                f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
+                f'<div style="font-size: 13px; font-weight: bold; color: {"#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"};">'
+                f'🔥 오늘 루틴 완료 현황: {done_r_cnt} / {total_r_cnt}개 완료 '
+                f'{"(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료 항목이 있어요! 🚨)"}'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
             st.markdown("### 🔥 매일 반복 루틴 체크")
             st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
 
-            daily_routines_list = get_student_daily_routines(selected_student)
             if daily_routines_list:
-                today_obj = get_korean_today()
-                today_str = str(today_obj)
-                current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
-                
                 with st.container(border=True):
                     st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
                     st.markdown("---")
@@ -1062,7 +1075,6 @@ if not st.session_state["teacher_authenticated"]:
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
             
-            # 1. 나의 오답 및 질문 번호 저장/수정
             with st.container(border=True):
                 st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
                 st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
@@ -1086,7 +1098,6 @@ if not st.session_state["teacher_authenticated"]:
                         st.warning("단원코드를 먼저 입력해 주세요.")
 
             st.markdown("")
-            # 2. 나의 오답노트 및 해설 바로가기
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
                 st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상을 바로 시청하세요.")
@@ -1166,7 +1177,6 @@ if not st.session_state["teacher_authenticated"]:
                         st.info(f"현재 등록된 오답이 없습니다.")
 
             st.markdown("")
-            # 3. 해설 영상 즉시 검색하기
             with st.container(border=True):
                 st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
                 st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
@@ -1752,7 +1762,6 @@ else:
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
-            # 💡 아이디어 2: 선생님 대시보드에 오늘 루틴 미체크 학생 실시간 요약 보드 추가
             today_str_box = str(get_korean_today())
             unchecked_students_today = []
             for s_item in student_list:
