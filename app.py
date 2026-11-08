@@ -141,7 +141,9 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id))')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date))')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code))')
-            c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
+            # 💡 학생별 오답 문제 개별 복습 완료 상태 저장 테이블 (student_name, full_code, is_solved)
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
+            c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
         else:
@@ -159,7 +161,8 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
-            c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL)')
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
+            c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
 
@@ -168,6 +171,7 @@ def init_db():
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_unique ON student_wrong_entries (student_name, unit_code)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_links_unique ON problem_links (full_code)')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_solved_unique ON student_wrong_solved (student_name, full_code)')
         except Exception:
             pass
 
@@ -276,6 +280,7 @@ def delete_student(name):
     c.execute("DELETE FROM student_homework WHERE student_name = ?", (name,))
     c.execute("DELETE FROM student_homework_progress WHERE student_hw_id IN (SELECT id FROM student_homework WHERE student_name = ?)", (name,))
     c.execute("DELETE FROM student_wrong_entries WHERE student_name = ?", (name,))
+    c.execute("DELETE FROM student_wrong_solved WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routines WHERE student_name = ?", (name,))
     c.execute("DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     c.execute("DELETE FROM notices WHERE student_name = ?", (name,))
@@ -327,6 +332,7 @@ def save_problem_link(full_code, video_url):
         return False
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
+    now_str = get_korean_now_str()
     
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -334,15 +340,15 @@ def save_problem_link(full_code, video_url):
         if db_type == "sqlite":
             c.execute("DELETE FROM problem_links WHERE full_code = ?", (full_code,))
             c.execute('''
-                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-                VALUES (?, ?, ?, ?)
-            ''', (full_code, unit_code, prob_num, video_url))
+                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (full_code, unit_code, prob_num, video_url, now_str))
         else:
             c.execute('''
-                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(full_code) DO UPDATE SET video_url = ?
-            ''', (full_code, unit_code, prob_num, video_url, video_url))
+                INSERT INTO problem_links (full_code, unit_code, prob_num, video_url, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(full_code) DO UPDATE SET video_url = ?, updated_at = ?
+            ''', (full_code, unit_code, prob_num, video_url, now_str, video_url, now_str))
         conn.commit()
         success = True
     except Exception:
@@ -355,6 +361,7 @@ def bulk_save_problem_links(text_data):
     fail_count = 0
     conn, db_type = get_db_connection()
     c = conn.cursor()
+    now_str = get_korean_now_str()
     
     for line in lines:
         line = line.strip()
@@ -371,15 +378,15 @@ def bulk_save_problem_links(text_data):
                     if db_type == "sqlite":
                         c.execute("DELETE FROM problem_links WHERE full_code = ?", (full_code,))
                         c.execute('''
-                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-                            VALUES (?, ?, ?, ?)
-                        ''', (full_code, unit_code, prob_num, video_url))
+                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url, updated_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (full_code, unit_code, prob_num, video_url, now_str))
                     else:
                         c.execute('''
-                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url)
-                            VALUES (?, ?, ?, ?)
-                            ON CONFLICT(full_code) DO UPDATE SET video_url = ?
-                        ''', (full_code, unit_code, prob_num, video_url, video_url))
+                            INSERT INTO problem_links (full_code, unit_code, prob_num, video_url, updated_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(full_code) DO UPDATE SET video_url = ?, updated_at = ?
+                        ''', (full_code, unit_code, prob_num, video_url, now_str, video_url, now_str))
                     success_count += 1
                 except Exception:
                     fail_count += 1
@@ -397,12 +404,18 @@ def get_problem_links_by_unit(unit_code):
     rows = c.fetchall()
     return rows
 
-def get_problem_link_by_full(full_code):
+def get_problem_link_info(full_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT video_url FROM problem_links WHERE full_code = ?", (full_code.upper(),))
+    c.execute("SELECT video_url, updated_at FROM problem_links WHERE full_code = ?", (full_code.upper(),))
     row = c.fetchone()
-    return row[0] if row else ""
+    if row:
+        return row[0], (row[1] if row[1] else "")
+    return "", ""
+
+def get_problem_link_by_full(full_code):
+    url, _ = get_problem_link_info(full_code)
+    return url
 
 def get_all_problem_links():
     conn, _ = get_db_connection()
@@ -698,6 +711,31 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     except Exception:
         pass
 
+# 💡 학생별 개별 문제 복습 완료(혼자 해결함) 상태 가져오기 및 저장 함수
+def get_student_wrong_solved_status(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT full_code, is_solved FROM student_wrong_solved WHERE student_name = ?", (student_name,))
+    rows = c.fetchall()
+    return {r[0]: bool(r[1]) for r in rows}
+
+def save_single_wrong_solved_status(student_name, full_code, is_solved_val):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "sqlite":
+            c.execute("DELETE FROM student_wrong_solved WHERE student_name = ? AND full_code = ?", (student_name, full_code))
+            c.execute("INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (?, ?, ?)", (student_name, full_code, int(is_solved_val)))
+        else:
+            c.execute('''
+                INSERT INTO student_wrong_solved (student_name, full_code, is_solved)
+                VALUES (?, ?, ?)
+                ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?
+            ''', (student_name, full_code, int(is_solved_val), int(is_solved_val)))
+        conn.commit()
+    except Exception:
+        pass
+
 def parse_numbers(text):
     if not text:
         return set()
@@ -829,7 +867,7 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("""
             - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
             - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 궁금한 문제의 해설 영상 바로가기 링크를 쉽고 빠르게 찾아볼 수 있습니다.
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 내가 혼자 해결한 문제는 **[혼자 해결함]** 체크를 해두어 체계적으로 복습을 관리할 수 있습니다.
             """)
 
         milestones = get_student_milestones(selected_student)
@@ -966,7 +1004,7 @@ if not st.session_state["teacher_authenticated"]:
                 search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
                 if search_prob_input:
                     if len(search_prob_input) >= 7:
-                        matched_url = get_problem_link_by_full(search_prob_input)
+                        matched_url, _ = get_problem_link_info(search_prob_input)
                         if matched_url:
                             st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
                             st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
@@ -984,7 +1022,7 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("")
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답 및 질문 번호 저장/수정")
-                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
+                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
                 
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
                 target_code = entered_unit_code if entered_unit_code else "B1353"
@@ -1028,14 +1066,53 @@ if not st.session_state["teacher_authenticated"]:
                     if existing_wrong:
                         st.markdown(f"##### 📌 `{view_target_code}` 단원 오답 및 해설 바로가기")
                         parsed_nums = parse_numbers(existing_wrong)
+                        
+                        # 💡 학생별 문제 복습 완료 상태 가져오기
+                        solved_map = get_student_wrong_solved_status(selected_student)
+                        now_datetime = datetime.now()
+                        
                         if parsed_nums:
                             for n in sorted(list(parsed_nums)):
                                 full_code = f"{view_target_code}{n:03d}"
-                                v_url = get_problem_link_by_full(full_code)
-                                if v_url:
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; text-decoration:none; font-weight:bold; margin-bottom:6px;">📌 {full_code} &nbsp;&nbsp;🎥 해설 영상 바로가기 ➔</a>', unsafe_allow_html=True)
-                                else:
-                                    st.markdown(f'<div style="border:1px solid rgba(128,128,128,0.3); padding:10px 14px; border-radius:6px; margin-bottom:6px; font-weight:bold;">📌 {full_code} &nbsp;&nbsp;<span style="font-size:12px; color:gray;">(해설 링크 준비중)</span></div>', unsafe_allow_html=True)
+                                v_url, v_updated_at = get_problem_link_info(full_code)
+                                is_solved = solved_map.get(full_code, False)
+                                
+                                # 💡 알림(새 해설 업로드 후 24시간 이내인지 여부) 계산
+                                is_new_alert = False
+                                if v_url and v_updated_at:
+                                    try:
+                                        up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                        if (now_datetime - up_dt).total_seconds() <= 86400: # 24시간
+                                            is_new_alert = True
+                                    except Exception:
+                                        pass
+
+                                with st.container(border=True):
+                                    col_w1, col_w2 = st.columns([3, 2])
+                                    with col_w1:
+                                        badge_html = ""
+                                        if v_url:
+                                            if is_new_alert:
+                                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새 해설 업로드!</span>'
+                                            else:
+                                                badge_html = ' <span style="color:#0284C7; font-weight:bold; font-size:12px;">(🎥 해설 완료)</span>'
+                                        else:
+                                            badge_html = ' <span style="color:#DC2626; font-weight:bold; font-size:12px;">(🚨 링크 누락)</span>'
+                                        
+                                        st.markdown(f"**📌 {full_code}**{badge_html}", unsafe_allow_html=True)
+                                        
+                                        # 💡 '혼자 해결함 / 복습 완료' 체크박스 (오답 기록은 지우지 않고 상태만 관리)
+                                        chk_solved_key = f"solved_chk_{selected_student}_{full_code}"
+                                        new_solved_val = st.checkbox("✅ 혼자 해결함 (복습 완료)", value=is_solved, key=chk_solved_key)
+                                        if new_solved_val != is_solved:
+                                            save_single_wrong_solved_status(selected_student, full_code, new_solved_val)
+                                            st.rerun()
+
+                                    with col_w2:
+                                        if v_url:
+                                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; border:1px solid rgba(128,128,128,0.3); padding:8px; border-radius:6px; text-decoration:none; font-weight:bold; text-align:center; margin-top:8px;">🎥 해설 영상 ➔</a>', unsafe_allow_html=True)
+                                        else:
+                                            st.markdown('<div style="border:1px solid rgba(128,128,128,0.3); padding:8px; border-radius:6px; text-align:center; color:gray; font-size:12px; margin-top:8px;">해설 준비중</div>', unsafe_allow_html=True)
                     else:
                         st.info(f"현재 등록된 오답이 없습니다.")
     else:
@@ -1376,7 +1453,6 @@ else:
                     
                     types_rows = get_chapter_types(selected_ch_id)
                     if types_rows:
-                        # 💡 여기에 st.expander를 적용하여 기본적으로 접혀 있도록 수정함
                         with st.expander("📌 하위 세부 유형 목록 및 해설 링크 설정", expanded=False):
                             for t_id, t_name, t_vurl in types_rows:
                                 with st.container(border=True):
