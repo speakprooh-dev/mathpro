@@ -1014,7 +1014,7 @@ if not st.session_state["teacher_authenticated"]:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
         with tab2:
-            # 💡 [개선] 날짜별 숙제 탭 상단에 오늘의 미완료 현황 배너 및 강력 유도 메시지 추가
+            # 💡 [개선] 루틴 완료 현황 한 줄 표기 및 날짜별 개별 숙제 현황까지 추가
             today_obj = get_korean_today()
             today_str = str(today_obj)
             daily_routines_list = get_student_daily_routines(selected_student)
@@ -1023,13 +1023,15 @@ if not st.session_state["teacher_authenticated"]:
             total_r_cnt = len(daily_routines_list)
             done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
             
+            routine_status_text = f"🔥 오늘 루틴: {done_r_cnt} / {total_r_cnt}개 완료 " + ("(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료! 🚨)")
+            routine_color = "#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"
+
             st.markdown(
                 f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
                 f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
                 f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
-                f'<div style="font-size: 13px; font-weight: bold; color: {"#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"};">'
-                f'🔥 오늘 루틴 완료 현황: {done_r_cnt} / {total_r_cnt}개 완료 '
-                f'{"(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료 항목이 있어요! 🚨)"}'
+                f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
+                f'{routine_status_text}'
                 f'</div>'
                 f'</div>',
                 unsafe_allow_html=True
@@ -1060,6 +1062,19 @@ if not st.session_state["teacher_authenticated"]:
                 selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 hws = get_student_homework_by_date(selected_student, selected_date)
                 
+                # 💡 선택한 날짜의 개별 숙제 완료 현황 계산
+                total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
+                done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
+                hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
+                hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
+
+                st.markdown(
+                    f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
+                    f'{hw_status_text}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
                 with st.container(border=True):
                     for h_idx, (h_id, title) in enumerate(hws):
                         if title.startswith("💬 [선생님 메시지]:"):
