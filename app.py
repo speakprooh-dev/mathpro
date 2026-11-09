@@ -79,6 +79,7 @@ def create_excel_backup():
 
 
 def restore_from_excel(uploaded_file):
+def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -101,6 +102,10 @@ def restore_from_excel(uploaded_file):
             try:
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 
+                # 💡 id 컬럼에 빈값(NaN)이 섞여 있으면 DB 자동 생성(SERIAL)에 맡기도록 id 컬럼 제외
+                if 'id' in df.columns and df['id'].isna().any():
+                    df = df.drop(columns=['id'])
+                
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
@@ -113,7 +118,6 @@ def restore_from_excel(uploaded_file):
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
                         
-                        # NaN 값을 None으로 변환하고 문자열 공백 정리
                         data_tuples = []
                         for row in df.itertuples(index=False, name=None):
                             clean_row = []
@@ -126,7 +130,7 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT DO NOTHING"
+                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s"
                         execute_values(c, insert_query, data_tuples)
                     
                     conn.commit()
@@ -137,7 +141,6 @@ def restore_from_excel(uploaded_file):
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
                 conn.rollback()
-                # 🚨 어떤 테이블에서 왜 에러가 났는지 상세히 반환합니다!
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
                 
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
@@ -147,6 +150,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
