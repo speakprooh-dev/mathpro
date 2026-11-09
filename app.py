@@ -84,18 +84,21 @@ def restore_from_excel(uploaded_file):
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
         c = conn.cursor()
+        
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
+                # pandas to_sql을 통해 테이블 덮어쓰기
                 df.to_sql(sheet_name, conn, if_exists='replace', index=False)
-            except Exception as e:
-                # 개별 시트 복구 실패 시 해당 트랜잭션만 롤백하고 계속 진행
+            except Exception as sheet_err:
                 try:
                     conn.rollback()
                 except:
                     pass
+        
+        # 변경사항 최종 저장
         conn.commit()
-        return True, "데이터베이스가 성공적으로 복구되었습니다!"
+        return True, f"데이터베이스가 성공적으로 복구되었습니다! ({db_type.upper()} 모드)"
     except Exception as e:
         try:
             conn.rollback()
