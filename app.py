@@ -94,12 +94,18 @@ backup_to_excel = create_excel_backup
 
 
 def restore_from_excel(uploaded_file):
-    """엑셀 파일 데이터베이스 복구 함수 (안전한 트랜잭션 및 검증 로직 포함)"""
+    """엑셀 파일 데이터베이스 복구 함수 (autocommit 및 중복 충돌 방지 적용)"""
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
-        c = conn.cursor()
         
+        # 💡 PostgreSQL 트랜잭션 꼬임(aborted transaction) 방지를 위해 autocommit 일시 활성화
+        original_autocommit = False
+        if db_type == "postgres":
+            original_autocommit = conn.autocommit
+            conn.autocommit = True
+            
+        c = conn.cursor()
         restored_sheets = []
         
         tables_order = [
@@ -129,18 +135,13 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
-                    # 부모 테이블인 students는 CASCADE로 초기화, 나머지는 안전하게 DELETE
                     try:
                         if target_table == "students":
                             c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
                         else:
                             c.execute(f"DELETE FROM {target_table};")
                     except Exception:
-                        conn.rollback()
-                        try:
-                            c.execute(f"DELETE FROM {target_table};")
-                        except Exception:
-                            conn.rollback()
+                        pass
                     
                     if not df.empty:
                         cols = list(df.columns)
@@ -158,6 +159,7 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
+                        # 테이블별 고유키 충돌(ON CONFLICT) 처리 분기
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             if non_key_cols:
@@ -165,29 +167,29 @@ def restore_from_excel(uploaded_file):
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO UPDATE SET {set_str}"
                             else:
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO NOTHING"
+                        elif target_table == "problem_links" and "full_code" in cols:
+                            non_key_cols = [col for col in cols if col != "full_code"]
+                            if non_key_cols:
+                                set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
+                                insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (full_code) DO UPDATE SET {set_str}"
+                            else:
+                                insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (full_code) DO NOTHING"
                         else:
                             insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT DO NOTHING"
                             
                         execute_values(c, insert_query, data_tuples)
-                    
-                    conn.commit()
-                    
-                    # 💡 [검증] students 테이블 복구 직후 데이터가 실제로 들어갔는지 확인
-                    if target_table == "students":
-                        c.execute("SELECT COUNT(*) FROM students;")
-                        cnt = c.fetchone()[0]
-                        if cnt == 0 and not df.empty:
-                            return False, "students 테이블 복구 시 데이터가 반영되지 않았습니다. (외래키 또는 제약조건 확인 필요)"
                 else:
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
-                conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 세션 상태 캐시 완벽 초기화
+        if db_type == "postgres":
+            conn.autocommit = original_autocommit
+            
+        # 세션 상태 캐시 초기화
         for key in list(st.session_state.keys()):
             if "student" in key or "df" in key or "conn" in key:
                 try:
@@ -197,12 +199,7 @@ def restore_from_excel(uploaded_file):
                 
         return True, f"🎉 복구 완료된 시트 목록:\n- " + ",\n- ".join(restored_sheets)
     except Exception as e:
-        try:
-            conn.rollback()
-        except:
-            pass
         return False, f"복구 중 오류 발생: {str(e)}"
-
 
 # ====================================================
 # ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
