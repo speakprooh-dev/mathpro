@@ -85,6 +85,7 @@ def restore_from_excel(uploaded_file):
         
         restored_sheets = []
         
+        # 💡 핵심: students 테이블을 맨 처음에 두고, 자식 테이블들을 뒤로 배치하여 외래키 무결성 완벽 보장
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "homework", "student_homework", "milestone_progress", 
@@ -101,9 +102,11 @@ def restore_from_excel(uploaded_file):
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 df = df.dropna(how='all')
                 
+                # id 컬럼 빈값 처리
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
                 
+                # 필수 외래키 빈값 행 제거
                 if target_table == "milestone_progress" and "milestone_id" in df.columns:
                     df = df.dropna(subset=["milestone_id"])
                 if target_table == "student_homework_progress" and "student_hw_id" in df.columns:
@@ -112,8 +115,12 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
+                    # 💡 students 테이블은 다른 테이블들의 부모이므로 CASCADE로 안전하게 초기화
                     try:
-                        c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
+                        if target_table == "students":
+                            c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
+                        else:
+                            c.execute(f"DELETE FROM {target_table};")
                     except Exception:
                         conn.rollback()
                         try:
@@ -137,6 +144,7 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
+                        # 💡 students 테이블 삽입 시 충돌 방지 및 업데이트 처리
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             if non_key_cols:
@@ -159,7 +167,7 @@ def restore_from_excel(uploaded_file):
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 💡 복구 직후 스토리지 캐시를 비우고 앱이 최신 DB를 강제로 다시 읽도록 세션 초기화 트리거
+        # 세션 캐시 클리어
         if "students_df" in st.session_state:
             del st.session_state["students_df"]
                 
@@ -170,7 +178,6 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
-
 
 
 # ====================================================
