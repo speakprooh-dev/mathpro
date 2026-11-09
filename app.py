@@ -874,16 +874,19 @@ with st.sidebar:
             use_container_width=True
         )
         
-        with st.expander("🔄 엑셀 파일로 데이터 복구하기"):
+        with st.expander("🔄 엑셀 파일로 데이터 복구하기", expanded=True):
             uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
             if uploaded_backup is not None:
                 if st.button("🚀 엑셀 데이터로 DB 복구 실행", type="primary", use_container_width=True):
-                    success, msg = restore_from_excel(uploaded_backup)
-                    if success:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
+                    with st.spinner("데이터를 복구 중입니다... 잠시만 기다려주세요."):
+                        success, msg = restore_from_excel(uploaded_backup)
+                        if success:
+                            st.success(f"🎉 {msg}")
+                            # 5초 뒤에 새로고침되거나 명확히 보이도록 처리
+                            if st.button("🔄 화면 새로고침하기"):
+                                st.rerun()
+                        else:
+                            st.error(f"❌ {msg}")
         st.divider()
 
     st.markdown("<br>" * 3, unsafe_allow_html=True)
