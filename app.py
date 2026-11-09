@@ -821,11 +821,21 @@ def delete_student_homework_date(student_name, hw_date):
     conn.commit()
 
 def get_milestone_progress(student_name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
-    rows = c.fetchall()
-    return {r[0]: bool(r[1]) for r in rows}
+    try:
+        if db_type == "postgres":
+            c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = %s", (student_name,))
+        else:
+            c.execute("SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
+        rows = c.fetchall()
+        return {r[0]: bool(r[1]) for r in rows}
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return {}
 
 def get_student_homework_progress(student_name):
     conn, _ = get_db_connection()
