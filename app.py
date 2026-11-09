@@ -22,14 +22,14 @@ def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            if "url" in sec:
-                parsed_url = urlparse(sec["url"])
+            # host 설정이 분리되어 있는 경우 처리
+            if "host" in sec:
                 conn = psycopg2.connect(
-                    dbname=parsed_url.path[1:],
-                    user=parsed_url.username,
-                    password=parsed_url.password,
-                    host=parsed_url.hostname,
-                    port=parsed_url.port,
+                    host=sec["host"],
+                    database=sec.get("database", "postgres"),
+                    user=sec.get("user", "postgres"),
+                    password=sec["password"],
+                    port=sec.get("port", 5432),
                     sslmode="require"
                 )
                 return conn, "postgres"
@@ -40,6 +40,7 @@ def get_db_connection():
     st.warning("⚠️ 현재 Supabase에 연결되지 않아 로컬 SQLite(임시 DB) 모드로 동작 중입니다.")
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
+
 
 def get_korean_today():
     try:
