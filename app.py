@@ -1154,19 +1154,32 @@ if not st.session_state["teacher_authenticated"]:
         solved_map_alert = get_student_wrong_solved_status(selected_student)
         unread_video_count = 0
 
+        # 🔔 🔥 복습 미완료 개수와 새해설 개수를 각각 분리 집계
+        unsolved_total_count = 0  # 복습 미완료 총 개수
+        new_video_count = 0       # 그중 '새해설' (24시간 이내 등록) 개수
+        now_datetime_alert = datetime.now()
+
         for u_code, nums_txt in user_wrong_rows:
             parsed_nums = parse_numbers(nums_txt)
             for n in parsed_nums:
                 f_code = f"{u_code}{n:03d}"
-                v_url, _ = get_problem_link_info(f_code)
+                v_url, v_up_at = get_problem_link_info(f_code)
                 is_solved = solved_map_alert.get(f_code, False)
                 
+                # 링크가 있고 아직 복습 완료 안 한 경우
                 if v_url and not is_solved:
-                    unread_video_count += 1
+                    unsolved_total_count += 1
+                    
+                    # 24시간 이내 등록된 새해설인지 체크
+                    try:
+                        up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                        if (now_datetime_alert - up_dt).total_seconds() <= 86400:
+                            new_video_count += 1
+                    except Exception:
+                        pass
 
-        # 📢 직관적인 안내 문구 배너 출력
-        # 📢 새 해설 대기 개수가 집계되어 나오는 안내 배너 출력
-        if unread_video_count > 0:
+        # 📢 미완료 개수와 새해설 개수가 모두 포함된 안내 배너 출력
+        if unsolved_total_count > 0:
             st.markdown(
                 f'''
                 <div style="
@@ -1181,7 +1194,7 @@ if not st.session_state["teacher_authenticated"]:
                     color: #F87171;
                     font-weight: bold;
                 ">
-                    <span>🔥 선생님이 등록하신 새로운 복습 문제 해설 영상이 <span style="color: #FFFFFF; font-size: 1.15em; text-decoration: underline;">{unread_video_count}개</span> 대기 중입니다! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습을 완료해 보세요.</span>
+                    <span>🔥 복습해야 할 미완료 문제 <span style="color: #FFFFFF; font-size: 1.1em; text-decoration: underline;">{unsolved_total_count}개</span> (새해설 <span style="color: #FBBF24; font-size: 1.1em; text-decoration: underline;">{new_video_count}개</span> 포함) 대기 중! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습해 보세요.</span>
                 </div>
                 ''',
                 unsafe_allow_html=True
