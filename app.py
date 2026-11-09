@@ -83,7 +83,7 @@ def restore_from_excel(uploaded_file):
         conn, db_type = get_db_connection()
         c = conn.cursor()
         
-        restored_count = 0
+        restored_sheets = []
         
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
@@ -157,28 +157,26 @@ def restore_from_excel(uploaded_file):
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
-                restored_count += 1
+                restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 세션 캐시 클리어
+        # 💡 세션 상태 캐시를 완전히 초기화하여 대시보드가 Supabase의 최신 학생 목록을 즉시 강제 로드하도록 조치
         for key in list(st.session_state.keys()):
-            if "student" in key or "df" in key:
+            if "student" in key or "df" in key or "conn" in key:
                 try:
                     del st.session_state[key]
                 except:
                     pass
                 
-        return True, f"🎉 총 {restored_count}개의 시트 데이터가 Supabase 클라우드에 안전하게 복구되었습니다!"
+        return True, f"🎉 복구 완료된 시트 목록:\n- " + ",\n- ".join(restored_sheets)
     except Exception as e:
         try:
             conn.rollback()
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
-
-
 
 
 # ====================================================
