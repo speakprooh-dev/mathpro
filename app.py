@@ -79,6 +79,7 @@ def create_excel_backup():
 
 
 def restore_from_excel(uploaded_file):
+def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -101,14 +102,20 @@ def restore_from_excel(uploaded_file):
             try:
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 
-                # id 컬럼에 빈값(NaN)이 있으면 DB 자동 생성에 맡기기 위해 제외
+                # 전체가 비어있는 행은 제거
+                df = df.dropna(how='all')
+                
+                # id 컬럼에 빈값이 있으면 제외
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
+                
+                # 💡 milestone_progress 등의 테이블에서 핵심 필수 키가 비어있는 행이 있다면 안전하게 제거
+                if target_table == "milestone_progress" and "milestone_id" in df.columns:
+                    df = df.dropna(subset=["milestone_id"])
                 
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
-                    # 1. 기존 데이터 깔끔하게 비우기 (CASCADE 적용)
                     try:
                         c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
                     except Exception:
@@ -118,7 +125,6 @@ def restore_from_excel(uploaded_file):
                         except Exception:
                             conn.rollback()
                     
-                    # 2. 데이터 삽입 (students 테이블의 경우 중복 이름 충돌 방지 처리)
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
@@ -135,7 +141,6 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        # students 테이블은 name 중복 충돌 시 정보 업데이트, 나머지는 무시 또는 삽입
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
@@ -165,6 +170,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
