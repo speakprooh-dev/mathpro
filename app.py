@@ -1178,23 +1178,21 @@ if not st.session_state["teacher_authenticated"]:
                     except Exception:
                         pass
 
-        # 📢 미완료 개수와 새해설 개수가 모두 포함된 안내 배너 출력
+        # 📢 훨씬 심플하고 직관적인 미니멀 배너 출력
         if unsolved_total_count > 0:
             st.markdown(
                 f'''
                 <div style="
-                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(249, 115, 22, 0.15));
-                    border: 1px solid rgba(239, 68, 68, 0.4);
-                    padding: 14px 18px;
-                    border-radius: 10px;
-                    margin-bottom: 20px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
+                    background-color: rgba(239, 68, 68, 0.1);
+                    border-left: 4px solid #EF4444;
+                    padding: 12px 14px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    font-size: 13.5px;
                     color: #F87171;
                     font-weight: bold;
                 ">
-                    <span>🔥 복습해야 할 미완료 문제 <span style="color: #FFFFFF; font-size: 1.1em; text-decoration: underline;">{unsolved_total_count}개</span> (새해설 <span style="color: #FBBF24; font-size: 1.1em; text-decoration: underline;">{new_video_count}개</span> 포함) 대기 중! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습해 보세요.</span>
+                    🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
                 </div>
                 ''',
                 unsafe_allow_html=True
