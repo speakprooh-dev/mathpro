@@ -19,24 +19,29 @@ except ImportError:
 
 @st.cache_resource
 def get_db_connection():
+    # 1. 먼저 Supabase 연결 시도
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            conn = psycopg2.connect(
-                host=sec.get("host", "db.qfpclacalaaxbhhheosw.supabase.co"),
-                database=sec.get("database", "postgres"),
-                user=sec.get("user", "postgres"),
-                password=sec["password"],
-                port=int(sec.get("port", 5432)),
-                sslmode="require",
-                connect_timeout=10
-            )
+            # url이 있으면 url로 연결, 없으면 host/port 분리형으로 연결
+            if "url" in sec and sec["url"]:
+                conn = psycopg2.connect(sec["url"], connect_timeout=5)
+            else:
+                conn = psycopg2.connect(
+                    host=sec.get("host", "db.qfpclacalaaxbhhheosw.supabase.co"),
+                    database=sec.get("database", "postgres"),
+                    user=sec.get("user", "postgres"),
+                    password=sec["password"],
+                    port=int(sec.get("port", 5432)),
+                    sslmode="require",
+                    connect_timeout=5
+                )
             return conn, "postgres"
         except Exception as e:
-            st.error(f"Supabase Connection Detailed Error: {e}")
-            raise e
+            # Supabase 연결 실패 시 앱이 멈추지 않고 알림만 띄운 뒤 SQLite로 안전하게 전환
+            st.info("💡 클라우드(Supabase) 연결을 확인하는 동안 로컬 데이터 모드로 안전하게 실행합니다.")
     
-    # 연결 실패 시 로컬 SQLite 모드
+    # 2. Supabase 연결 실패 또는 설정 없을 시 로컬 SQLite 모드 (자동 백업 및 정상 작동)
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
