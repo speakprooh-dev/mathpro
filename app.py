@@ -17,14 +17,12 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
-# 💡 @st.cache_resource 제거: 연결이 꼬이거나 에러 상태로 굳는 현상을 원천 차단합니다.
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             conn = psycopg2.connect(conn_url, connect_timeout=5)
-            # 매번 연결할 때마다 혹시 모를 이전 에러 상태를 깨끗하게 초기화
             conn.rollback()
             return conn, "postgres"
         except Exception as e:
@@ -34,7 +32,6 @@ def get_db_connection():
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
 def q(c, query, params=None):
-    """💡 SQLite(?)와 PostgreSQL(%s) 문법 차이를 자동으로 변환해 주는 공통 실행 함수"""
     try:
         if "psycopg2" in str(type(c.connection)):
             query = query.replace("?", "%s")
@@ -52,7 +49,6 @@ def q(c, query, params=None):
 # ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
-    """등록된 모든 해설 링크를 메모리에 캐싱하여 속도 최적화"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     try:
@@ -64,7 +60,6 @@ def get_all_problem_link_set():
 
 @st.cache_data(ttl=30)
 def get_all_homework_progress_map(student_name):
-    """특정 학생의 모든 숙제 완료 상태를 한 번에 가져옴"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     try:
@@ -75,7 +70,6 @@ def get_all_homework_progress_map(student_name):
 
 @st.cache_data(ttl=30)
 def get_entire_homework_progress_map():
-    """모든 학생의 숙제 완료 상태를 단 한 번의 쿼리로 통째로 가져와 캐싱 (매트릭스 렉 원천 차단)"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     try:
@@ -87,7 +81,6 @@ def get_entire_homework_progress_map():
 
 @st.cache_data(ttl=30)
 def get_all_routine_logs_map(student_name):
-    """특정 학생의 모든 루틴 로그를 한 번에 가져옴"""
     conn, _ = get_db_connection()
     c = conn.cursor()
     try:
@@ -95,7 +88,6 @@ def get_all_routine_logs_map(student_name):
         return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
     except Exception:
         return {}
-
 
 def get_korean_today():
     try:
@@ -110,6 +102,46 @@ def get_korean_now_str():
         return datetime.now(kst).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+# ==========================================
+# 📊 방문자 통계 분석 함수 (추가됨)
+# ==========================================
+def get_visitor_stats():
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        today_str = str(get_korean_today())
+        
+        # 오늘 접속한 고유 학생 수
+        q(c, "SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
+        today_active_cnt = c.fetchone()[0]
+        
+        # 누적 총 접속 횟수
+        q(c, "SELECT COUNT(*) FROM visitor_logs", ())
+        total_visits = c.fetchone()[0]
+        
+        # 학생별 최근 접속 일시 및 누적 횟수
+        q(c, """
+            SELECT student_name, MAX(visit_time), COUNT(*) 
+            FROM visitor_logs 
+            GROUP BY student_name 
+            ORDER BY MAX(visit_time) DESC
+        """, ())
+        s_summary = c.fetchall()
+        
+        # 최근 7일 일자별 접속 요약
+        q(c, """
+            SELECT visit_date, COUNT(DISTINCT student_name), COUNT(*) 
+            FROM visitor_logs 
+            GROUP BY visit_date 
+            ORDER BY visit_date DESC 
+            LIMIT 7
+        """, ())
+        daily_logs = c.fetchall()
+        
+        return today_active_cnt, total_visits, s_summary, daily_logs
+    except Exception:
+        return 0, 0, [], []
 
 # ==========================================
 # 📥/📤 엑셀 백업 및 복구 장치
@@ -149,9 +181,6 @@ def create_excel_backup():
             pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name="error", index=False)
         output.seek(0)
         return output.getvalue()
-
-backup_to_excel = create_excel_backup
-
 
 def restore_from_excel(uploaded_file):
     try:
@@ -265,7 +294,6 @@ def restore_from_excel(uploaded_file):
         except Exception:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
-
 
 def migrate_local_to_supabase():
     try:
@@ -2159,7 +2187,6 @@ else:
                     unsafe_allow_html=True
                 )
 
-            # 💡 전체 숙제 매트릭스 렉 방지를 위해 전체 맵을 한 번에 가져옴 (DB 통신 0회)
             entire_hw_prog = get_entire_homework_progress_map()
 
             for s_idx_main, s_name in enumerate(student_list):
