@@ -227,34 +227,45 @@ def log_student_visit(student_name):
         st.session_state[session_key] = True
 
 def get_visitor_stats():
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     
     today_str = str(get_korean_today())
-    c.execute("SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
-    today_active_students = c.fetchone()[0]
     
-    c.execute("SELECT COUNT(*) FROM visitor_logs")
-    total_visit_count = c.fetchone()[0]
-    
-    c.execute("""
-        SELECT student_name, MAX(visit_time) as last_visit, COUNT(*) as visit_count 
-        FROM visitor_logs 
-        GROUP BY student_name 
-        ORDER BY last_visit DESC
-    """)
-    student_summary = c.fetchall()
-    
-    c.execute("""
-        SELECT visit_date, COUNT(DISTINCT student_name) as student_cnt, COUNT(*) as total_cnt
-        FROM visitor_logs
-        GROUP BY visit_date
-        ORDER BY visit_date DESC
-        LIMIT 7
-    """)
-    recent_daily_logs = c.fetchall()
-    
-    return today_active_students, total_visit_count, student_summary, recent_daily_logs
+    try:
+        if db_type == "postgres":
+            c.execute("SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = %s", (today_str,))
+        else:
+            c.execute("SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
+        today_active_students = c.fetchone()[0]
+        
+        c.execute("SELECT COUNT(*) FROM visitor_logs")
+        total_visit_count = c.fetchone()[0]
+        
+        c.execute("""
+            SELECT student_name, MAX(visit_time) as last_visit, COUNT(*) as visit_count 
+            FROM visitor_logs 
+            GROUP BY student_name 
+            ORDER BY last_visit DESC
+        """)
+        student_summary = c.fetchall()
+        
+        c.execute("""
+            SELECT visit_date, COUNT(DISTINCT student_name) as student_cnt, COUNT(*) as total_cnt
+            FROM visitor_logs
+            GROUP BY visit_date
+            ORDER BY visit_date DESC
+            LIMIT 7
+        """)
+        recent_daily_logs = c.fetchall()
+        
+        return today_active_students, total_visit_count, student_summary, recent_daily_logs
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return 0, 0, [], []
 
 def get_students():
     try:
