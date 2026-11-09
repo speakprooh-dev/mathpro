@@ -85,47 +85,51 @@ def restore_from_excel(uploaded_file):
         c = conn.cursor()
         
         restored_sheets = []
-        for sheet_name in excel_file.sheet_names:
-            df = pd.read_excel(excel_file, sheet_name=sheet_name)
-            target_table = sheet_name.strip().lower()
-            
+        
+        # 💡 외래 키 제약 조건 순서를 고려한 테이블 정렬 (부모 먼저, 자식 나중에 또는 역순 삭제)
+        tables_order = [
+            "students", "subjects", "chapters", "chapter_types", 
+            "milestones", "homework", "student_homework", "milestone_progress", 
+            "homework_progress", "student_homework_progress", "student_wrong_entries", 
+            "student_wrong_solved", "problem_links", "homework_templates",
+            "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
+        ]
+        
+        # 엑셀에 존재하는 시트 중 위 순서에 있는 것들을 먼저 처리하고, 나머지는 뒤에 붙임
+        existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
+        sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
+        
+        for target_table in sorted_sheets:
             try:
+                df = pd.read_excel(excel_file, sheet_name=target_table)
+                
                 if db_type == "postgres":
-                    # 🐘 Supabase(PostgreSQL) 초고속 일괄 삽입 (execute_values 사용)
                     from psycopg2.extras import execute_values
                     
+                    # 1. 기존 데이터 삭제 (외래키 무시 안전 삭제)
                     try:
-                        c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
+                        c.execute(f"DELETE FROM {target_table};")
                     except Exception:
                         conn.rollback()
-                        try:
-                            c.execute(f"DELETE FROM {target_table};")
-                        except Exception:
-                            conn.rollback()
                     
+                    # 2. 데이터가 있으면 삽입
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
-                        
-                        # NaN/NaT 처리
                         data_tuples = [tuple(None if pd.isna(val) else val for val in row) for row in df.itertuples(index=False, name=None)]
                         
-                        # 한 번에 대량 전송 (초고속)
                         insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s"
                         execute_values(c, insert_query, data_tuples)
                     
                     conn.commit()
                 else:
-                    # 📁 SQLite 전용 덮어쓰기
+                    # 📁 SQLite 전용
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
-                try:
-                    conn.rollback()
-                except:
-                    pass
+                conn.rollback()
                 print(f"시트 복구 실패 ({target_table}): {sheet_err}")
                 
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
