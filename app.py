@@ -162,7 +162,7 @@ def restore_from_excel(uploaded_file):
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 세션 캐시 클리어로 대시보드 강제 새로고침 유도
+        # 세션 캐시 클리어
         for key in list(st.session_state.keys()):
             if "student" in key or "df" in key:
                 try:
@@ -170,13 +170,14 @@ def restore_from_excel(uploaded_file):
                 except:
                     pass
                 
-        return True, f"🎉 총 {restored_count개의 시트 데이터가 Supabase 클라우드에 안전하게 복구되었습니다!"
+        return True, f"🎉 총 {restored_count}개의 시트 데이터가 Supabase 클라우드에 안전하게 복구되었습니다!"
     except Exception as e:
         try:
             conn.rollback()
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
