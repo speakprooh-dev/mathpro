@@ -91,7 +91,7 @@ backup_to_excel = create_excel_backup
 
 
 def restore_from_excel(uploaded_file):
-    """엑셀 파일 데이터베이스 복구 함수"""
+    """엑셀 파일 데이터베이스 복구 함수 (안전한 트랜잭션 및 검증 로직 포함)"""
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -126,6 +126,7 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
+                    # 부모 테이블인 students는 CASCADE로 초기화, 나머지는 안전하게 DELETE
                     try:
                         if target_table == "students":
                             c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
@@ -167,6 +168,13 @@ def restore_from_excel(uploaded_file):
                         execute_values(c, insert_query, data_tuples)
                     
                     conn.commit()
+                    
+                    # 💡 [검증] students 테이블 복구 직후 데이터가 실제로 들어갔는지 확인
+                    if target_table == "students":
+                        c.execute("SELECT COUNT(*) FROM students;")
+                        cnt = c.fetchone()[0]
+                        if cnt == 0 and not df.empty:
+                            return False, "students 테이블 복구 시 데이터가 반영되지 않았습니다. (외래키 또는 제약조건 확인 필요)"
                 else:
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
@@ -191,6 +199,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 # ====================================================
 # ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
