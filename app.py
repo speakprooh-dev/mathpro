@@ -436,11 +436,21 @@ def get_chapters():
     return sorted(rows, key=natural_sort_key)
 
 def get_chapter_types(chapter_id):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-    rows = c.fetchall()
-    return rows
+    try:
+        if db_type == "postgres":
+            c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = %s", (chapter_id,))
+        else:
+            c.execute("SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
+        rows = c.fetchall()
+        return rows
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return []
 
 def save_problem_link(full_code, video_url):
     full_code = full_code.strip().upper()
