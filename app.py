@@ -137,7 +137,6 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        # 💡 students 테이블 복구 시 충돌나거나 막히지 않도록 안전한 INSERT 쿼리 적용
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             if non_key_cols:
@@ -159,6 +158,10 @@ def restore_from_excel(uploaded_file):
             except Exception as sheet_err:
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
+        
+        # 💡 복구 직후 스토리지 캐시를 비우고 앱이 최신 DB를 강제로 다시 읽도록 세션 초기화 트리거
+        if "students_df" in st.session_state:
+            del st.session_state["students_df"]
                 
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
     except Exception as e:
@@ -167,6 +170,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 # ====================================================
