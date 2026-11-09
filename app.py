@@ -86,7 +86,6 @@ def restore_from_excel(uploaded_file):
         
         restored_sheets = []
         
-        # 💡 외래 키 제약 조건 순서를 고려한 테이블 정렬 (부모 먼저, 자식 나중에 또는 역순 삭제)
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "homework", "student_homework", "milestone_progress", 
@@ -95,7 +94,6 @@ def restore_from_excel(uploaded_file):
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
         
-        # 엑셀에 존재하는 시트 중 위 순서에 있는 것들을 먼저 처리하고, 나머지는 뒤에 붙임
         existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
         sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
         
@@ -106,31 +104,41 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
-                    # 1. 기존 데이터 삭제 (외래키 무시 안전 삭제)
                     try:
                         c.execute(f"DELETE FROM {target_table};")
                     except Exception:
                         conn.rollback()
                     
-                    # 2. 데이터가 있으면 삽입
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
-                        data_tuples = [tuple(None if pd.isna(val) else val for val in row) for row in df.itertuples(index=False, name=None)]
                         
-                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s"
+                        # NaN 값을 None으로 변환하고 문자열 공백 정리
+                        data_tuples = []
+                        for row in df.itertuples(index=False, name=None):
+                            clean_row = []
+                            for val in row:
+                                if pd.isna(val):
+                                    clean_row.append(None)
+                                elif isinstance(val, str):
+                                    clean_row.append(val.strip())
+                                else:
+                                    clean_row.append(val)
+                            data_tuples.append(tuple(clean_row))
+                        
+                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT DO NOTHING"
                         execute_values(c, insert_query, data_tuples)
                     
                     conn.commit()
                 else:
-                    # 📁 SQLite 전용
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
                 conn.rollback()
-                print(f"시트 복구 실패 ({target_table}): {sheet_err}")
+                # 🚨 어떤 테이블에서 왜 에러가 났는지 상세히 반환합니다!
+                return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
                 
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
     except Exception as e:
@@ -139,6 +147,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 # ====================================================
