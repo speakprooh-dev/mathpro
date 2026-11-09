@@ -363,11 +363,21 @@ def get_students():
         return []
 
 def get_student_drive_url(name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
-    row = c.fetchone()
-    return row[0] if row and row[0] else ""
+    try:
+        if db_type == "postgres":
+            c.execute("SELECT drive_url FROM students WHERE name = %s", (name,))
+        else:
+            c.execute("SELECT drive_url FROM students WHERE name = ?", (name,))
+        row = c.fetchone()
+        return row[0] if row and row[0] else ""
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return ""
 
 def update_student_drive_url(name, drive_url):
     conn, _ = get_db_connection()
