@@ -24,7 +24,6 @@ def get_db_connection():
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             conn = psycopg2.connect(conn_url, connect_timeout=5)
-            st.success("☁️ Supabase 클라우드 DB에 성공적으로 연결되었습니다!")
             return conn, "postgres"
         except Exception as e:
             # 🚨 에러가 왜 났는지 화면에 빨간색으로 직접 띄워줍니다!
@@ -942,6 +941,24 @@ with st.sidebar:
     
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
+        
+        # 🔍 현재 어떤 DB 모드로 연결 중인지 항상 표시해 주는 배너
+        _, current_db_type = get_db_connection()
+        if current_db_type == "postgres":
+            st.markdown(
+                '<div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #10B981; text-align: center;">'
+                '☁️ 현재 Supabase 클라우드 DB 연동 중'
+                '</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
+                '📁 현재 로컬(SQLite) 파일 모드 연동 중'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
             st.session_state["teacher_authenticated"] = False
             st.rerun()
