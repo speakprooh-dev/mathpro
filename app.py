@@ -108,11 +108,17 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
+                    # 1. 기존 데이터 깔끔하게 비우기 (CASCADE 적용)
                     try:
-                        c.execute(f"DELETE FROM {target_table};")
+                        c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
                     except Exception:
                         conn.rollback()
+                        try:
+                            c.execute(f"DELETE FROM {target_table};")
+                        except Exception:
+                            conn.rollback()
                     
+                    # 2. 데이터 삽입 (students 테이블의 경우 중복 이름 충돌 방지 처리)
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
@@ -129,7 +135,17 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s"
+                        # students 테이블은 name 중복 충돌 시 정보 업데이트, 나머지는 무시 또는 삽입
+                        if target_table == "students" and "name" in cols:
+                            non_key_cols = [col for col in cols if col != "name"]
+                            set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
+                            if set_str:
+                                insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO UPDATE SET {set_str}"
+                            else:
+                                insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO NOTHING"
+                        else:
+                            insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT DO NOTHING"
+                            
                         execute_values(c, insert_query, data_tuples)
                     
                     conn.commit()
@@ -149,6 +165,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
