@@ -83,15 +83,24 @@ def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
+        c = conn.cursor()
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             try:
                 df.to_sql(sheet_name, conn, if_exists='replace', index=False)
-            except Exception:
-                pass
+            except Exception as e:
+                # 개별 시트 복구 실패 시 해당 트랜잭션만 롤백하고 계속 진행
+                try:
+                    conn.rollback()
+                except:
+                    pass
         conn.commit()
         return True, "데이터베이스가 성공적으로 복구되었습니다!"
     except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
         return False, f"복구 중 오류 발생: {str(e)}"
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
