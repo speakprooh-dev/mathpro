@@ -1178,7 +1178,7 @@ if not st.session_state["teacher_authenticated"]:
                     except Exception:
                         pass
 
-        # 📢 훨씬 심플하고 직관적인 미니멀 배너 출력
+        # 📢 미복습 집계와 간단한 행동 지침(메뉴얼)이 포함된 배너 출력
         if unsolved_total_count > 0:
             st.markdown(
                 f'''
@@ -1188,11 +1188,13 @@ if not st.session_state["teacher_authenticated"]:
                     padding: 12px 14px;
                     border-radius: 8px;
                     margin-bottom: 15px;
-                    font-size: 13.5px;
-                    color: #F87171;
-                    font-weight: bold;
                 ">
-                    🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
+                    <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
+                        🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
+                    </div>
+                    <div style="font-size: 12px; margin-top: 4px; color: inherit;">
+                        "오답·질문 관리" 탭에서 해설을 시청하고 복습 완료를 체크해 주세요! 💡
+                    </div>
                 </div>
                 ''',
                 unsafe_allow_html=True
