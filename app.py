@@ -33,6 +33,22 @@ def get_db_connection():
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
+def q(c, query, params=None):
+    """💡 SQLite(?)와 PostgreSQL(%s) 문법 차이를 자동으로 변환해 주는 공통 실행 함수"""
+    try:
+        # 현재 연결이 PostgreSQL(Supabase)인 경우 쿼리 내의 '?'를 자동으로 '%s'로 치환
+        if "psycopg2" in str(type(c.connection)):
+            query = query.replace("?", "%s")
+    except Exception:
+        pass
+        
+    if params is not None:
+        c.execute(query, params)
+    else:
+        c.execute(query)
+    return c
+
+
 def get_korean_today():
     try:
         kst = timezone(timedelta(hours=9))
