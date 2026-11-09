@@ -79,7 +79,6 @@ def create_excel_backup():
 
 
 def restore_from_excel(uploaded_file):
-def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -109,7 +108,7 @@ def restore_from_excel(uploaded_file):
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
                 
-                # 💡 milestone_progress 등의 테이블에서 핵심 필수 키가 비어있는 행이 있다면 안전하게 제거
+                # milestone_progress 테이블에서 핵심 필수 키가 비어있는 행이 있다면 안전하게 제거
                 if target_table == "milestone_progress" and "milestone_id" in df.columns:
                     df = df.dropna(subset=["milestone_id"])
                 
@@ -170,6 +169,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
