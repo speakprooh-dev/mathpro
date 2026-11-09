@@ -23,13 +23,15 @@ def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            # secrets에 url이 설정되어 있으면 풀러 URL로 즉시 연결
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro.2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             conn = psycopg2.connect(conn_url, connect_timeout=5)
+            
+            # 🟢 Supabase 클라우드 연결 성공 시 화면에 표시
+            st.success("☁️ Supabase 클라우드 DB에 성공적으로 연결되었습니다!")
             return conn, "postgres"
         except Exception as e:
-            # 연결에 실패하더라도 학생 화면이 멈추지 않고 로컬 모드로 조용히 전환됩니다.
-            pass
+            # 💡 연결 실패 시 로컬 모드로 전환되며 안내 표시
+            st.warning("💡 클라우드 연결 실패로 안전한 로컬(SQLite) 데이터 모드로 실행합니다.")
     
     # 2. 클라우드 연결 불가 시 안전한 로컬 SQLite 모드 작동
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
