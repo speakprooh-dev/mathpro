@@ -667,11 +667,15 @@ def delete_notice(notice_id):
     conn.commit()
 
 def get_student_daily_routines(student_name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
+    if db_type == "postgres":
+        c.execute("SELECT id, title FROM daily_routines WHERE student_name = %s ORDER BY id", (student_name,))
+    else:
+        c.execute("SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
     rows = c.fetchall()
     return rows
+
 
 def bulk_insert_daily_routines(student_name, text_data):
     conn, _ = get_db_connection()
@@ -716,14 +720,18 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn.commit()
 
 def get_student_daily_logs_by_date(student_name, target_date_str):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
+    if db_type == "postgres":
+        c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = %s AND log_date = %s", (student_name, target_date_str))
+    else:
+        c.execute("SELECT routine_id, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date = ?", (student_name, target_date_str))
     rows = c.fetchall()
     log_map = {}
     for r_id, val in rows:
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
+
 
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
@@ -845,16 +853,22 @@ def assign_chapters_to_student(student_name, chapter_ids):
     conn.commit()
 
 def get_student_homework_dates(student_name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
+    if db_type == "postgres":
+        c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = %s ORDER BY hw_date DESC", (student_name,))
+    else:
+        c.execute("SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     rows = c.fetchall()
     return [r[0] for r in rows]
 
 def get_student_homework_by_date(student_name, hw_date):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
+    if db_type == "postgres":
+        c.execute("SELECT id, title FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
+    else:
+        c.execute("SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
     rows = c.fetchall()
     return rows
 
