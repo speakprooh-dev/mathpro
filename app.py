@@ -456,11 +456,19 @@ def get_notices_for_student(student_name):
     return rows
 
 def get_all_notices():
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
-    rows = c.fetchall()
-    return rows
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
+        rows = c.fetchall()
+        return rows
+    except Exception as e:
+        # 💡 [핵심 안전장치] 트랜잭션 에러 발생 시 풀아주기
+        try:
+            conn.rollback()
+        except:
+            pass
+        return []
 
 def delete_notice(notice_id):
     conn, _ = get_db_connection()
