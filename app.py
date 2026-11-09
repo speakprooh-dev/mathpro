@@ -91,26 +91,32 @@ def restore_from_excel(uploaded_file):
             
             try:
                 if db_type == "postgres":
-                    # 🐘 PostgreSQL(Supabase) 전용 안전 삽입 로직
-                    # 기존 테이블을 비우고 데이터를 행별로 삽입합니다.
+                    # 🐘 Supabase(PostgreSQL) 초고속 일괄 삽입 (execute_values 사용)
+                    from psycopg2.extras import execute_values
+                    
                     try:
-                        c.execute(f"DELETE FROM {target_table}")
+                        c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
                     except Exception:
                         conn.rollback()
+                        try:
+                            c.execute(f"DELETE FROM {target_table};")
+                        except Exception:
+                            conn.rollback()
                     
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
-                        placeholders = ", ".join(["%s"] * len(cols))
-                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES ({placeholders})"
                         
-                        # NaN 값을 None으로 변환하여 안전하게 삽입
+                        # NaN/NaT 처리
                         data_tuples = [tuple(None if pd.isna(val) else val for val in row) for row in df.itertuples(index=False, name=None)]
                         
-                        c.executemany(insert_query, data_tuples)
+                        # 한 번에 대량 전송 (초고속)
+                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s"
+                        execute_values(c, insert_query, data_tuples)
+                    
                     conn.commit()
                 else:
-                    # 📁 SQLite 전용 덮어쓰기 로직
+                    # 📁 SQLite 전용 덮어쓰기
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
@@ -129,6 +135,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 # ====================================================
 # ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
