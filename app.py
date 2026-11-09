@@ -1144,7 +1144,7 @@ if not st.session_state["teacher_authenticated"]:
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
         # ----------------------------------------------------
-        # 🔔 🔥 미복습 새 해설 영상 알람 배너 집계 로직 추가
+        # 🔔 🔥 미복습 새 해설 영상 알람 배너 집계 로직
         # ----------------------------------------------------
         conn_alert, _ = get_db_connection()
         c_alert = conn_alert.cursor()
@@ -1161,11 +1161,10 @@ if not st.session_state["teacher_authenticated"]:
                 v_url, _ = get_problem_link_info(f_code)
                 is_solved = solved_map_alert.get(f_code, False)
                 
-                # 해설 영상이 존재하지만 아직 복습 완료(체크)하지 않은 경우 카운트
                 if v_url and not is_solved:
                     unread_video_count += 1
 
-        # 📢 새 해설 영상 알람 배너 출력 (1개 이상일 때)
+        # 📢 직관적인 안내 문구 배너 출력
         if unread_video_count > 0:
             st.markdown(
                 f'''
@@ -1181,7 +1180,7 @@ if not st.session_state["teacher_authenticated"]:
                     color: #F87171;
                     font-weight: bold;
                 ">
-                    <span>🔥 선생님이 등록하신 해설 영상 중 미복습 문제가 <span style="color: #FFFFFF; font-size: 1.15em; text-decoration: underline;">{unread_video_count}개</span> 있습니다! 💬 오답·질문 관리 탭에서 확인하고 복습을 완료해 보세요.</span>
+                    <span>🔥 선생님이 등록하신 <b>새로운 복습 문제 해설 영상</b>이 도착했어요! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습을 완료해 보세요.</span>
                 </div>
                 ''',
                 unsafe_allow_html=True
@@ -1363,15 +1362,45 @@ if not st.session_state["teacher_authenticated"]:
                 
                 saved_units_list = [r[0] for r in saved_rows]
                 
-                selected_existing_unit = st.selectbox(
+                # 💡 [핵심] 단원별로 미복습 새 해설 영상이 있는지 검사하여 드롭다운 이름에 '🔥' 아이콘 붙이기
+                solved_map_chk = get_student_wrong_solved_status(selected_student)
+                now_datetime_chk = datetime.now()
+                
+                unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
+                unit_map_dict = {}
+                
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    p_nums = parse_numbers(entry_txt)
+                    
+                    has_new_unsolved = False
+                    for n in p_nums:
+                        f_code = f"{u_code}{n:03d}"
+                        v_url, v_up_at = get_problem_link_info(f_code)
+                        is_solved = solved_map_chk.get(f_code, False)
+                        
+                        if v_url and not is_solved:
+                            try:
+                                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                                if (now_datetime_chk - up_dt).total_seconds() <= 86400:
+                                    has_new_unsolved = True
+                                    break
+                            except Exception:
+                                pass
+                    
+                    display_name = f"🔥 [새해설 대기] {u_code}" if has_new_unsolved else f"{u_code}"
+                    unit_map_dict[display_name] = u_code
+                    unit_display_options.append(display_name)
+
+                selected_display_unit = st.selectbox(
                     "확인할 단원 선택", 
-                    ["-- 저장된 단원을 선택하세요 --"] + saved_units_list,
+                    unit_display_options,
                     key="saved_unit_select_box"
                 )
                 
                 view_target_code = ""
-                if selected_existing_unit and selected_existing_unit != "-- 저장된 단원을 선택하세요 --":
-                    view_target_code = selected_existing_unit
+                if selected_display_unit and selected_display_unit != "-- 저장된 단원을 선택하세요 --":
+                    view_target_code = unit_map_dict[selected_display_unit]
 
                 if view_target_code:
                     existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
