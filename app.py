@@ -607,13 +607,17 @@ def get_problem_links_by_unit(unit_code):
     return rows
 
 def get_problem_link_info(full_code):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT video_url, updated_at FROM problem_links WHERE full_code = ?", (full_code.upper(),))
+    if db_type == "postgres":
+        c.execute("SELECT video_url, updated_at FROM problem_links WHERE full_code = %s", (full_code.upper(),))
+    else:
+        c.execute("SELECT video_url, updated_at FROM problem_links WHERE full_code = ?", (full_code.upper(),))
     row = c.fetchone()
     if row:
         return row[0], (row[1] if row[1] else "")
     return "", ""
+
 
 def get_problem_link_by_full(full_code):
     url, _ = get_problem_link_info(full_code)
