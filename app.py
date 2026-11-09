@@ -83,9 +83,8 @@ def restore_from_excel(uploaded_file):
         conn, db_type = get_db_connection()
         c = conn.cursor()
         
-        restored_sheets = []
+        restored_count = 0
         
-        # 💡 핵심: students 테이블을 맨 처음에 두고, 자식 테이블들을 뒤로 배치하여 외래키 무결성 완벽 보장
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "homework", "student_homework", "milestone_progress", 
@@ -102,11 +101,9 @@ def restore_from_excel(uploaded_file):
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 df = df.dropna(how='all')
                 
-                # id 컬럼 빈값 처리
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
                 
-                # 필수 외래키 빈값 행 제거
                 if target_table == "milestone_progress" and "milestone_id" in df.columns:
                     df = df.dropna(subset=["milestone_id"])
                 if target_table == "student_homework_progress" and "student_hw_id" in df.columns:
@@ -115,7 +112,6 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
-                    # 💡 students 테이블은 다른 테이블들의 부모이므로 CASCADE로 안전하게 초기화
                     try:
                         if target_table == "students":
                             c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
@@ -144,7 +140,6 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        # 💡 students 테이블 삽입 시 충돌 방지 및 업데이트 처리
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             if non_key_cols:
@@ -162,22 +157,27 @@ def restore_from_excel(uploaded_file):
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
                     
-                restored_sheets.append(f"{target_table}({len(df)}건)")
+                restored_count += 1
             except Exception as sheet_err:
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 세션 캐시 클리어
-        if "students_df" in st.session_state:
-            del st.session_state["students_df"]
+        # 세션 캐시 클리어로 대시보드 강제 새로고침 유도
+        for key in list(st.session_state.keys()):
+            if "student" in key or "df" in key:
+                try:
+                    del st.session_state[key]
+                except:
+                    pass
                 
-        return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
+        return True, f"🎉 총 {restored_count개의 시트 데이터가 Supabase 클라우드에 안전하게 복구되었습니다!"
     except Exception as e:
         try:
             conn.rollback()
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 # ====================================================
