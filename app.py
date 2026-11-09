@@ -99,15 +99,11 @@ def restore_from_excel(uploaded_file):
         for target_table in sorted_sheets:
             try:
                 df = pd.read_excel(excel_file, sheet_name=target_table)
-                
-                # 전체가 비어있는 행은 제거
                 df = df.dropna(how='all')
                 
-                # id 컬럼에 빈값이 있으면 제외
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
                 
-                # 각 테이블별 필수 외래키가 비어있는 행이 있다면 안전하게 제거
                 if target_table == "milestone_progress" and "milestone_id" in df.columns:
                     df = df.dropna(subset=["milestone_id"])
                 if target_table == "student_homework_progress" and "student_hw_id" in df.columns:
@@ -141,6 +137,10 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
+                        # 💡 students 테이블 디버깅을 위해 에러 발생 시 컬럼 구조를 보여주도록 설정
+                        if target_table == "students":
+                            print(f"Students columns: {cols}, Count: {len(df)}")
+                        
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
@@ -170,6 +170,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
