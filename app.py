@@ -137,14 +137,11 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        # 💡 students 테이블 디버깅을 위해 에러 발생 시 컬럼 구조를 보여주도록 설정
-                        if target_table == "students":
-                            print(f"Students columns: {cols}, Count: {len(df)}")
-                        
+                        # 💡 students 테이블 복구 시 충돌나거나 막히지 않도록 안전한 INSERT 쿼리 적용
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
-                            set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
-                            if set_str:
+                            if non_key_cols:
+                                set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO UPDATE SET {set_str}"
                             else:
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO NOTHING"
@@ -170,9 +167,6 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
-
-
-
 
 
 # ====================================================
