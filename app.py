@@ -18,7 +18,6 @@ except ImportError:
     SUPABASE_AVAILABLE = False
 
 @st.cache_resource
-@st.cache_resource
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
@@ -35,9 +34,9 @@ def get_db_connection():
             )
             return conn, "postgres"
         except Exception as e:
-            # 디버깅을 위해 에러 메시지를 화면에 잠깐 띄우거나 로그로 확인
-            print(f"Supabase Connection Detailed Error: {e}")
-            pass
+            # Supabase 연결 실패 시 화면에 빨간색 에러 메시지 출력
+            st.error(f"Supabase Connection Detailed Error: {e}")
+            raise e
     
     # 연결 실패 시 로컬 SQLite 모드
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
