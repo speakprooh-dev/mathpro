@@ -79,7 +79,6 @@ def create_excel_backup():
 
 
 def restore_from_excel(uploaded_file):
-def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -102,7 +101,7 @@ def restore_from_excel(uploaded_file):
             try:
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 
-                # 💡 id 컬럼에 빈값(NaN)이 섞여 있으면 DB 자동 생성(SERIAL)에 맡기도록 id 컬럼 제외
+                # id 컬럼에 빈값(NaN)이 있으면 DB 자동 생성에 맡기기 위해 제외
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
                 
@@ -150,6 +149,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+
 
 
 
