@@ -85,20 +85,22 @@ def restore_from_excel(uploaded_file):
         conn, db_type = get_db_connection()
         c = conn.cursor()
         
+        restored_sheets = []
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
+            # 테이블 이름을 소문자로 통일하여 Supabase 테이블과 정확히 매칭
+            target_table = sheet_name.strip().lower()
             try:
-                # pandas to_sql을 통해 테이블 덮어쓰기
-                df.to_sql(sheet_name, conn, if_exists='replace', index=False)
+                df.to_sql(target_table, conn, if_exists='replace', index=False, method='multi')
+                restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
                 try:
                     conn.rollback()
                 except:
                     pass
         
-        # 변경사항 최종 저장
         conn.commit()
-        return True, f"데이터베이스가 성공적으로 복구되었습니다! ({db_type.upper()} 모드)"
+        return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
     except Exception as e:
         try:
             conn.rollback()
