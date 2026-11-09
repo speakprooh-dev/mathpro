@@ -81,33 +81,54 @@ def create_excel_backup():
 
 def restore_from_excel(uploaded_file):
     try:
-        from sqlalchemy import create_engine
         excel_file = pd.ExcelFile(uploaded_file)
-        
-        # 💡 Supabase 또는 SQLite에 맞는 SQLAlchemy 엔진 생성
-        if SUPABASE_AVAILABLE and "supabase" in st.secrets:
-            sec = st.secrets["supabase"]
-            conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
-            if conn_url.startswith("postgres://"):
-                conn_url = conn_url.replace("postgres://", "postgresql://", 1)
-            engine = create_engine(conn_url)
-        else:
-            DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
-            engine = create_engine(f"sqlite:///{DB_PATH}")
+        conn, db_type = get_db_connection()
+        c = conn.cursor()
         
         restored_sheets = []
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
             target_table = sheet_name.strip().lower()
+            
             try:
-                # SQLAlchemy 엔진을 사용하여 안전하게 테이블 덮어쓰기
-                df.to_sql(target_table, engine, if_exists='replace', index=False)
+                if db_type == "postgres":
+                    # 🐘 PostgreSQL(Supabase) 전용 안전 삽입 로직
+                    # 기존 테이블을 비우고 데이터를 행별로 삽입합니다.
+                    try:
+                        c.execute(f"DELETE FROM {target_table}")
+                    except Exception:
+                        conn.rollback()
+                    
+                    if not df.empty:
+                        cols = list(df.columns)
+                        col_str = ", ".join(cols)
+                        placeholders = ", ".join(["%s"] * len(cols))
+                        insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES ({placeholders})"
+                        
+                        # NaN 값을 None으로 변환하여 안전하게 삽입
+                        data_tuples = [tuple(None if pd.isna(val) else val for val in row) for row in df.itertuples(index=False, name=None)]
+                        
+                        c.executemany(insert_query, data_tuples)
+                    conn.commit()
+                else:
+                    # 📁 SQLite 전용 덮어쓰기 로직
+                    df.to_sql(target_table, conn, if_exists='replace', index=False)
+                    conn.commit()
+                    
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
-                print(f"시트 복구 에러 ({sheet_name}): {sheet_err}")
+                try:
+                    conn.rollback()
+                except:
+                    pass
+                print(f"시트 복구 실패 ({target_table}): {sheet_err}")
                 
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
     except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
         return False, f"복구 중 오류 발생: {str(e)}"
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
