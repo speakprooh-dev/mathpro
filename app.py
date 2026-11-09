@@ -1143,6 +1143,50 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
+        # ----------------------------------------------------
+        # 🔔 🔥 미복습 새 해설 영상 알람 배너 집계 로직 추가
+        # ----------------------------------------------------
+        conn_alert, _ = get_db_connection()
+        c_alert = conn_alert.cursor()
+        c_alert.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
+        user_wrong_rows = c_alert.fetchall()
+        
+        solved_map_alert = get_student_wrong_solved_status(selected_student)
+        unread_video_count = 0
+
+        for u_code, nums_txt in user_wrong_rows:
+            parsed_nums = parse_numbers(nums_txt)
+            for n in parsed_nums:
+                f_code = f"{u_code}{n:03d}"
+                v_url, _ = get_problem_link_info(f_code)
+                is_solved = solved_map_alert.get(f_code, False)
+                
+                # 해설 영상이 존재하지만 아직 복습 완료(체크)하지 않은 경우 카운트
+                if v_url and not is_solved:
+                    unread_video_count += 1
+
+        # 📢 새 해설 영상 알람 배너 출력 (1개 이상일 때)
+        if unread_video_count > 0:
+            st.markdown(
+                f'''
+                <div style="
+                    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(249, 115, 22, 0.15));
+                    border: 1px solid rgba(239, 68, 68, 0.4);
+                    padding: 14px 18px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    color: #F87171;
+                    font-weight: bold;
+                ">
+                    <span>🔥 선생님이 등록하신 해설 영상 중 미복습 문제가 <span style="color: #FFFFFF; font-size: 1.15em; text-decoration: underline;">{unread_video_count}개</span> 있습니다! 💬 오답·질문 관리 탭에서 확인하고 복습을 완료해 보세요.</span>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
         with st.container(border=True):
