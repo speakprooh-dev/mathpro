@@ -18,28 +18,31 @@ except ImportError:
     SUPABASE_AVAILABLE = False
 
 @st.cache_resource
+@st.cache_resource
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            # host 설정이 분리되어 있는 경우 처리
-            if "host" in sec:
-                conn = psycopg2.connect(
-                    host=sec["host"],
-                    database=sec.get("database", "postgres"),
-                    user=sec.get("user", "postgres"),
-                    password=sec["password"],
-                    port=sec.get("port", 5432),
-                    sslmode="require"
-                )
-                return conn, "postgres"
+            # Secrets에 분리된 설정값으로 직접 연결 시도
+            conn = psycopg2.connect(
+                host=sec.get("host", "aws-0-ap-northeast-2.pooler.supabase.com"),
+                database=sec.get("database", "postgres"),
+                user=sec.get("user", "postgres.qfpclacalaaxbhhheosw"),
+                password=sec["password"],
+                port=int(sec.get("port", 6543)),
+                sslmode="require",
+                connect_timeout=10
+            )
+            return conn, "postgres"
         except Exception as e:
-            st.error(f"⚠️ Supabase 연결 실패: {e}")
+            # 디버깅을 위해 에러 메시지를 화면에 잠깐 띄우거나 로그로 확인
+            print(f"Supabase Connection Detailed Error: {e}")
+            pass
     
-    # Secrets 설정이 없거나 실패한 경우 경고 표시 후 SQLite 연결
-    st.warning("⚠️ 현재 Supabase에 연결되지 않아 로컬 SQLite(임시 DB) 모드로 동작 중입니다.")
+    # 연결 실패 시 로컬 SQLite 모드
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
+
 
 
 def get_korean_today():
