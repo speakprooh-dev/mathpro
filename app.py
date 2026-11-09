@@ -26,12 +26,10 @@ def get_db_connection():
             conn = psycopg2.connect(conn_url, connect_timeout=5)
             return conn, "postgres"
         except Exception as e:
-            # 🚨 에러가 왜 났는지 화면에 빨간색으로 직접 띄워줍니다!
             st.error(f"❌ Supabase 연결 에러 상세 내용: {str(e)}")
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
-
 
 
 def get_korean_today():
@@ -52,32 +50,47 @@ def get_korean_now_str():
 # 📥/📤 엑셀 백업 및 복구 장치
 # ==========================================
 def create_excel_backup():
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    """전체 데이터 엑셀 백업 함수 (Supabase/SQLite 안전 연동)"""
+    try:
         conn, db_type = get_db_connection()
+        output = io.BytesIO()
+        
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
-            "milestones", "student_homework", "milestone_progress", 
-            "student_homework_progress", "student_wrong_entries", "student_wrong_solved", "problem_links", "homework_templates",
+            "milestones", "homework", "student_homework", "milestone_progress", 
+            "homework_progress", "student_homework_progress", "student_wrong_entries", 
+            "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
-        success_count = 0
-        for table in tables:
-            try:
-                df = pd.read_sql(f"SELECT * FROM {table}", conn)
-                df.to_excel(writer, sheet_name=table, index=False)
-                success_count += 1
-            except Exception:
-                pass
         
-        # 💡 [안전 장치] 가져온 테이블이 하나도 없을 경우 빈 기본 시트를 만들어 에러 방지
-        if success_count == 0:
-            df_empty = pd.DataFrame({"info": ["No data available"]})
-            df_empty.to_excel(writer, sheet_name="backup_info", index=False)
+        success_count = 0
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            for table in tables:
+                try:
+                    df = pd.read_sql(f"SELECT * FROM {table}", conn)
+                    df.to_excel(writer, sheet_name=table, index=False)
+                    success_count += 1
+                except Exception:
+                    pass
             
-    return output.getvalue()
+            if success_count == 0:
+                df_empty = pd.DataFrame({"info": ["No data available"]})
+                df_empty.to_excel(writer, sheet_name="backup_info", index=False)
+                
+        output.seek(0)
+        return output.getvalue()
+    except Exception as e:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name="error", index=False)
+        output.seek(0)
+        return output.getvalue()
+
+# 호환성을 위해 백업 함수 별칭 설정
+backup_to_excel = create_excel_backup
 
 def restore_from_excel(uploaded_file):
+    """엑셀 파일 데이터베이스 복구 함수"""
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
@@ -162,7 +175,7 @@ def restore_from_excel(uploaded_file):
                 conn.rollback()
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 💡 세션 상태 캐시를 완전히 초기화하여 대시보드가 Supabase의 최신 학생 목록을 즉시 강제 로드하도록 조치
+        # 세션 상태 캐시 완벽 초기화
         for key in list(st.session_state.keys()):
             if "student" in key or "df" in key or "conn" in key:
                 try:
@@ -178,7 +191,6 @@ def restore_from_excel(uploaded_file):
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
 
-
 # ====================================================
 # ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
 # ====================================================
@@ -186,16 +198,13 @@ def migrate_local_to_supabase():
     try:
         import sqlite3
         
-        # 1. 로컬 SQLite 연결
         DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
         
-        # 2. Supabase(PostgreSQL) 연결
         cloud_conn, _ = get_db_connection()
         cloud_cursor = cloud_conn.cursor()
         
-        # 3. 로컬에 존재하는 모든 테이블 목록 가져오기
         local_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [row[0] for row in local_cursor.fetchall()]
         
@@ -204,25 +213,21 @@ def migrate_local_to_supabase():
             if table in ["sqlite_sequence", "backup_info"]:
                 continue
             
-            # 로컬 테이블 데이터 읽기
             local_cursor.execute(f"SELECT * FROM {table}")
             rows = local_cursor.fetchall()
             
             if not rows:
                 continue
                 
-            # 컬럼명 가져오기
             col_names = [description[0] for description in local_cursor.description]
             col_str = ", ".join(col_names)
             placeholders = ", ".join(["%s"] * len(col_names))
             
             try:
-                # 기존 Supabase 테이블 내용 비우기
                 cloud_cursor.execute(f"DELETE FROM {table}")
             except Exception:
                 cloud_conn.rollback()
                 
-            # 행 단위 데이터 삽입 (executemany)
             insert_query = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders})"
             try:
                 cloud_cursor.executemany(insert_query, rows)
@@ -265,7 +270,6 @@ def init_db():
         c = conn.cursor()
         
         if db_type == "postgres":
-            # 🐘 Supabase (PostgreSQL) 전용 자동 테이블 생성
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS chapters (id SERIAL PRIMARY KEY, subject TEXT NOT NULL, name TEXT NOT NULL);')
@@ -286,7 +290,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL);')
             conn.commit()
         else:
-            # 📁 로컬 SQLite 전용 테이블 생성
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS chapters (id INTEGER PRIMARY KEY AUTOINCREMENT, subject TEXT NOT NULL, name TEXT NOT NULL)')
@@ -307,7 +310,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
             conn.commit()
 
-        # 인덱스 생성 및 컬럼 보완
         try:
             c.execute("ALTER TABLE problem_links ADD COLUMN updated_at TEXT DEFAULT ''")
             conn.commit()
@@ -324,7 +326,6 @@ def init_db():
         except Exception:
             pass
 
-        # 기본 과목 데이터 초기 입력
         c.execute("SELECT COUNT(*) FROM subjects")
         if c.fetchone()[0] == 0:
             default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
@@ -342,10 +343,6 @@ def init_db():
 
 init_db()
 
-
-# ----------------------------------------------------
-# 👁️ 접속 로그 기록 기능
-# ----------------------------------------------------
 def log_student_visit(student_name):
     if not student_name or st.session_state.get("teacher_authenticated", False):
         return
@@ -637,7 +634,6 @@ def get_all_notices():
         rows = c.fetchall()
         return rows
     except Exception as e:
-        # 💡 [핵심 안전장치] 트랜잭션 에러 발생 시 풀아주기
         try:
             conn.rollback()
         except:
@@ -1027,7 +1023,7 @@ if url_student and url_student in student_list:
     log_student_visit(url_student)
 
 # ----------------------------------------------------
-# 🧭 사이드바 구성 (선생님 로그인 버튼 하단 배치)
+# 🧭 사이드바 구성
 # ----------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 MathPro 시스템")
@@ -1035,7 +1031,6 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         
-        # 🔍 현재 어떤 DB 모드로 연결 중인지 항상 표시해 주는 배너
         _, current_db_type = get_db_connection()
         if current_db_type == "postgres":
             st.markdown(
@@ -1075,7 +1070,6 @@ with st.sidebar:
                         success, msg = restore_from_excel(uploaded_backup)
                         if success:
                             st.success(f"🎉 {msg}")
-                            # 5초 뒤에 새로고침되거나 명확히 보이도록 처리
                             if st.button("🔄 화면 새로고침하기"):
                                 st.rerun()
                         else:
@@ -1192,20 +1186,14 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
-        # ----------------------------------------------------
-        # 🔔 🔥 미복습 새 해설 영상 알람 배너 집계 로직
-        # ----------------------------------------------------
         conn_alert, _ = get_db_connection()
         c_alert = conn_alert.cursor()
         c_alert.execute("SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
         user_wrong_rows = c_alert.fetchall()
         
         solved_map_alert = get_student_wrong_solved_status(selected_student)
-        unread_video_count = 0
-
-        # 🔔 🔥 복습 미완료 개수와 새해설 개수를 각각 분리 집계
-        unsolved_total_count = 0  # 복습 미완료 총 개수
-        new_video_count = 0       # 그중 '새해설' (24시간 이내 등록) 개수
+        unsolved_total_count = 0
+        new_video_count = 0
         now_datetime_alert = datetime.now()
 
         for u_code, nums_txt in user_wrong_rows:
@@ -1215,11 +1203,8 @@ if not st.session_state["teacher_authenticated"]:
                 v_url, v_up_at = get_problem_link_info(f_code)
                 is_solved = solved_map_alert.get(f_code, False)
                 
-                # 링크가 있고 아직 복습 완료 안 한 경우
                 if v_url and not is_solved:
                     unsolved_total_count += 1
-                    
-                    # 24시간 이내 등록된 새해설인지 체크
                     try:
                         up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
                         if (now_datetime_alert - up_dt).total_seconds() <= 86400:
@@ -1227,7 +1212,6 @@ if not st.session_state["teacher_authenticated"]:
                     except Exception:
                         pass
 
-        # 📢 미복습 집계와 간단한 행동 지침(메뉴얼)이 포함된 배너 출력
         if unsolved_total_count > 0:
             st.markdown(
                 f'''
@@ -1315,7 +1299,6 @@ if not st.session_state["teacher_authenticated"]:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
         with tab2:
-            # 💡 [개선] 루틴 완료 현황 한 줄 표기 및 날짜별 개별 숙제 현황까지 추가
             today_obj = get_korean_today()
             today_str = str(today_obj)
             daily_routines_list = get_student_daily_routines(selected_student)
@@ -1363,7 +1346,6 @@ if not st.session_state["teacher_authenticated"]:
                 selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 hws = get_student_homework_by_date(selected_student, selected_date)
                 
-                # 💡 선택한 날짜의 개별 숙제 완료 현황 계산
                 total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
                 done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
                 hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
@@ -1425,7 +1407,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 saved_units_list = [r[0] for r in saved_rows]
                 
-                # 💡 [핵심] 단원별로 미복습 새 해설 영상이 있는지 검사하여 드롭다운 이름에 '🔥' 아이콘 붙이기
                 solved_map_chk = get_student_wrong_solved_status(selected_student)
                 now_datetime_chk = datetime.now()
                 
