@@ -132,41 +132,58 @@ def restore_from_excel(uploaded_file):
         return False, f"복구 중 오류 발생: {str(e)}"
 
 # ====================================================
-# ☁️ 로컬 SQLite 데이터를 Supabase로 통째로 전송하는 동기화 함수
+# ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
 # ====================================================
 def migrate_local_to_supabase():
     try:
-        from sqlalchemy import create_engine
         import sqlite3
         
         # 1. 로컬 SQLite 연결
         DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
         local_conn = sqlite3.connect(DB_PATH)
+        local_cursor = local_conn.cursor()
         
-        # 2. Supabase(PostgreSQL) 연결 엔진 생성
-        if "supabase" in st.secrets:
-            sec = st.secrets["supabase"]
-            conn_url = sec.get("url", "")
-            if conn_url.startswith("postgres://"):
-                conn_url = conn_url.replace("postgres://", "postgresql://", 1)
-            engine = create_engine(conn_url)
-        else:
-            return False, "Supabase Secrets 설정이 없습니다."
-            
+        # 2. Supabase(PostgreSQL) 연결
+        cloud_conn, _ = get_db_connection()
+        cloud_cursor = cloud_conn.cursor()
+        
         # 3. 로컬에 존재하는 모든 테이블 목록 가져오기
-        cursor = local_conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [row[0] for row in cursor.fetchall()]
+        local_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in local_cursor.fetchall()]
         
         migrated_tables = []
         for table in tables:
             if table in ["sqlite_sequence", "backup_info"]:
                 continue
             
-            df = pd.read_sql(f"SELECT * FROM {table}", local_conn)
-            df.to_sql(table, engine, if_exists='replace', index=False)
-            migrated_tables.append(f"{table}({len(df)}건)")
+            # 로컬 테이블 데이터 읽기
+            local_cursor.execute(f"SELECT * FROM {table}")
+            rows = local_cursor.fetchall()
             
+            if not rows:
+                continue
+                
+            # 컬럼명 가져오기
+            col_names = [description[0] for description in local_cursor.description]
+            col_str = ", ".join(col_names)
+            placeholders = ", ".join(["%s"] * len(col_names))
+            
+            try:
+                # 기존 Supabase 테이블 내용 비우기
+                cloud_cursor.execute(f"DELETE FROM {table}")
+            except Exception:
+                cloud_conn.rollback()
+                
+            # 행 단위 데이터 삽입 (executemany)
+            insert_query = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders})"
+            try:
+                cloud_cursor.executemany(insert_query, rows)
+                cloud_conn.commit()
+                migrated_tables.append(f"{table}({len(rows)}건)")
+            except Exception as e:
+                cloud_conn.rollback()
+                print(f"테이블 전송 실패 ({table}): {e}")
+                
         local_conn.close()
         return True, f"클라우드 전송 완료된 테이블: {', '.join(migrated_tables)}"
     except Exception as e:
