@@ -36,7 +36,6 @@ def get_db_connection():
 def q(c, query, params=None):
     """💡 SQLite(?)와 PostgreSQL(%s) 문법 차이를 자동으로 변환해 주는 공통 실행 함수"""
     try:
-        # 현재 연결이 PostgreSQL(Supabase)인 경우 쿼리 내의 '?'를 자동으로 '%s'로 치환
         if "psycopg2" in str(type(c.connection)):
             query = query.replace("?", "%s")
     except Exception:
@@ -75,6 +74,18 @@ def get_all_homework_progress_map(student_name):
         return {}
 
 @st.cache_data(ttl=30)
+def get_entire_homework_progress_map():
+    """모든 학생의 숙제 완료 상태를 단 한 번의 쿼리로 통째로 가져와 캐싱 (매트릭스 렉 원천 차단)"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, student_hw_id, is_checked FROM student_homework_progress")
+        rows = c.fetchall()
+        return {(r[0], r[1]): bool(r[2]) for r in rows}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
 def get_all_routine_logs_map(student_name):
     """특정 학생의 모든 루틴 로그를 한 번에 가져옴"""
     conn, _ = get_db_connection()
@@ -104,7 +115,6 @@ def get_korean_now_str():
 # 📥/📤 엑셀 백업 및 복구 장치
 # ==========================================
 def create_excel_backup():
-    """전체 데이터 엑셀 백업 함수 (openpyxl 엔진 사용으로 모듈 에러 방지)"""
     try:
         conn, db_type = get_db_connection()
         output = io.BytesIO()
@@ -144,14 +154,12 @@ backup_to_excel = create_excel_backup
 
 
 def restore_from_excel(uploaded_file):
-    """엑셀 파일 데이터베이스 복구 함수 (안전한 트랜잭션 및 충돌 방지)"""
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
         c = conn.cursor()
         
         restored_sheets = []
-        
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "homework", "student_homework", "milestone_progress", 
@@ -178,7 +186,6 @@ def restore_from_excel(uploaded_file):
                 
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
-                    
                     try:
                         conn.rollback()
                     except Exception:
@@ -263,7 +270,6 @@ def restore_from_excel(uploaded_file):
 def migrate_local_to_supabase():
     try:
         import sqlite3
-        
         DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
@@ -422,47 +428,6 @@ def log_student_visit(student_name):
         q(c, "INSERT INTO visitor_logs (student_name, visit_date, visit_time) VALUES (?, ?, ?)", (student_name, today_str, now_str))
         conn.commit()
         st.session_state[session_key] = True
-
-def get_visitor_stats():
-    conn, db_type = get_db_connection()
-    c = conn.cursor()
-    
-    today_str = str(get_korean_today())
-    
-    try:
-        if db_type == "postgres":
-            q(c, "SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = %s", (today_str,))
-        else:
-            q(c, "SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
-        today_active_students = c.fetchone()[0]
-        
-        q(c, "SELECT COUNT(*) FROM visitor_logs")
-        total_visit_count = c.fetchone()[0]
-        
-        q(c, """
-            SELECT student_name, MAX(visit_time) as last_visit, COUNT(*) as visit_count 
-            FROM visitor_logs 
-            GROUP BY student_name 
-            ORDER BY last_visit DESC
-        """)
-        student_summary = c.fetchall()
-        
-        q(c, """
-            SELECT visit_date, COUNT(DISTINCT student_name) as student_cnt, COUNT(*) as total_cnt
-            FROM visitor_logs
-            GROUP BY visit_date
-            ORDER BY visit_date DESC
-            LIMIT 7
-        """)
-        recent_daily_logs = c.fetchall()
-        
-        return today_active_students, total_visit_count, student_summary, recent_daily_logs
-    except Exception as e:
-        try:
-            conn.rollback()
-        except:
-            pass
-        return 0, 0, [], []
 
 def get_students():
     try:
@@ -664,11 +629,6 @@ def get_problem_link_info(full_code):
         return row[0], (row[1] if row[1] else "")
     return "", ""
 
-
-def get_problem_link_by_full(full_code):
-    url, _ = get_problem_link_info(full_code)
-    return url
-
 def get_all_problem_links():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -726,7 +686,6 @@ def get_student_daily_routines(student_name):
     rows = c.fetchall()
     return rows
 
-
 def bulk_insert_daily_routines(student_name, text_data):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -781,7 +740,6 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
     for r_id, val in rows:
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
-
 
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
@@ -1756,7 +1714,6 @@ else:
                     today_obj = get_korean_today()
                     date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
                     
-                    # 💡 루틴 로그 일괄 캐시 적용으로 반복 쿼리 제거
                     batch_routine_logs = get_all_routine_logs_map(selected_hw_student)
 
                     for r_id, r_title in current_routines:
@@ -2202,20 +2159,21 @@ else:
                     unsafe_allow_html=True
                 )
 
+            # 💡 전체 숙제 매트릭스 렉 방지를 위해 전체 맵을 한 번에 가져옴 (DB 통신 0회)
+            entire_hw_prog = get_entire_homework_progress_map()
+
             for s_idx_main, s_name in enumerate(student_list):
                 hws = get_student_homework_by_date(s_name, selected_matrix_date)
                 if hws:
                     with st.container(border=True):
                         st.markdown(f"**👤 {s_name} 학생**")
-                        # 💡 숙제 매트릭스도 일괄 캐시 맵 사용으로 반복 통신 제거
-                        s_hw_prog = get_all_homework_progress_map(s_name)
                         
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
                                 msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
                                 st.info(f"💬 **선생님의 한마디**: {msg_content}")
                             else:
-                                is_done = s_hw_prog.get(h_id, False)
+                                is_done = entire_hw_prog.get((s_name, h_id), False)
                                 col_m1, col_m2 = st.columns([5, 1])
                                 with col_m1:
                                     chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
