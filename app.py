@@ -19,21 +19,17 @@ except ImportError:
 
 @st.cache_resource
 def get_db_connection():
-    # 1. Supabase 클라우드 연결 시도 (풀러 방식)
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro.2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
+            conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             conn = psycopg2.connect(conn_url, connect_timeout=5)
-            
-            # 🟢 Supabase 클라우드 연결 성공 시 화면에 표시
             st.success("☁️ Supabase 클라우드 DB에 성공적으로 연결되었습니다!")
             return conn, "postgres"
         except Exception as e:
-            # 💡 연결 실패 시 로컬 모드로 전환되며 안내 표시
-            st.warning("💡 클라우드 연결 실패로 안전한 로컬(SQLite) 데이터 모드로 실행합니다.")
+            # 🚨 에러가 왜 났는지 화면에 빨간색으로 직접 띄워줍니다!
+            st.error(f"❌ Supabase 연결 에러 상세 내용: {str(e)}")
     
-    # 2. 클라우드 연결 불가 시 안전한 로컬 SQLite 모드 작동
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
