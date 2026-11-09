@@ -33,19 +33,11 @@ def get_db_connection():
                     sslmode="require"
                 )
                 return conn, "postgres"
-            elif "host" in sec:
-                conn = psycopg2.connect(
-                    host=sec["host"],
-                    database=sec.get("database", "postgres"),
-                    user=sec.get("user", "postgres"),
-                    password=sec["password"],
-                    port=sec.get("port", 5432),
-                    sslmode="require"
-                )
-                return conn, "postgres"
-        except Exception:
-            pass
+        except Exception as e:
+            st.error(f"⚠️ Supabase 연결 실패: {e}")
     
+    # Secrets 설정이 없거나 실패한 경우 경고 표시 후 SQLite 연결
+    st.warning("⚠️ 현재 Supabase에 연결되지 않아 로컬 SQLite(임시 DB) 모드로 동작 중입니다.")
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
