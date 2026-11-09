@@ -81,31 +81,33 @@ def create_excel_backup():
 
 def restore_from_excel(uploaded_file):
     try:
+        from sqlalchemy import create_engine
         excel_file = pd.ExcelFile(uploaded_file)
-        conn, db_type = get_db_connection()
-        c = conn.cursor()
+        
+        # 💡 Supabase 또는 SQLite에 맞는 SQLAlchemy 엔진 생성
+        if SUPABASE_AVAILABLE and "supabase" in st.secrets:
+            sec = st.secrets["supabase"]
+            conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
+            if conn_url.startswith("postgres://"):
+                conn_url = conn_url.replace("postgres://", "postgresql://", 1)
+            engine = create_engine(conn_url)
+        else:
+            DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
+            engine = create_engine(f"sqlite:///{DB_PATH}")
         
         restored_sheets = []
         for sheet_name in excel_file.sheet_names:
             df = pd.read_excel(excel_file, sheet_name=sheet_name)
-            # 테이블 이름을 소문자로 통일하여 Supabase 테이블과 정확히 매칭
             target_table = sheet_name.strip().lower()
             try:
-                df.to_sql(target_table, conn, if_exists='replace', index=False, method='multi')
+                # SQLAlchemy 엔진을 사용하여 안전하게 테이블 덮어쓰기
+                df.to_sql(target_table, engine, if_exists='replace', index=False)
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
-                try:
-                    conn.rollback()
-                except:
-                    pass
-        
-        conn.commit()
+                print(f"시트 복구 에러 ({sheet_name}): {sheet_err}")
+                
         return True, f"복구 완료된 시트: {', '.join(restored_sheets)}"
     except Exception as e:
-        try:
-            conn.rollback()
-        except:
-            pass
         return False, f"복구 중 오류 발생: {str(e)}"
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
