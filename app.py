@@ -62,13 +62,22 @@ def create_excel_backup():
             "student_homework_progress", "student_wrong_entries", "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
+        success_count = 0
         for table in tables:
             try:
                 df = pd.read_sql(f"SELECT * FROM {table}", conn)
                 df.to_excel(writer, sheet_name=table, index=False)
+                success_count += 1
             except Exception:
                 pass
+        
+        # 💡 [안전 장치] 가져온 테이블이 하나도 없을 경우 빈 기본 시트를 만들어 에러 방지
+        if success_count == 0:
+            df_empty = pd.DataFrame({"info": ["No data available"]})
+            df_empty.to_excel(writer, sheet_name="backup_info", index=False)
+            
     return output.getvalue()
+
 
 def restore_from_excel(uploaded_file):
     try:
