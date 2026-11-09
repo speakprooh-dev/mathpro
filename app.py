@@ -50,7 +50,7 @@ def get_korean_now_str():
 # 📥/📤 엑셀 백업 및 복구 장치
 # ==========================================
 def create_excel_backup():
-    """전체 데이터 엑셀 백업 함수 (Supabase/SQLite 안전 연동)"""
+    """전체 데이터 엑셀 백업 함수 (openpyxl 엔진 사용으로 모듈 에러 방지)"""
     try:
         conn, db_type = get_db_connection()
         output = io.BytesIO()
@@ -64,7 +64,7 @@ def create_excel_backup():
         ]
         
         success_count = 0
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             for table in tables:
                 try:
                     df = pd.read_sql(f"SELECT * FROM {table}", conn)
@@ -81,13 +81,14 @@ def create_excel_backup():
         return output.getvalue()
     except Exception as e:
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             pd.DataFrame({"error": [str(e)]}).to_excel(writer, sheet_name="error", index=False)
         output.seek(0)
         return output.getvalue()
 
 # 호환성을 위해 백업 함수 별칭 설정
 backup_to_excel = create_excel_backup
+
 
 def restore_from_excel(uploaded_file):
     """엑셀 파일 데이터베이스 복구 함수"""
