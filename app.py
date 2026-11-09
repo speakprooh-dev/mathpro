@@ -77,7 +77,6 @@ def create_excel_backup():
             
     return output.getvalue()
 
-
 def restore_from_excel(uploaded_file):
     try:
         excel_file = pd.ExcelFile(uploaded_file)
@@ -260,6 +259,77 @@ def restore_from_excel(uploaded_file):
                             set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
                             if set_str:
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO UPDATE SET {set_str}"
+
+
+def restore_from_excel(uploaded_file):
+    try:
+        excel_file = pd.ExcelFile(uploaded_file)
+        conn, db_type = get_db_connection()
+        c = conn.cursor()
+        
+        restored_sheets = []
+        
+        tables_order = [
+            "students", "subjects", "chapters", "chapter_types", 
+            "milestones", "homework", "student_homework", "milestone_progress", 
+            "homework_progress", "student_homework_progress", "student_wrong_entries", 
+            "student_wrong_solved", "problem_links", "homework_templates",
+            "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
+        ]
+        
+        existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
+        sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
+        
+        for target_table in sorted_sheets:
+            try:
+                df = pd.read_excel(excel_file, sheet_name=target_table)
+                
+                # 전체가 비어있는 행은 제거
+                df = df.dropna(how='all')
+                
+                # id 컬럼에 빈값이 있으면 제외
+                if 'id' in df.columns and df['id'].isna().any():
+                    df = df.drop(columns=['id'])
+                
+                # 각 테이블별 필수 외래키가 비어있는 행이 있다면 안전하게 제거
+                if target_table == "milestone_progress" and "milestone_id" in df.columns:
+                    df = df.dropna(subset=["milestone_id"])
+                if target_table == "student_homework_progress" and "student_hw_id" in df.columns:
+                    df = df.dropna(subset=["student_hw_id"])
+                
+                if db_type == "postgres":
+                    from psycopg2.extras import execute_values
+                    
+                    try:
+                        c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
+                    except Exception:
+                        conn.rollback()
+                        try:
+                            c.execute(f"DELETE FROM {target_table};")
+                        except Exception:
+                            conn.rollback()
+                    
+                    if not df.empty:
+                        cols = list(df.columns)
+                        col_str = ", ".join(cols)
+                        
+                        data_tuples = []
+                        for row in df.itertuples(index=False, name=None):
+                            clean_row = []
+                            for val in row:
+                                if pd.isna(val):
+                                    clean_row.append(None)
+                                elif isinstance(val, str):
+                                    clean_row.append(val.strip())
+                                else:
+                                    clean_row.append(val)
+                            data_tuples.append(tuple(clean_row))
+                        
+                        if target_table == "students" and "name" in cols:
+                            non_key_cols = [col for col in cols if col != "name"]
+                            set_str = ", ".join([f"{col} = EXCLUDED.{col}" for col in non_key_cols])
+                            if set_str:
+                                insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO UPDATE SET {set_str}"
                             else:
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (name) DO NOTHING"
                         else:
@@ -284,6 +354,7 @@ def restore_from_excel(uploaded_file):
         except:
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
+str(e)}"
 
 
 
