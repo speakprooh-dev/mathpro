@@ -726,15 +726,29 @@ def delete_homework_template(t_id):
     conn.commit()
 
 def get_student_milestones(student_name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    c.execute("""
-        SELECT m.id, m.subject, m.chapter, m.type_name, 
-               COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
-        FROM milestones m WHERE m.student_name = ?
-    """, (student_name,))
-    rows = c.fetchall()
-    return rows
+    try:
+        if db_type == "postgres":
+            c.execute("""
+                SELECT m.id, m.subject, m.chapter, m.type_name, 
+                       COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
+                FROM milestones m WHERE m.student_name = %s
+            """, (student_name,))
+        else:
+            c.execute("""
+                SELECT m.id, m.subject, m.chapter, m.type_name, 
+                       COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
+                FROM milestones m WHERE m.student_name = ?
+            """, (student_name,))
+        rows = c.fetchall()
+        return rows
+    except Exception as e:
+        try:
+            conn.rollback()
+        except:
+            pass
+        return []
 
 def assign_chapters_to_student(student_name, chapter_ids):
     conn, _ = get_db_connection()
