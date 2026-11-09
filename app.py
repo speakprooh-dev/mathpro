@@ -22,19 +22,22 @@ def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
-            # Secrets에 분리된 설정값으로 직접 연결 시도
-            conn = psycopg2.connect(
-                host=sec.get("host", "aws-0-ap-northeast-2.pooler.supabase.com"),
-                database=sec.get("database", "postgres"),
-                user=sec.get("user", "postgres.qfpclacalaaxbhhheosw"),
-                password=sec["password"],
-                port=int(sec.get("port", 6543)),
-                sslmode="require",
-                connect_timeout=10
-            )
+            # Secrets에 url이 설정되어 있으면 url로 바로 연결
+            if "url" in sec:
+                conn = psycopg2.connect(sec["url"])
+            else:
+                #혹시 모를 기존 설정 방식도 호환
+                conn = psycopg2.connect(
+                    host=sec.get("host"),
+                    database=sec.get("database", "postgres"),
+                    user=sec.get("user"),
+                    password=sec["password"],
+                    port=int(sec.get("port", 5432)),
+                    sslmode="require",
+                    connect_timeout=10
+                )
             return conn, "postgres"
         except Exception as e:
-            # Supabase 연결 실패 시 화면에 빨간색 에러 메시지 출력
             st.error(f"Supabase Connection Detailed Error: {e}")
             raise e
     
