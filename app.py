@@ -24,12 +24,15 @@ def get_db_connection():
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             conn = psycopg2.connect(conn_url, connect_timeout=5)
+            # 💡 [핵심 안전장치] 꼬인 트랜잭션 상태를 강제로 풀어주어 복구 명령이 정상 통과되도록 보장
+            conn.rollback()
             return conn, "postgres"
         except Exception as e:
             st.error(f"❌ Supabase 연결 에러 상세 내용: {str(e)}")
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
+
 
 
 def get_korean_today():
