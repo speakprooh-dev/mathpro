@@ -48,7 +48,9 @@ def q(c, query, params=None):
         c.execute(query)
     return c
 
-# 💡 오답노트 속도 극대화용 전체 링크 일괄 캐시 함수 (1분간 메모리 캐싱)
+# ==========================================
+# ⚡ 전체 속도 극대화를 위한 일괄 캐시 함수들
+# ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
     """등록된 모든 해설 링크를 메모리에 캐싱하여 속도 최적화"""
@@ -60,6 +62,28 @@ def get_all_problem_link_set():
         return {str(r[0]).upper() for r in rows}
     except Exception:
         return set()
+
+@st.cache_data(ttl=30)
+def get_all_homework_progress_map(student_name):
+    """특정 학생의 모든 숙제 완료 상태를 한 번에 가져옴"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
+        return {r[0]: bool(r[1]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_all_routine_logs_map(student_name):
+    """특정 학생의 모든 루틴 로그를 한 번에 가져옴"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ?", (student_name,))
+        return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
+    except Exception:
+        return {}
 
 
 def get_korean_today():
@@ -116,7 +140,6 @@ def create_excel_backup():
         output.seek(0)
         return output.getvalue()
 
-# 호환성을 위해 백업 함수 별칭 설정
 backup_to_excel = create_excel_backup
 
 
@@ -156,7 +179,6 @@ def restore_from_excel(uploaded_file):
                 if db_type == "postgres":
                     from psycopg2.extras import execute_values
                     
-                    # 💡 트랜잭션 충돌 방지를 위해 실행 전 롤백 수행
                     try:
                         conn.rollback()
                     except Exception:
@@ -190,7 +212,6 @@ def restore_from_excel(uploaded_file):
                                     clean_row.append(val)
                             data_tuples.append(tuple(clean_row))
                         
-                        # 테이블별 고유키 충돌(ON CONFLICT) 처리
                         if target_table == "students" and "name" in cols:
                             non_key_cols = [col for col in cols if col != "name"]
                             if non_key_cols:
@@ -223,7 +244,6 @@ def restore_from_excel(uploaded_file):
                     pass
                 return False, f"시트 복구 실패 [{target_table}]: {str(sheet_err)}"
         
-        # 세션 상태 캐시 초기화
         for key in list(st.session_state.keys()):
             if "student" in key or "df" in key or "conn" in key:
                 try:
@@ -240,9 +260,6 @@ def restore_from_excel(uploaded_file):
         return False, f"복구 중 오류 발생: {str(e)}"
 
 
-# ====================================================
-# ☁️ 순수 psycopg2를 이용한 로컬 → Supabase 동기화 함수
-# ====================================================
 def migrate_local_to_supabase():
     try:
         import sqlite3
@@ -375,7 +392,7 @@ def init_db():
         except Exception:
             pass
 
-        c.execute("SELECT COUNT(*) FROM subjects")
+        q(c, "SELECT COUNT(*) FROM subjects")
         if c.fetchone()[0] == 0:
             default_subjects = ["수학(상)", "수학(하)", "수학Ⅰ", "수학Ⅱ", "미적분", "확률과 통계"]
             for sub in default_subjects:
@@ -1733,12 +1750,15 @@ else:
                             st.warning("삭제할 루틴 과제를 체크박스에서 먼저 선택해 주세요.")
 
                     st.markdown("---")
-                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (자동 저장)")
+                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (일괄 캐시 적용)")
                     st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
                     
                     today_obj = get_korean_today()
                     date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
                     
+                    # 💡 루틴 로그 일괄 캐시 적용으로 반복 쿼리 제거
+                    batch_routine_logs = get_all_routine_logs_map(selected_hw_student)
+
                     for r_id, r_title in current_routines:
                         st.markdown(f"**📌 {r_title}**")
                         cols = st.columns(7)
@@ -1748,8 +1768,7 @@ else:
                                 short_date = d_str[5:]
                                 st.caption(f"{short_date}({day_name})")
                                 
-                                cur_logs = get_student_daily_logs_by_date(selected_hw_student, d_str)
-                                def_val = cur_logs.get((str(r_id), d_str), False)
+                                def_val = batch_routine_logs.get((str(r_id), d_str), False)
                                 
                                 chk_key = f"auto_mat_routine_{selected_hw_student}_{r_id}_{d_str}"
                                 new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
@@ -2045,7 +2064,6 @@ else:
                         cnt = len(parsed_s)
                         summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + cnt
                 
-                # 💡 초고속 일괄 링크 집합 로드 (반복문 속도 문제 완전 해결)
                 link_set = get_all_problem_link_set()
 
                 search_missing_total = 0
@@ -2189,7 +2207,8 @@ else:
                 if hws:
                     with st.container(border=True):
                         st.markdown(f"**👤 {s_name} 학생**")
-                        s_hw_prog = get_student_homework_progress(s_name)
+                        # 💡 숙제 매트릭스도 일괄 캐시 맵 사용으로 반복 통신 제거
+                        s_hw_prog = get_all_homework_progress_map(s_name)
                         
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
