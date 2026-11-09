@@ -131,6 +131,47 @@ def restore_from_excel(uploaded_file):
             pass
         return False, f"복구 중 오류 발생: {str(e)}"
 
+# ====================================================
+# ☁️ 로컬 SQLite 데이터를 Supabase로 통째로 전송하는 동기화 함수
+# ====================================================
+def migrate_local_to_supabase():
+    try:
+        from sqlalchemy import create_engine
+        import sqlite3
+        
+        # 1. 로컬 SQLite 연결
+        DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
+        local_conn = sqlite3.connect(DB_PATH)
+        
+        # 2. Supabase(PostgreSQL) 연결 엔진 생성
+        if "supabase" in st.secrets:
+            sec = st.secrets["supabase"]
+            conn_url = sec.get("url", "")
+            if conn_url.startswith("postgres://"):
+                conn_url = conn_url.replace("postgres://", "postgresql://", 1)
+            engine = create_engine(conn_url)
+        else:
+            return False, "Supabase Secrets 설정이 없습니다."
+            
+        # 3. 로컬에 존재하는 모든 테이블 목록 가져오기
+        cursor = local_conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        migrated_tables = []
+        for table in tables:
+            if table in ["sqlite_sequence", "backup_info"]:
+                continue
+            
+            df = pd.read_sql(f"SELECT * FROM {table}", local_conn)
+            df.to_sql(table, engine, if_exists='replace', index=False)
+            migrated_tables.append(f"{table}({len(df)}건)")
+            
+        local_conn.close()
+        return True, f"클라우드 전송 완료된 테이블: {', '.join(migrated_tables)}"
+    except Exception as e:
+        return False, f"동기화 중 오류 발생: {str(e)}"
+
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
 if "teacher_authenticated" not in st.session_state:
@@ -912,6 +953,16 @@ with st.sidebar:
                                 st.rerun()
                         else:
                             st.error(f"❌ {msg}")
+                            
+        st.markdown("---")
+        if st.button("☁️ 로컬 데이터를 Supabase 클라우드로 업로드", use_container_width=True):
+            with st.spinner("로컬 데이터를 클라우드로 전송 중입니다... 잠시만 기다려주세요."):
+                success, msg = migrate_local_to_supabase()
+                if success:
+                    st.success(f"🎉 {msg}")
+                else:
+                    st.error(f"❌ {msg}")
+
         st.divider()
 
     st.markdown("<br>" * 3, unsafe_allow_html=True)
