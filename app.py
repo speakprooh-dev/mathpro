@@ -1165,6 +1165,7 @@ if not st.session_state["teacher_authenticated"]:
                     unread_video_count += 1
 
         # 📢 직관적인 안내 문구 배너 출력
+        # 📢 새 해설 대기 개수가 집계되어 나오는 안내 배너 출력
         if unread_video_count > 0:
             st.markdown(
                 f'''
@@ -1180,7 +1181,7 @@ if not st.session_state["teacher_authenticated"]:
                     color: #F87171;
                     font-weight: bold;
                 ">
-                    <span>🔥 선생님이 등록하신 <b>새로운 복습 문제 해설 영상</b>이 도착했어요! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습을 완료해 보세요.</span>
+                    <span>🔥 선생님이 등록하신 새로운 복습 문제 해설 영상이 <span style="color: #FFFFFF; font-size: 1.15em; text-decoration: underline;">{unread_video_count}개</span> 대기 중입니다! 💬 '오답·질문 관리' 탭에서 확인하고 차근차근 복습을 완료해 보세요.</span>
                 </div>
                 ''',
                 unsafe_allow_html=True
@@ -1388,7 +1389,7 @@ if not st.session_state["teacher_authenticated"]:
                             except Exception:
                                 pass
                     
-                    display_name = f"🔥 [새해설 대기] {u_code}" if has_new_unsolved else f"{u_code}"
+                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
                     unit_map_dict[display_name] = u_code
                     unit_display_options.append(display_name)
 
