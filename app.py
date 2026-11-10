@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (안전성 및 속도 최적화)
+# ☁️ Supabase URL 방식 연동 설정
 # ==========================================
 try:
     import psycopg2
@@ -46,7 +46,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 일괄 캐시 함수들
+# 🚀 고속 캐시 함수들
 # ==========================================
 @st.cache_data(ttl=300)
 def get_all_problem_link_set():
@@ -829,18 +829,6 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     conn.commit()
     st.cache_data.clear()
 
-def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    for routine_id_str, val in routine_checked_dict.items():
-        q(c, '''
-            INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
-        ''', (student_name, str(routine_id_str), log_date, int(val), int(val)))
-    conn.commit()
-    st.cache_data.clear()
-
 @st.cache_data(ttl=30)
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, db_type = get_db_connection()
@@ -1165,9 +1153,9 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
-# ----------------------------------------------------
+# ====================================================
 # 🖼️ 메인 화면 상단 로고 이미지 배치 및 타이틀
-# ----------------------------------------------------
+# ====================================================
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
@@ -1476,58 +1464,6 @@ if not st.session_state["teacher_authenticated"]:
         h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
-
-        conn_alert, _ = get_db_connection()
-        c_alert = conn_alert.cursor()
-        q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
-        user_wrong_rows = c_alert.fetchall()
-        
-        solved_map_alert = get_student_wrong_solved_status(selected_student)
-        unsolved_total_count = 0
-        new_video_count = 0
-        now_datetime_alert = datetime.now()
-
-        target_full_codes = []
-        for u_code, nums_txt in user_wrong_rows:
-            parsed_nums = parse_numbers(nums_txt)
-            for n in parsed_nums:
-                target_full_codes.append(f"{u_code}{n:03d}".upper())
-
-        batch_link_info = get_batch_problem_link_info(target_full_codes)
-
-        for f_code in target_full_codes:
-            v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
-            is_solved = solved_map_alert.get(f_code, False)
-            
-            if v_url and not is_solved:
-                unsolved_total_count += 1
-                try:
-                    up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                    if (now_datetime_alert - up_dt).total_seconds() <= 86400:
-                        new_video_count += 1
-                except Exception:
-                    pass
-
-        if unsolved_total_count > 0:
-            st.markdown(
-                f'''
-                <div style="
-                    background-color: rgba(239, 68, 68, 0.1);
-                    border-left: 4px solid #EF4444;
-                    padding: 12px 14px;
-                    border-radius: 8px;
-                    margin-bottom: 15px;
-                ">
-                    <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
-                        🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
-                    </div>
-                    <div style="font-size: 12px; margin-top: 4px; color: inherit;">
-                        "오답·질문 관리" 탭에서 해설을 시청하고 복습 완료를 체크해 주세요! 💡
-                    </div>
-                </div>
-                ''',
-                unsafe_allow_html=True
-            )
 
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
