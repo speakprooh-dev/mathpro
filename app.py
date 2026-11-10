@@ -1509,7 +1509,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
-            st.caption("체크박스를 눌러도 창이 접히지 않고 편하게 연속으로 체크할 수 있습니다! 🔥")
+            st.caption("체크박스를 연속으로 눌러도 렉 없이 빠르게 반영됩니다! 🔥")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name, v_url in milestones:
@@ -1530,9 +1530,9 @@ if not st.session_state["teacher_authenticated"]:
                                     value=default_val, 
                                     key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
                                 )
+                                # ⚡ [속도 최적화] 체크 상태가 바뀔 때 화면 전체 리프레시(st.rerun)를 제거하여 렉 방지
                                 if val != default_val:
                                     save_single_milestone_progress(selected_student, m_id, val)
-                                    st.rerun()
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
                                     st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
