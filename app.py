@@ -45,7 +45,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 클라우드 속도 극대화를 위한 공격적 캐시 함수들
+# 🚀 클라우드 속도 극대화를 위한 일괄 캐시 함수들
 # ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
@@ -86,6 +86,36 @@ def get_all_routine_logs_map(student_name):
     try:
         q(c, "SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ?", (student_name,))
         return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_entire_daily_routines_map():
+    """⚡ 모든 학생의 루틴 항목을 단 1회의 DB 요청으로 일괄 조회하여 맵 구성"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, id, title FROM daily_routines ORDER BY id")
+        rows = c.fetchall()
+        routines_map = {}
+        for s_name, r_id, title in rows:
+            routines_map.setdefault(s_name, []).append((r_id, title))
+        return routines_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_entire_daily_routine_logs_map(target_date_str):
+    """⚡ 지정 날짜의 모든 학생 루틴 로그를 단 1회의 DB 요청으로 일괄 조회"""
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, routine_id, is_checked FROM daily_routine_logs WHERE log_date = ?", (target_date_str,))
+        rows = c.fetchall()
+        logs_map = {}
+        for s_name, r_id, is_chk in rows:
+            logs_map[(s_name, str(r_id))] = bool(is_chk)
+        return logs_map
     except Exception:
         return {}
 
@@ -2209,12 +2239,16 @@ else:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
             today_str_box = str(get_korean_today())
+            
+            # ⚡ [성능 최적화] 개별 학생 반복 호출 대신 일괄 캐시 맵 활용
+            routines_map = get_entire_daily_routines_map()
+            logs_map = get_entire_daily_routine_logs_map(today_str_box)
+            
             unchecked_students_today = []
             for s_item in student_list:
-                r_list_s = get_student_daily_routines(s_item)
+                r_list_s = routines_map.get(s_item, [])
                 if r_list_s:
-                    log_map_s = get_student_daily_logs_by_date(s_item, today_str_box)
-                    done_all = all(log_map_s.get((str(r[0]), today_str_box), False) for r in r_list_s)
+                    done_all = all(logs_map.get((s_item, str(r[0])), False) for r in r_list_s)
                     if not done_all:
                         unchecked_students_today.append(s_item)
 
