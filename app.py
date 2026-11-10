@@ -723,10 +723,17 @@ def get_problem_link_info(full_code):
 def get_all_problem_links_searched(search_filter=""):
     if not search_filter or not search_filter.strip():
         return [], 0
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     search_val = f"%{search_filter.strip().upper()}%"
-    q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
+    
+    # 🟢 DB 타입(SQLite vs Postgres)에 맞춰 쿼리 파라미터 안전 처리
+    if db_type == "postgres":
+        query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE %s OR unit_code LIKE %s ORDER BY unit_code, full_code"
+    else:
+        query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code"
+        
+    c.execute(query, (search_val, search_val))
     rows = c.fetchall()
     return rows, len(rows)
 
