@@ -756,12 +756,23 @@ def get_problem_link_info(full_code):
 def get_all_problem_links_searched(search_filter=""):
     if not search_filter or not search_filter.strip():
         return [], 0
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    search_val = f"%{search_filter.strip().upper()}%"
-    q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
-    rows = c.fetchall()
-    return rows, len(rows)
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        search_val = f"%{search_filter.strip().upper()}%"
+        
+        # id 컬럼이 없는 구형 DB 구조일 경우를 대비해 안전하게 조회
+        try:
+            q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
+        except Exception:
+            # id 컬럼이 없다면 id 대신 0을 반환하도록 대체
+            q(c, "SELECT 0, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
+            
+        rows = c.fetchall()
+        return rows, len(rows)
+    except Exception as e:
+        print(f"문제 링크 검색 예외: {e}")
+        return [], 0
 
 def delete_problem_link(link_id):
     conn, _ = get_db_connection()
