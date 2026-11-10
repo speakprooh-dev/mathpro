@@ -2114,48 +2114,6 @@ else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 target_rows = c.fetchall()
 
-                if wrong_view_mode == "📅 날짜별 보기":
-                    available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
-                    selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
-                    
-                    filtered_logs = log_rows if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
-                
-                else: # 주간별 모아보기
-                    def get_week_range_str(date_str):
-                        try:
-                            d = date.fromisoformat(date_str)
-                            start_week = d - timedelta(days=d.weekday())
-                            end_week = start_week + timedelta(days=6)
-                            return f"{start_week} ~ {end_week} (월~일)"
-                        except Exception:
-                            return "날짜 미상 주간"
-                    
-                    weeks_dict = {}
-                    for s_name, u_code, p_num, reg_date in log_rows:
-                        weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
-                    
-                    sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
-                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
-                    filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
-
-                # (학생, 단원, 날짜) 단위로 그룹핑하여 렌더링 형식 맞춤
-                grouped_map = {}
-                for s_name, u_code, p_num, reg_date in filtered_logs:
-                    key = (s_name, u_code, reg_date)
-                    grouped_map.setdefault(key, []).append(p_num)
-                
-                target_rows = []
-                for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                    nums_txt = ", ".join(map(str, sorted(num_list)))
-                    target_rows.append((s_name, u_code, nums_txt, reg_date))
-            
-            else: # 해설 링크 없는 문제 모아보기
-                if chk_student_choice == "전체 학생 (모두 보기)":
-                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
-                else:
-                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                target_rows = c.fetchall()
-
             # --- 이하는 기존 출력 로직 동일 ---
             if target_rows:
                 summary_student_counts = {}
