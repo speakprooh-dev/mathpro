@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (캐싱 적용)
+# ☁️ Supabase URL 방식 연동 설정 (연결 캐싱 적용으로 속도 극대화)
 # ==========================================
 try:
     import psycopg2
@@ -17,16 +17,31 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
+@st.cache_resource(show_spinner=False)
+def get_persistent_postgres_connection(conn_url):
+    """클라우드 DB 연결을 한 번만 맺고 메모리에 유지하여 속도를 로컬 수준으로 끌어올립니다."""
+    conn = psycopg2.connect(conn_url, connect_timeout=5)
+    conn.autocommit = True
+    return conn
+
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
-            conn = psycopg2.connect(conn_url, connect_timeout=5)
-            conn.rollback()
+            
+            # 🟢 캐시된 영구 연결을 가져와서 즉시 재사용
+            conn = get_persistent_postgres_connection(conn_url)
+            
+            # 혹시라도 연결이 끊어졌을 경우 자동 재연결
+            if conn.closed != 0:
+                st.cache_resource.clear()
+                conn = get_persistent_postgres_connection(conn_url)
+                
             return conn, "postgres"
         except Exception as e:
-            st.error(f"❌ Supabase 연결 에러 상세 내용: {str(e)}")
+            # 연결 실패 시 안전하게 로컬 SQLite로 폴백
+            pass
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
@@ -2078,11 +2093,19 @@ else:
         
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_selectbox")
+            
             today_str_box = str(get_korean_today())
             
             routines_map = get_entire_daily_routines_map()
             logs_map = get_entire_daily_routine_logs_map(today_str_box)
-            unchecked_students_today = [s_item for s_item in student_list if routines_map.get(s_item) and not all(logs_map.get((s_item, str(r[0])), False) for r in routines_map.get(s_item, []))]
+            
+            unchecked_students_today = []
+            for s_item in student_list:
+                r_list_s = routines_map.get(s_item, [])
+                if r_list_s:
+                    done_all = all(logs_map.get((s_item, str(r[0])), False) for r in r_list_s)
+                    if not done_all:
+                        unchecked_students_today.append(s_item)
 
             if unchecked_students_today:
                 st.markdown(
@@ -2102,17 +2125,24 @@ else:
             all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
             entire_hw_prog = get_entire_homework_progress_map()
 
-            for s_idx_main, s_name in enumerate(student_list):
-                hws = all_students_hw_map.get(s_name, [])
-                expander_label = f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)" if hws else f"👤 {s_name} 학생 숙제 없음"
-                with st.expander(expander_label, expanded=False):
-                    if hws:
+            # 🟢 [개선 포인트] 해당 날짜에 숙제가 있는 학생들만 필터링
+            active_hw_students = [s_name for s_name in student_list if all_students_hw_map.get(s_name)]
+
+            if active_hw_students:
+                st.markdown(f"📌 **{selected_matrix_date} 숙제 배정 학생 (총 {len(active_hw_students)}명)**")
+                
+                for s_idx_main, s_name in enumerate(active_hw_students):
+                    hws = all_students_hw_map.get(s_name, [])
+                    
+                    expander_label = f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)"
+                    with st.expander(expander_label, expanded=False):
                         combined_titles_mat = [title for _, title in hws]
                         initial_mat_text = "\n".join(combined_titles_mat)
                         
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
-                                st.info(f"💬 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
+                                msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
+                                st.info(f"💬 **선생님의 한마디**: {msg_content}")
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
@@ -2124,11 +2154,13 @@ else:
                             with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
                                 st.markdown(f"##### 📝 {s_name} 학생 ({selected_matrix_date}) 숙제 전체 편집")
                                 edited_bulk_hw_text = st.text_area("줄바꿈으로 숙제 항목들을 수정하세요", value=initial_mat_text, height=120, key=f"mat_text_area_{s_idx_main}_{selected_matrix_date}")
+                                
                                 col_mb1, col_mb2 = st.columns(2)
                                 with col_mb1:
                                     save_mb_btn = st.form_submit_button("💾 일괄 수정 저장", type="primary")
                                 with col_mb2:
                                     del_mb_btn = st.form_submit_button("🗑️ 이 날짜 숙제 전체 삭제")
+                                    
                                 if save_mb_btn:
                                     if edited_bulk_hw_text.strip():
                                         update_student_homework_by_date(s_name, selected_matrix_date, edited_bulk_hw_text.strip())
@@ -2138,8 +2170,8 @@ else:
                                     delete_student_homework_date(s_name, selected_matrix_date)
                                     st.success("숙제가 전체 삭제되었습니다!")
                                     st.rerun()
-                    else:
-                        st.caption("해당 날짜에 등록된 과제가 없습니다.")
+            else:
+                st.info(f"선택하신 {selected_matrix_date}에 숙제가 배정된 학생이 없습니다.")
         else:
             st.info("등록된 숙제 날짜나 학생이 없습니다.")
 
