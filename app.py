@@ -12,11 +12,21 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
-# 🟢 [안전 장치] 기본 접속 모드는 무조건 'supabase'로 고정하여 학생 데이터 유실 방지
+# ==========================================
+# 🔀 [선생님 제어용] 전역 DB 모드 스위치 (기본값: supabase)
+# ==========================================
+@st.cache_resource
+def get_global_db_config():
+    """모든 학생과 접속자에게 적용되는 전역 DB 모드 설정 객체"""
+    return {"mode": "supabase"}
+
+global_config = get_global_db_config()
+
+# URL 파라미터(?db=local 또는 ?db=supabase)가 들어오면 최우선 적용, 없으면 전역 설정값을 따라감
 if "db" in st.query_params:
     st.session_state["db_mode_override"] = st.query_params["db"]
-elif "db_mode_override" not in st.session_state:
-    st.session_state["db_mode_override"] = "supabase"
+else:
+    st.session_state["db_mode_override"] = global_config["mode"]
 
 # ==========================================
 # ☁️ Supabase URL 방식 연동 설정
@@ -36,8 +46,7 @@ def get_persistent_postgres_connection(conn_url):
     return conn
 
 def get_db_connection():
-    # 🟢 학생들이 링크를 타고 들어오거나 기본 접속 시 항상 Supabase 클라우드 사용
-    if st.session_state["db_mode_override"] == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
+    if st.session_state.get("db_mode_override") == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
@@ -49,10 +58,10 @@ def get_db_connection():
                 conn = get_persistent_postgres_connection(conn_url)
                 
             return conn, "postgres"
-        except Exception as e:
+        except Exception:
             pass
     
-    # 선생님 본인 테스트 전용 로컬 SQLite 파일 모드
+    # 로컬 SQLite 파일 모드
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
@@ -70,7 +79,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 딜레이를 없애기 위한 초고속 일괄 캐시 함수들
+# 🚀 초고속 캐시 및 데이터 연동 함수들
 # ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
@@ -85,7 +94,6 @@ def get_all_problem_link_set():
 
 @st.cache_data(ttl=30)
 def get_batch_problem_link_info(full_codes):
-    """⚡ 여러 문제의 해설 링크 정보를 단 1회의 쿼리로 일괄 조회"""
     if not full_codes:
         return {}
     conn, db_type = get_db_connection()
@@ -402,7 +410,7 @@ def migrate_local_to_supabase():
                 cloud_cursor.executemany(insert_query, rows)
                 cloud_conn.commit()
                 migrated_tables.append(f"{table}({len(rows)}건)")
-            except Exception as e:
+            except Exception:
                 cloud_conn.rollback()
         local_conn.close()
         cloud_conn.close()
@@ -1202,7 +1210,7 @@ def parse_numbers(text):
     return set(int(n) for n in nums)
 
 # ----------------------------------------------------
-# 🖼️ 메인 화면 상단 로고 이미지 배치 및 타이틀
+# 🖼️ 메인 화면 상단 로고 및 헤더
 # ----------------------------------------------------
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
@@ -1236,41 +1244,40 @@ if url_student and url_student in student_list:
     log_student_visit(url_student)
 
 # ----------------------------------------------------
-# 🧭 사이드바 구성
+# 🧭 사이드바 구성 (선생님 전용 비상 스위치 통합)
 # ----------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 MathPro 시스템")
     
     if st.session_state["teacher_authenticated"]:
-        st.success("👑 선생님 모드 활성화됨")
+        st.success("👑 선생님 관리자 모드 활성화됨")
         
-        # 🟢 [안전한 관리자 전용 테스트 토글] 선생님 본인 화면에서만 로컬/클라우드 전환 제어
-        st.markdown("##### 🔀 DB 연동 모드 설정 (선생님 테스트용)")
-        current_mode = st.session_state["db_mode_override"]
+        # 🟢 [핵심] 관리자 전용 전학생 일괄 DB 모드 제어 스위치
+        st.markdown("##### 🔀 전학생 DB 모드 일괄 제어")
         
-        if current_mode == "supabase":
+        if global_config["mode"] == "supabase":
             st.markdown(
                 '<div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #10B981; text-align: center;">'
-                '☁️ 현재 Supabase 클라우드 연동 중'
+                '☁️ 현재 모든 학생: Supabase 클라우드'
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("📁 로컬 테스트 모드로 전환", use_container_width=True, key="btn_switch_to_local"):
+            if st.button("⚠️ 전학생 로컬 모드로 일괄 전환", use_container_width=True, key="btn_switch_to_local"):
+                global_config["mode"] = "local"
                 st.session_state["db_mode_override"] = "local"
-                st.query_params["db"] = "local"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
         else:
             st.markdown(
                 '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
-                '📁 현재 로컬 테스트 모드 중'
+                '📁 현재 모든 학생: 로컬 테스트 모드'
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("☁️ Supabase 클라우드로 복귀", use_container_width=True, key="btn_switch_to_supabase"):
+            if st.button("☁️ 전학생 Supabase 모드로 복귀", use_container_width=True, key="btn_switch_to_supabase"):
+                global_config["mode"] = "supabase"
                 st.session_state["db_mode_override"] = "supabase"
-                st.query_params["db"] = "supabase"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
@@ -1282,7 +1289,7 @@ with st.sidebar:
             st.rerun()
         st.divider()
         
-        st.markdown("##### 📥/📤 데이터 백업 및 복구")
+        st.markdown("##### 📥/📤 데이터 백업 및 수동 동기화")
         st.download_button(
             label="📥 전체 데이터 엑셀 백업하기",
             data=create_excel_backup(),
