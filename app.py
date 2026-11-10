@@ -2123,7 +2123,7 @@ else:
                 target_rows = c.fetchall()
 
             elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                # ⚡ [최고 속도 최적화] 불필요한 사전 검사 쿼리를 모두 제거하고 캐시된 함수로 즉시 조회
+                # ⚡ [초고속 최적화] 캐시된 로그 데이터를 즉시 가져와 날짜/주간별로 그룹화
                 @st.cache_data(ttl=60, show_spinner=False)
                 def get_cached_wrong_logs(student_name_filter):
                     conn_c, db_t = get_db_connection()
@@ -2135,6 +2135,49 @@ else:
                     return cursor.fetchall()
 
                 log_rows = get_cached_wrong_logs(chk_student_choice)
+
+                if log_rows:
+                    if wrong_view_mode == "📅 날짜별 보기":
+                        available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
+                        selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates)
+                        
+                        filtered_logs = log_rows if selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                        
+                        grouped_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
+                        
+                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
+                    
+                    else: # 주간별 모아보기
+                        def get_week_range_str(date_str):
+                            try:
+                                d = date.fromisoformat(date_str)
+                                start_week = d - timedelta(days=d.weekday())
+                                end_week = start_week + timedelta(days=6)
+                                return f"{start_week} ~ {end_week} (월~일)"
+                            except Exception:
+                                return "날짜 미상 주간"
+                        
+                        weeks_dict = {}
+                        for s_name, u_code, p_num, reg_date in log_rows:
+                            weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                        
+                        sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
+                        selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
+                        filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
+
+                        grouped_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
+                        
+                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
 
                 if log_rows:
                     if wrong_view_mode == "📅 날짜별 보기":
