@@ -51,7 +51,8 @@ def q(c, query, params=None):
     except Exception:
         pass
         
-    if params is not None:
+    # 🟢 파라미터가 비어있거나 빈 튜플인 경우 에러 방지를 위해 None으로 처리
+    if params is not None and len(params) > 0:
         c.execute(query, params)
     else:
         c.execute(query)
