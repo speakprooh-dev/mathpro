@@ -2371,15 +2371,19 @@ else:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 if searched_links:
+                    # 🟢 2개의 열(Columns)을 먼저 생성하여 좌우 교차 배치 준비
+                    cols = st.columns(2)
                     for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
-                        with st.container(border=True):
-                            col_li_info, col_li_del = st.columns([5, 1])
-                            with col_li_info:
-                                st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                            with col_li_del:
-                                if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
-                                    delete_problem_link(l_id)
-                                    st.rerun()
+                        target_col = cols[item_idx % 2]  # 짝수/홀수 인덱스에 따라 좌우 열(Column) 분배
+                        with target_col:
+                            with st.container(border=True):
+                                col_li_info, col_li_del = st.columns([5, 1])
+                                with col_li_info:
+                                    st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                                with col_li_del:
+                                    if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
+                                        delete_problem_link(l_id)
+                                        st.rerun()
                 else:
                     st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
             else:
