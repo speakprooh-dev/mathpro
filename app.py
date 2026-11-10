@@ -16,7 +16,7 @@ if "teacher_authenticated" not in st.session_state:
 if "db" in st.query_params:
     st.session_state["db_mode_override"] = st.query_params["db"]
 elif "db_mode_override" not in st.session_state:
-    st.session_state["db_mode_override"] = "local"
+    st.session_state["db_mode_override"] = "supabase"
 
 # ==========================================
 # ☁️ Supabase URL 방식 연동 설정 (버튼 토글 연동)
