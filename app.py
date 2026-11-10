@@ -467,7 +467,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
-            pass
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
             conn.commit()
@@ -722,43 +721,14 @@ def get_problem_link_info(full_code):
     return "", ""
 
 def get_all_problem_links_searched(search_filter=""):
-    if not search_filter or not str(search_filter).strip():
+    if not search_filter or not search_filter.strip():
         return [], 0
-    try:
-        conn, db_type = get_db_connection()
-        c = conn.cursor()
-        clean_filter = str(search_filter).strip().upper()
-        search_val = f"%{clean_filter}%"
-        
-        if db_type == "postgres":
-            query = """
-                SELECT id, full_code, video_url, unit_code 
-                FROM problem_links 
-                WHERE UPPER(TRIM(unit_code)) = %s 
-                   OR UPPER(TRIM(full_code)) = %s 
-                   OR UPPER(TRIM(unit_code)) LIKE %s 
-                   OR UPPER(TRIM(full_code)) LIKE %s 
-                ORDER BY unit_code, full_code
-            """
-            params = (clean_filter, clean_filter, search_val, search_val)
-        else:
-            query = """
-                SELECT id, full_code, video_url, unit_code 
-                FROM problem_links 
-                WHERE UPPER(TRIM(unit_code)) = ? 
-                   OR UPPER(TRIM(full_code)) = ? 
-                   OR UPPER(TRIM(unit_code)) LIKE ? 
-                   OR UPPER(TRIM(full_code)) LIKE ? 
-                ORDER BY unit_code, full_code
-            """
-            params = (clean_filter, clean_filter, search_val, search_val)
-            
-        c.execute(query, params)
-        rows = c.fetchall()
-        return rows, len(rows)
-    except Exception as e:
-        st.error(f"DB 검색 중 에러 발생: {e}")
-        return [], 0
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    search_val = f"%{search_filter.strip().upper()}%"
+    q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
+    rows = c.fetchall()
+    return rows, len(rows)
 
 def delete_problem_link(link_id):
     conn, _ = get_db_connection()
@@ -2257,6 +2227,7 @@ else:
             st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
             unit_summaries = get_unit_code_summary_list()
             dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
+            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
             
             col_dd, col_sc = st.columns(2)
             with col_dd:
@@ -2264,13 +2235,7 @@ else:
             with col_sc:
                 search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
             
-            # 🟢 드롭다운에서 선택한 값에서 괄호 앞의 단원코드(예: 1131)만 정확하게 추출
-            if search_link_input:
-                target_filter = search_link_input
-            elif selected_dropdown_item and not selected_dropdown_item.startswith("--"):
-                target_filter = selected_dropdown_item.split(" ")[0].strip()
-            else:
-                target_filter = ""
+            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
 
             if target_filter:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
