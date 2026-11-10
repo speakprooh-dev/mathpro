@@ -2118,7 +2118,8 @@ else:
                     st.warning("⚠️ 아직 날짜별 오답 로그가 비어있습니다. 아래 버튼을 눌러 기존 오답을 로그로 변환해 주세요!")
                     if st.button("🔄 기존 오답 노트를 날짜별 로그로 즉시 변환하기", type="primary"):
                         try:
-                            c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
+                            # q() 함수를 사용하여 안전하게 조회 및 실행
+                            q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
                             existing_wrong_rows = c.fetchall()
                             today_default_str = str(get_korean_today())
                             now_default_str = get_korean_now_str()
@@ -2127,12 +2128,13 @@ else:
                                 reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
                                 for num in parse_numbers(nums_txt):
                                     if db_type == "sqlite":
-                                        c.execute('''
+                                        q(c, '''
                                             INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
                                             VALUES (?, ?, ?, ?, ?)
                                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
                                     else:
-                                        c.execute('''
+                                        # q() 함수가 ?를 자동으로 %s로 변환해 줍니다!
+                                        q(c, '''
                                             INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
                                             VALUES (?, ?, ?, ?, ?)
                                             ON CONFLICT DO NOTHING
