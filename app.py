@@ -103,24 +103,18 @@ def get_korean_now_str():
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-# ==========================================
-# 📊 방문자 통계 분석 함수 (추가됨)
-# ==========================================
 def get_visitor_stats():
     try:
         conn, _ = get_db_connection()
         c = conn.cursor()
         today_str = str(get_korean_today())
         
-        # 오늘 접속한 고유 학생 수
         q(c, "SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
         today_active_cnt = c.fetchone()[0]
         
-        # 누적 총 접속 횟수
         q(c, "SELECT COUNT(*) FROM visitor_logs", ())
         total_visits = c.fetchone()[0]
         
-        # 학생별 최근 접속 일시 및 누적 횟수
         q(c, """
             SELECT student_name, MAX(visit_time), COUNT(*) 
             FROM visitor_logs 
@@ -129,7 +123,6 @@ def get_visitor_stats():
         """, ())
         s_summary = c.fetchall()
         
-        # 최근 7일 일자별 접속 요약
         q(c, """
             SELECT visit_date, COUNT(DISTINCT student_name), COUNT(*) 
             FROM visitor_logs 
@@ -143,9 +136,6 @@ def get_visitor_stats():
     except Exception:
         return 0, 0, [], []
 
-# ==========================================
-# 📥/📤 엑셀 백업 및 복구 장치
-# ==========================================
 def create_excel_backup():
     try:
         conn, db_type = get_db_connection()
@@ -657,12 +647,24 @@ def get_problem_link_info(full_code):
         return row[0], (row[1] if row[1] else "")
     return "", ""
 
-def get_all_problem_links():
+def get_all_problem_links_paginated(search_filter="", page=1, per_page=15):
+    """💡 전체를 한 번에 안 읽고 검색어나 페이징 단위로만 가볍게 읽어와서 7번 탭 속도를 초고속화"""
     conn, _ = get_db_connection()
     c = conn.cursor()
-    q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code")
-    rows = c.fetchall()
-    return rows
+    if search_filter:
+        q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (f"%{search_filter}%", f"%{search_filter}%"))
+        rows = c.fetchall()
+        return rows, len(rows), 1
+    else:
+        q(c, "SELECT COUNT(*) FROM problem_links")
+        total_count = c.fetchone()[0]
+        total_pages = max(1, (total_count + per_page - 1) // per_page)
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+        
+        q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code LIMIT ? OFFSET ?", (per_page, offset))
+        rows = c.fetchall()
+        return rows, total_count, total_pages
 
 def delete_problem_link(link_id):
     conn, _ = get_db_connection()
@@ -2189,12 +2191,11 @@ else:
 
             entire_hw_prog = get_entire_homework_progress_map()
 
+            # 💡 학생별 아코디언(expander)으로 감싸서 한 번에 그리는 부하를 완전히 없앰
             for s_idx_main, s_name in enumerate(student_list):
                 hws = get_student_homework_by_date(s_name, selected_matrix_date)
                 if hws:
-                    with st.container(border=True):
-                        st.markdown(f"**👤 {s_name} 학생**")
-                        
+                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
                                 msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
@@ -2252,66 +2253,46 @@ else:
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
         with col_link_tab2:
-            all_links = get_all_problem_links()
-            if all_links:
-                search_filter = st.text_input("🔍 검색", placeholder="단원코드 또는 문제번호").strip().upper()
-                filtered = [l for l in all_links if search_filter in l[1] or search_filter in l[3]] if search_filter else all_links
+            # 💡 초고속 페이징 적용으로 530개 링크가 있어도 탭 진입 시 딜레이 0초
+            search_filter_input = st.text_input("🔍 단원코드 또는 문제번호 검색", placeholder="예: B1353 또는 B1353015").strip().upper()
+            
+            if "link_page_num" not in st.session_state:
+                st.session_state["link_page_num"] = 1
                 
-                st.caption(f"총 {len(filtered)}개의 링크가 등록되어 있습니다.")
+            if search_filter_input:
+                filtered_links, total_cnt, total_pages = get_all_problem_links_paginated(search_filter=search_filter_input)
+                st.caption(f"검색 결과: 총 {total_cnt}개의 링크")
+                page_links = filtered_links
+            else:
+                curr_p = st.session_state["link_page_num"]
+                filtered_links, total_cnt, total_pages = get_all_problem_links_paginated(search_filter="", page=curr_p, per_page=15)
+                st.caption(f"전체 등록된 링크: 총 {total_cnt}개 (페이지 {curr_p} / {total_pages})")
+                page_links = filtered_links
+
+            if page_links:
+                for item_idx, (l_id, f_code, v_url, u_code) in enumerate(page_links):
+                    with st.container(border=True):
+                        col_li_info, col_li_del = st.columns([5, 1])
+                        with col_li_info:
+                            st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                        with col_li_del:
+                            if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
+                                delete_problem_link(l_id)
+                                st.rerun()
                 
-                if not search_filter:
-                    grouped_links = {}
-                    for l_id, f_code, v_url, u_code in filtered:
-                        grouped_links.setdefault(u_code, []).append((l_id, f_code, v_url))
-                    
-                    unit_keys = list(grouped_links.keys())
-                    items_per_page = 10
-                    total_pages = max(1, (len(unit_keys) + items_per_page - 1) // items_per_page)
-                    
-                    if "link_page" not in st.session_state:
-                        st.session_state["link_page"] = 1
-                        
-                    curr_page = st.session_state["link_page"] = min(st.session_state["link_page"], total_pages)
-                    
-                    start_idx = (curr_page - 1) * items_per_page
-                    end_idx = start_idx + items_per_page
-                    page_units = unit_keys[start_idx:end_idx]
-                    
-                    for u_idx, u_code in enumerate(page_units):
-                        u_items = grouped_links[u_code]
-                        with st.expander(f"📂 단원코드: [{u_code}] ({len(u_items)}개 문제)"):
-                            for item_idx, (l_id, f_code, v_url) in enumerate(u_items):
-                                col_li_info, col_li_del = st.columns([5, 1])
-                                with col_li_info:
-                                    st.markdown(f"📌 **{f_code}** | 🔗 [{v_url}]({v_url})")
-                                with col_li_del:
-                                    if st.button("🗑️", key=f"del_page_unit_{u_code}_{l_id}_{item_idx}"):
-                                        delete_problem_link(l_id)
-                                        st.rerun()
-                    
-                    if total_pages > 1:
-                        st.markdown("---")
-                        col_p1, col_p2, col_p3 = st.columns([1, 2, 1])
-                        with col_p1:
-                            if st.button("◀ 이전", disabled=(curr_page == 1), use_container_width=True):
-                                st.session_state["link_page"] -= 1
-                                st.rerun()
-                        with col_p2:
-                            st.markdown(f"<div style='text-align:center; padding-top:5px;'><b>페이지 {curr_page} / {total_pages}</b></div>", unsafe_allow_html=True)
-                        with col_p3:
-                            if st.button("다음 ▶", disabled=(curr_page == total_pages), use_container_width=True):
-                                st.session_state["link_page"] += 1
-                                st.rerun()
-                else:
-                    for item_idx, (l_id, f_code, v_url, u_code) in enumerate(filtered):
-                        with st.container(border=True):
-                            col_li_info, col_li_del = st.columns([5, 1])
-                            with col_li_info:
-                                st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                            with col_li_del:
-                                if st.button("🗑️", key=f"del_search_item_{u_code}_{l_id}_{item_idx}"):
-                                    delete_problem_link(l_id)
-                                    st.rerun()
+                if not search_filter_input and total_pages > 1:
+                    st.markdown("---")
+                    cp1, cp2, cp3 = st.columns([1, 2, 1])
+                    with cp1:
+                        if st.button("◀ 이전 페이지", disabled=(st.session_state["link_page_num"] <= 1), use_container_width=True):
+                            st.session_state["link_page_num"] -= 1
+                            st.rerun()
+                    with cp2:
+                        st.markdown(f"<div style='text-align:center; padding-top:5px;'><b>{st.session_state['link_page_num']} / {total_pages} 페이지</b></div>", unsafe_allow_html=True)
+                    with cp3:
+                        if st.button("다음 페이지 ▶", disabled=(st.session_state["link_page_num"] >= total_pages), use_container_width=True):
+                            st.session_state["link_page_num"] += 1
+                            st.rerun()
             else:
                 st.info("등록된 해설 링크가 없습니다.")
 
