@@ -2123,7 +2123,7 @@ else:
                 target_rows = c.fetchall()
 
             elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                # ⚡ [초고속 최적화] 매번 변환하지 않고 캐시된 로그 데이터를 단숨에 조회
+                # ⚡ [초고속 최적화] 무거운 변환 코드를 제거하고 캐시된 로그만 즉시 조회
                 @st.cache_data(ttl=60, show_spinner=False)
                 def get_cached_wrong_logs(student_name_filter):
                     conn_c, db_t = get_db_connection()
@@ -2136,33 +2136,7 @@ else:
 
                 log_rows = get_cached_wrong_logs(chk_student_choice)
 
-                # 🟢 로그 데이터가 비어있다면 자동으로 기존 오답을 로그로 변환 후 새로고침
-                if not log_rows:
-                    try:
-                        q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
-                        existing_wrong_rows = c.fetchall()
-                        today_default_str = str(get_korean_today())
-                        now_default_str = get_korean_now_str()
-                        
-                        for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
-                            reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
-                            for num in parse_numbers(nums_txt):
-                                if db_type == "sqlite":
-                                    q(c, '''
-                                        INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                                        VALUES (?, ?, ?, ?, ?)
-                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
-                                else:
-                                    c.execute('''
-                                        INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                                        VALUES (%s, %s, %s, %s, %s)
-                                        ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
-                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
-                        conn.commit()
-                        st.rerun()
-                    except Exception:
-                        pass
-                else:
+                if log_rows:
                     if wrong_view_mode == "📅 날짜별 보기":
                         available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
                         selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates)
