@@ -2206,17 +2206,23 @@ else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 target_rows = c.fetchall()
 
-            # --- 결과 렌더링 영역 ---
+           # --- 결과 렌더링 영역 ---
             if target_rows:
                 summary_student_counts = {}
+                all_target_full_codes = [] # 🟢 [최적화] 모든 문제 코드를 담을 리스트
+                
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
                         summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
+                        for n in parsed_s:
+                            all_target_full_codes.append(f"{u_code}{n:03d}".upper())
                 
+                # ⚡ 단 1회의 쿼리로 현재 화면에 필요한 모든 해설 정보를 한 번에 가져옴 (초고속 캐시 활용)
+                batch_link_cache = get_batch_problem_link_info(list(set(all_target_full_codes)))
                 link_set = get_all_problem_link_set()
-                search_missing_total = sum(1 for s_name, u_code, nums_txt, u_date in target_rows for n in parse_numbers(nums_txt) if f"{u_code}{n:03d}".upper() not in link_set)
-
+                
+                search_missing_total = sum(1 for f_code in all_target_full_codes if f_code not in link_set)
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
                     st.markdown(
@@ -2239,10 +2245,17 @@ else:
                     if parsed_s:
                         with st.container(border=True):
                             st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
-                            colored_num_tags = [
-                                f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
-                                for n in sorted(list(parsed_s))
-                            ]
+                            
+                            colored_num_tags = []
+                            for n in sorted(list(parsed_s)):
+                                f_code = f"{u_code}{n:03d}".upper()
+                                v_url, _ = batch_link_cache.get(f_code, ("", ""))
+                                # 해설 링크가 존재하면 파란색, 없으면 빨간색으로 표시
+                                if v_url:
+                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                else:
+                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+
                             st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 if wrong_view_mode not in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
