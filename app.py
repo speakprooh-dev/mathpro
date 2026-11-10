@@ -2123,8 +2123,38 @@ else:
                 target_rows = c.fetchall()
 
             elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                # ⚡ [초고속 최적화] 캐시된 로그 데이터를 즉시 가져와 날짜/주간별로 그룹화
-                @st.cache_data(ttl=60, show_spinner=False)
+                # ⚡ [안전 장치] 로그 테이블이 비어있으면 자동으로 채우고 초고속 조회
+                conn_check, db_type_check = get_db_connection()
+                c_check = conn_check.cursor()
+                
+                q(c_check, "SELECT COUNT(*) FROM student_wrong_logs", ())
+                if c_check.fetchone()[0] == 0:
+                    try:
+                        q(c_check, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                        existing_wrong_rows = c_check.fetchall()
+                        today_default_str = str(get_korean_today())
+                        now_default_str = get_korean_now_str()
+                        
+                        for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
+                            reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
+                            for num in parse_numbers(nums_txt):
+                                if db_type_check == "sqlite":
+                                    c_check.execute('''
+                                        INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                                        VALUES (?, ?, ?, ?, ?)
+                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                                else:
+                                    c_check.execute('''
+                                        INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                                        VALUES (%s, %s, %s, %s, %s)
+                                        ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
+                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                        conn_check.commit()
+                        st.cache_data.clear() # 캐시 초기화로 빈 화면 방지
+                    except Exception:
+                        pass
+
+                @st.cache_data(ttl=30, show_spinner=False)
                 def get_cached_wrong_logs(student_name_filter):
                     conn_c, db_t = get_db_connection()
                     cursor = conn_c.cursor()
