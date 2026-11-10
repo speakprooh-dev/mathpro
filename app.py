@@ -505,7 +505,7 @@ def init_db():
                     pass
             conn.commit()
 
-        # 🟢 [추가] 기존에 입력되어 있던 오답 데이터를 로그 테이블로 1회성 마이그레이션
+        # 🟢 [수정] 기존 오답 데이터를 로그 테이블로 강제 마이그레이션 및 동기화
         try:
             c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
             existing_wrong_rows = c.fetchall()
