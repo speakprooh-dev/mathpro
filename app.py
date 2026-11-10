@@ -704,6 +704,22 @@ def get_problem_links_by_unit(unit_code):
     rows = c.fetchall()
     return rows
 
+@st.cache_data(ttl=30)
+def get_batch_problem_link_info(full_codes):
+    """⚡ 여러 문제의 해설 링크 정보를 단 1회의 쿼리로 일괄 조회"""
+    if not full_codes:
+        return {}
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        placeholders = ', '.join(['%s' if db_type == "postgres" else '?'] * len(full_codes))
+        query = f"SELECT full_code, video_url, updated_at FROM problem_links WHERE full_code IN ({placeholders})"
+        q(c, query, tuple(full_codes))
+        rows = c.fetchall()
+        return {r[0].upper(): (r[1], r[2] if r[2] else "") for r in rows}
+    except Exception:
+        return {}
+
 @st.cache_data(ttl=60)
 def get_problem_link_info(full_code):
     conn, db_type = get_db_connection()
@@ -1357,21 +1373,28 @@ if not st.session_state["teacher_authenticated"]:
         new_video_count = 0
         now_datetime_alert = datetime.now()
 
+        # 1. 확인할 모든 문제 코드(full_code) 리스트 수집
+        target_full_codes = []
         for u_code, nums_txt in user_wrong_rows:
             parsed_nums = parse_numbers(nums_txt)
             for n in parsed_nums:
-                f_code = f"{u_code}{n:03d}"
-                v_url, v_up_at = get_problem_link_info(f_code)
-                is_solved = solved_map_alert.get(f_code, False)
-                
-                if v_url and not is_solved:
-                    unsolved_total_count += 1
-                    try:
-                        up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                        if (now_datetime_alert - up_dt).total_seconds() <= 86400:
-                            new_video_count += 1
-                    except Exception:
-                        pass
+                target_full_codes.append(f"{u_code}{n:03d}".upper())
+
+        # 2. ⚡ 단 1번의 쿼리로 모든 문제의 링크 정보를 일괄 가져오기
+        batch_link_info = get_batch_problem_link_info(target_full_codes)
+
+        for f_code in target_full_codes:
+            v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
+            is_solved = solved_map_alert.get(f_code, False)
+            
+            if v_url and not is_solved:
+                unsolved_total_count += 1
+                try:
+                    up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                    if (now_datetime_alert - up_dt).total_seconds() <= 86400:
+                        new_video_count += 1
+                except Exception:
+                    pass
 
         if unsolved_total_count > 0:
             st.markdown(
