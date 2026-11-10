@@ -523,10 +523,10 @@ def init_db():
                             VALUES (?, ?, ?, ?, ?)
                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
                     else:
-                        c.execute('''
+                        q(c, '''
                             INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
                             VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT DO NOTHING
+                            ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
             conn.commit()
         except Exception as e:
@@ -1155,8 +1155,8 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 q(c, '''
                     INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
                     VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT DO NOTHING
-                ''', (student_name, unit_code, int(num), today_str, now_str))
+                    ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
+                ''', (s_name, u_code, int(num), reg_date, now_default_str))
 
         conn.commit()
         st.cache_data.clear()
