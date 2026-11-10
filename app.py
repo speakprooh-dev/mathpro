@@ -721,12 +721,12 @@ def get_problem_link_info(full_code):
     return "", ""
 
 def get_all_problem_links_searched(search_filter=""):
-    if not search_filter or not search_filter.strip():
+    if not search_filter or not str(search_filter).strip():
         return [], 0
     try:
         conn, db_type = get_db_connection()
         c = conn.cursor()
-        clean_filter = search_filter.strip().upper()
+        clean_filter = str(search_filter).strip().upper()
         search_val = f"%{clean_filter}%"
         
         if db_type == "postgres":
@@ -2254,16 +2254,21 @@ else:
         with col_link_tab2:
             st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
             unit_summaries = get_unit_code_summary_list()
-            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
-            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
-            
-            col_dd, col_sc = st.columns(2)
-            with col_dd:
-                selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
-            with col_sc:
-                search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
-            
-            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
+dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
+
+col_dd, col_sc = st.columns(2)
+with col_dd:
+    selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
+with col_sc:
+    search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
+
+# 🟢 직접 검색어가 있으면 검색어 우선, 없으면 드롭다운의 맨 앞 단원코드(예: 114, B1353)만 추출
+if search_link_input:
+    target_filter = search_link_input
+elif selected_dropdown_item and not selected_dropdown_item.startswith("--"):
+    target_filter = selected_dropdown_item.split(" ")[0].strip()
+else:
+    target_filter = ""
 
             if target_filter:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
