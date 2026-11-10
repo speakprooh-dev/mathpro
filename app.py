@@ -80,6 +80,25 @@ def get_entire_homework_progress_map():
         return {}
 
 @st.cache_data(ttl=30)
+def get_all_students_homework_map(hw_date):
+    """⚡ 특정 날짜의 모든 학생 숙제 항목을 단 1회의 쿼리로 일괄 조회"""
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
+        else:
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = ? ORDER BY student_name, id", (hw_date,))
+        rows = c.fetchall()
+        
+        hw_map = {}
+        for h_id, s_name, title in rows:
+            hw_map.setdefault(s_name, []).append((h_id, title))
+        return hw_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
 def get_all_routine_logs_map(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -2235,12 +2254,12 @@ else:
         c = conn.cursor()
         q(c, "SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
         all_hw_dates = [r[0] for r in c.fetchall()]
+        
         if all_hw_dates and student_list:
-            selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+            selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_selectbox")
             
             today_str_box = str(get_korean_today())
             
-            # ⚡ [성능 최적화] 개별 학생 반복 호출 대신 일괄 캐시 맵 활용
             routines_map = get_entire_daily_routines_map()
             logs_map = get_entire_daily_routine_logs_map(today_str_box)
             
@@ -2267,12 +2286,16 @@ else:
                     unsafe_allow_html=True
                 )
 
+            # 🟢 [개선 포인트] 학생별 개별 조회 대신 단 1회의 쿼리로 전체 학생 숙제 일괄 로드
+            all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
             entire_hw_prog = get_entire_homework_progress_map()
 
             for s_idx_main, s_name in enumerate(student_list):
-                hws = get_student_homework_by_date(s_name, selected_matrix_date)
-                if hws:
-                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
+                hws = all_students_hw_map.get(s_name, [])
+                
+                expander_label = f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)" if hws else f"👤 {s_name} 학생 숙제 없음"
+                with st.expander(expander_label, expanded=False):
+                    if hws:
                         combined_titles_mat = [title for _, title in hws]
                         initial_mat_text = "\n".join(combined_titles_mat)
                         
@@ -2307,6 +2330,10 @@ else:
                                     delete_student_homework_date(s_name, selected_matrix_date)
                                     st.success("숙제가 전체 삭제되었습니다!")
                                     st.rerun()
+                    else:
+                        st.caption("해당 날짜에 등록된 과제가 없습니다.")
+        else:
+            st.info("등록된 숙제 날짜나 학생이 없습니다.")
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
