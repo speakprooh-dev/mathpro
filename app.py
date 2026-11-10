@@ -7,8 +7,17 @@ import pandas as pd
 import io
 import os
 
+st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
+
+if "teacher_authenticated" not in st.session_state:
+    st.session_state["teacher_authenticated"] = False
+
+# 🟢 [추가] 앱 내에서 버튼으로 모드를 바꿀 수 있는 세션 상태 관리 (기본값: 로컬)
+if "db_mode_override" not in st.session_state:
+    st.session_state["db_mode_override"] = "local"
+
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (연결 캐싱 적용으로 속도 극대화)
+# ☁️ Supabase URL 방식 연동 설정 (버튼 토글 연동)
 # ==========================================
 try:
     import psycopg2
@@ -25,24 +34,23 @@ def get_persistent_postgres_connection(conn_url):
     return conn
 
 def get_db_connection():
-    if SUPABASE_AVAILABLE and "supabase" in st.secrets:
+    # 🟢 사용자가 앱 내에서 'supabase' 모드를 켰을 때만 작동
+    if st.session_state["db_mode_override"] == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             
-            # 🟢 캐시된 영구 연결을 가져와서 즉시 재사용
             conn = get_persistent_postgres_connection(conn_url)
             
-            # 혹시라도 연결이 끊어졌을 경우 자동 재연결
             if conn.closed != 0:
                 st.cache_resource.clear()
                 conn = get_persistent_postgres_connection(conn_url)
                 
             return conn, "postgres"
         except Exception as e:
-            # 연결 실패 시 안전하게 로컬 SQLite로 폴백
             pass
     
+    # 기본값 또는 'local' 모드 선택 시 SQLite 파일 사용
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
@@ -364,7 +372,11 @@ def migrate_local_to_supabase():
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
         
-        cloud_conn, _ = get_db_connection()
+        # 일시적으로 Supabase 연결을 맺어 데이터 전송
+        sec = st.secrets["supabase"]
+        conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
+        cloud_conn = psycopg2.connect(conn_url, connect_timeout=5)
+        cloud_conn.autocommit = True
         cloud_cursor = cloud_conn.cursor()
         
         local_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -392,14 +404,10 @@ def migrate_local_to_supabase():
             except Exception as e:
                 cloud_conn.rollback()
         local_conn.close()
+        cloud_conn.close()
         return True, f"클라우드 전송 완료된 테이블: {', '.join(migrated_tables)}"
     except Exception as e:
         return False, f"동기화 중 오류 발생: {str(e)}"
-
-st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
-
-if "teacher_authenticated" not in st.session_state:
-    st.session_state["teacher_authenticated"] = False
 
 def get_base_url():
     try:
@@ -1167,21 +1175,37 @@ with st.sidebar:
     
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
-        _, current_db_type = get_db_connection()
-        if current_db_type == "postgres":
+        
+        # 🟢 [추가] 사이드바에서 버튼 하나로 DB 모드 토글 전환
+        st.markdown("##### 🔀 DB 연동 모드 설정")
+        current_mode = st.session_state["db_mode_override"]
+        
+        if current_mode == "supabase":
             st.markdown(
                 '<div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #10B981; text-align: center;">'
-                '☁️ 현재 Supabase 클라우드 DB 연동 중'
+                '☁️ 현재 Supabase 클라우드 연동 중'
                 '</div>',
                 unsafe_allow_html=True
             )
+            if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True):
+                st.session_state["db_mode_override"] = "local"
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
         else:
             st.markdown(
                 '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
-                '📁 현재 로컬(SQLite) 파일 모드 연동 중'
+                '📁 현재 로컬 파일 모드 연동 중'
                 '</div>',
                 unsafe_allow_html=True
             )
+            if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True):
+                st.session_state["db_mode_override"] = "supabase"
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+
+        st.divider()
 
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
             st.session_state["teacher_authenticated"] = False
@@ -1319,7 +1343,6 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
-        # ⚡ [초고속 최적화] 개별 루프 대신 일괄 쿼리로 미복습 오답 한 번에 계산
         conn_alert, _ = get_db_connection()
         c_alert = conn_alert.cursor()
         q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
@@ -1541,7 +1564,6 @@ if not st.session_state["teacher_authenticated"]:
                 unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
                 unit_map_dict = {}
                 
-                # ⚡ [최적화] 오답 리스트 전체에 대한 링크 정보도 일괄 조회
                 all_saved_full_codes = []
                 for u_code in saved_units_list:
                     entry_txt = get_student_wrong_entry(selected_student, u_code)
@@ -2125,7 +2147,6 @@ else:
             all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
             entire_hw_prog = get_entire_homework_progress_map()
 
-            # 🟢 [개선 포인트] 해당 날짜에 숙제가 있는 학생들만 필터링
             active_hw_students = [s_name for s_name in student_list if all_students_hw_map.get(s_name)]
 
             if active_hw_students:
