@@ -2130,36 +2130,32 @@ else:
                     q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (chk_student_choice,))
                 log_rows = c.fetchall()
 
-                # 🟢 만약 로그 데이터가 없다면, 화면에서 직접 변환할 수 있는 버튼 제공
+                # 🟢 로그 데이터가 비어있다면 자동으로 기존 오답을 로그로 변환 후 새로고침
                 if not log_rows:
-                    st.warning("⚠️ 아직 날짜별 오답 로그가 비어있습니다. 아래 버튼을 눌러 기존 오답을 로그로 변환해 주세요!")
-                    if st.button("🔄 기존 오답 노트를 날짜별 로그로 즉시 변환하기", type="primary"):
-                        try:
-                            # q() 함수를 사용하여 안전하게 조회 및 실행
-                            q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
-                            existing_wrong_rows = c.fetchall()
-                            today_default_str = str(get_korean_today())
-                            now_default_str = get_korean_now_str()
-                            
-                            for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
-                                reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
-                                for num in parse_numbers(nums_txt):
-                                    if db_type == "sqlite":
-                                        q(c, '''
-                                            INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                                            VALUES (?, ?, ?, ?, ?)
-                                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
-                                    else:
-                                        c.execute('''
-                                            INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                                            VALUES (%s, %s, %s, %s, %s)
-                                            ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
-                                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
-                            conn.commit()
-                            st.success("🎉 성공적으로 변환되었습니다! 화면을 새로고침합니다.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"변환 중 오류 발생: {e}")
+                    try:
+                        q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                        existing_wrong_rows = c.fetchall()
+                        today_default_str = str(get_korean_today())
+                        now_default_str = get_korean_now_str()
+                        
+                        for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
+                            reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
+                            for num in parse_numbers(nums_txt):
+                                if db_type == "sqlite":
+                                    q(c, '''
+                                        INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                                        VALUES (?, ?, ?, ?, ?)
+                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                                else:
+                                    c.execute('''
+                                        INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                                        VALUES (%s, %s, %s, %s, %s)
+                                        ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
+                                    ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                        conn.commit()
+                        st.rerun()
+                    except Exception:
+                        pass
                 else:
                     if wrong_view_mode == "📅 날짜별 보기":
                         available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
