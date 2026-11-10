@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정
+# ☁️ Supabase URL 방식 연동 설정 (캐싱 적용)
 # ==========================================
 try:
     import psycopg2
@@ -22,12 +22,11 @@ def get_db_connection():
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
-            
             conn = psycopg2.connect(conn_url, connect_timeout=5)
-            conn.autocommit = True
+            conn.rollback()
             return conn, "postgres"
         except Exception as e:
-            pass
+            st.error(f"❌ Supabase 연결 에러 상세 내용: {str(e)}")
     
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
@@ -46,9 +45,9 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 강력한 캐시 적용 함수들 (로딩 지연 원인 원천 차단)
+# 🚀 딜레이를 없애기 위한 초고속 일괄 캐시 함수들
 # ==========================================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_all_problem_link_set():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -59,7 +58,99 @@ def get_all_problem_link_set():
     except Exception:
         return set()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
+def get_batch_problem_link_info(full_codes):
+    """⚡ 여러 문제의 해설 링크 정보를 단 1회의 쿼리로 일괄 조회"""
+    if not full_codes:
+        return {}
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        placeholders = ', '.join(['%s' if db_type == "postgres" else '?'] * len(full_codes))
+        query = f"SELECT full_code, video_url, updated_at FROM problem_links WHERE full_code IN ({placeholders})"
+        q(c, query, tuple(full_codes))
+        rows = c.fetchall()
+        return {r[0].upper(): (r[1], r[2] if r[2] else "") for r in rows}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_all_homework_progress_map(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
+        return {r[0]: bool(r[1]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_entire_homework_progress_map():
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, student_hw_id, is_checked FROM student_homework_progress")
+        rows = c.fetchall()
+        return {(r[0], r[1]): bool(r[2]) for r in rows}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_all_routine_logs_map(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ?", (student_name,))
+        return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_entire_daily_routines_map():
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, id, title FROM daily_routines ORDER BY id")
+        rows = c.fetchall()
+        routines_map = {}
+        for s_name, r_id, title in rows:
+            routines_map.setdefault(s_name, []).append((r_id, title))
+        return routines_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_entire_daily_routine_logs_map(target_date_str):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT student_name, routine_id, is_checked FROM daily_routine_logs WHERE log_date = ?", (target_date_str,))
+        rows = c.fetchall()
+        logs_map = {}
+        for s_name, r_id, is_chk in rows:
+            logs_map[(s_name, str(r_id))] = bool(is_chk)
+        return logs_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_all_students_homework_map(hw_date):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
+        else:
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = ? ORDER BY student_name, id", (hw_date,))
+        rows = c.fetchall()
+        hw_map = {}
+        for h_id, s_name, title in rows:
+            hw_map.setdefault(s_name, []).append((h_id, title))
+        return hw_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
 def get_unit_code_summary_list():
     try:
         conn, _ = get_db_connection()
@@ -68,64 +159,6 @@ def get_unit_code_summary_list():
         return c.fetchall()
     except Exception:
         return []
-
-@st.cache_data(ttl=30)
-def get_student_routine_streak(student_name):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines = c.fetchone()[0]
-    if total_routines == 0:
-        return 0
-    
-    streak = 0
-    check_date = get_korean_today()
-    while True:
-        d_str = str(check_date)
-        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-        r_cnt = c.fetchone()[0]
-        if r_cnt == 0:
-            break
-        
-        q(c, """
-            SELECT COUNT(*) FROM daily_routine_logs 
-            WHERE student_name = ? AND log_date = ? AND is_checked = 1
-        """, (student_name, d_str))
-        done_cnt = c.fetchone()[0]
-        
-        if done_cnt >= r_cnt:
-            streak += 1
-            check_date -= timedelta(days=1)
-        else:
-            if check_date == get_korean_today():
-                check_date -= timedelta(days=1)
-                continue
-            else:
-                break
-    return streak
-
-@st.cache_data(ttl=30)
-def get_routine_completion_rate(student_name, days_limit=7):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    today_obj = get_korean_today()
-    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
-    today_str = str(today_obj)
-    
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines_count = c.fetchone()[0]
-    if total_routines_count == 0:
-        return 0, 0, 0
-    total_expected = total_routines_count * days_limit
-    
-    q(c, """
-        SELECT COUNT(*) FROM daily_routine_logs 
-        WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
-    """, (student_name, start_date_str, today_str))
-    completed_count = c.fetchone()[0]
-    
-    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
-    return rate, completed_count, total_expected
 
 def get_korean_today():
     try:
@@ -178,7 +211,6 @@ def create_excel_backup():
     try:
         conn, db_type = get_db_connection()
         output = io.BytesIO()
-        
         tables = [
             "students", "subjects", "chapters", "chapter_types", 
             "milestones", "homework", "student_homework", "milestone_progress", 
@@ -186,7 +218,6 @@ def create_excel_backup():
             "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
-        
         success_count = 0
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             for table in tables:
@@ -196,11 +227,9 @@ def create_excel_backup():
                     success_count += 1
                 except Exception:
                     pass
-            
             if success_count == 0:
                 df_empty = pd.DataFrame({"info": ["No data available"]})
                 df_empty.to_excel(writer, sheet_name="backup_info", index=False)
-                
         output.seek(0)
         return output.getvalue()
     except Exception as e:
@@ -215,7 +244,6 @@ def restore_from_excel(uploaded_file):
         excel_file = pd.ExcelFile(uploaded_file)
         conn, db_type = get_db_connection()
         c = conn.cursor()
-        
         restored_sheets = []
         tables_order = [
             "students", "subjects", "chapters", "chapter_types", 
@@ -224,7 +252,6 @@ def restore_from_excel(uploaded_file):
             "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs"
         ]
-        
         existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
         sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
         
@@ -232,10 +259,8 @@ def restore_from_excel(uploaded_file):
             try:
                 df = pd.read_excel(excel_file, sheet_name=target_table)
                 df = df.dropna(how='all')
-                
                 if 'id' in df.columns and df['id'].isna().any():
                     df = df.drop(columns=['id'])
-                
                 if target_table == "milestone_progress" and "milestone_id" in df.columns:
                     df = df.dropna(subset=["milestone_id"])
                 if target_table == "student_homework_progress" and "student_hw_id" in df.columns:
@@ -247,7 +272,6 @@ def restore_from_excel(uploaded_file):
                         conn.rollback()
                     except Exception:
                         pass
-                    
                     try:
                         if target_table == "students":
                             c.execute(f"TRUNCATE TABLE {target_table} RESTART IDENTITY CASCADE;")
@@ -263,7 +287,6 @@ def restore_from_excel(uploaded_file):
                     if not df.empty:
                         cols = list(df.columns)
                         col_str = ", ".join(cols)
-                        
                         data_tuples = []
                         for row in df.itertuples(index=False, name=None):
                             clean_row = []
@@ -292,14 +315,11 @@ def restore_from_excel(uploaded_file):
                                 insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT (full_code) DO NOTHING"
                         else:
                             insert_query = f"INSERT INTO {target_table} ({col_str}) VALUES %s ON CONFLICT DO NOTHING"
-                            
                         execute_values(c, insert_query, data_tuples)
-                    
                     conn.commit()
                 else:
                     df.to_sql(target_table, conn, if_exists='replace', index=False)
                     conn.commit()
-                    
                 restored_sheets.append(f"{target_table}({len(df)}건)")
             except Exception as sheet_err:
                 try:
@@ -314,7 +334,6 @@ def restore_from_excel(uploaded_file):
                     del st.session_state[key]
                 except:
                     pass
-                
         return True, f"🎉 복구 완료된 시트 목록:\n- " + ",\n- ".join(restored_sheets)
     except Exception as e:
         try:
@@ -335,27 +354,21 @@ def migrate_local_to_supabase():
         
         local_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [row[0] for row in local_cursor.fetchall()]
-        
         migrated_tables = []
         for table in tables:
             if table in ["sqlite_sequence", "backup_info"]:
                 continue
-            
             local_cursor.execute(f"SELECT * FROM {table}")
             rows = local_cursor.fetchall()
-            
             if not rows:
                 continue
-                
             col_names = [description[0] for description in local_cursor.description]
             col_str = ", ".join(col_names)
             placeholders = ", ".join(["%s"] * len(col_names))
-            
             try:
                 cloud_cursor.execute(f"DELETE FROM {table}")
             except Exception:
                 cloud_conn.rollback()
-                
             insert_query = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders})"
             try:
                 cloud_cursor.executemany(insert_query, rows)
@@ -363,7 +376,6 @@ def migrate_local_to_supabase():
                 migrated_tables.append(f"{table}({len(rows)}건)")
             except Exception as e:
                 cloud_conn.rollback()
-                
         local_conn.close()
         return True, f"클라우드 전송 완료된 테이블: {', '.join(migrated_tables)}"
     except Exception as e:
@@ -395,7 +407,6 @@ def init_db():
     try:
         conn, db_type = get_db_connection()
         c = conn.cursor()
-        
         if db_type == "postgres":
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS subjects (id SERIAL PRIMARY KEY, name TEXT UNIQUE NOT NULL);')
@@ -473,7 +484,6 @@ init_db()
 def log_student_visit(student_name):
     if not student_name or st.session_state.get("teacher_authenticated", False):
         return
-    
     session_key = f"visited_{student_name}_{get_korean_today()}"
     if not st.session_state.get(session_key, False):
         conn, _ = get_db_connection()
@@ -484,7 +494,7 @@ def log_student_visit(student_name):
         conn.commit()
         st.session_state[session_key] = True
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=30)
 def get_students():
     try:
         conn, _ = get_db_connection()
@@ -505,7 +515,7 @@ def get_student_drive_url(name):
             q(c, "SELECT drive_url FROM students WHERE name = ?", (name,))
         row = c.fetchone()
         return row[0] if row and row[0] else ""
-    except Exception as e:
+    except Exception:
         try:
             conn.rollback()
         except:
@@ -526,10 +536,9 @@ def add_student(name):
         q(c, "INSERT INTO students (name, drive_url) VALUES (?, ?)", (name, ""))
         conn.commit()
         st.cache_data.clear()
-        success = True
+        return True
     except Exception:
-        success = False
-    return success
+        return False
 
 def delete_student(name):
     conn, _ = get_db_connection()
@@ -549,7 +558,7 @@ def delete_student(name):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_subjects():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -570,19 +579,17 @@ def add_subject(name):
     except Exception:
         return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_chapters():
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, subject, name FROM chapters")
     rows = c.fetchall()
-    
     def natural_sort_key(ch):
         subject, name = ch[1], ch[2]
         match = re.search(r'(\d+)', name)
         num = int(match.group(1)) if match else 0
         return (subject, num, name)
-        
     return sorted(rows, key=natural_sort_key)
 
 def get_chapter_types(chapter_id):
@@ -593,9 +600,8 @@ def get_chapter_types(chapter_id):
             q(c, "SELECT id, name, video_url FROM chapter_types WHERE chapter_id = %s", (chapter_id,))
         else:
             q(c, "SELECT id, name, video_url FROM chapter_types WHERE chapter_id = ?", (chapter_id,))
-        rows = c.fetchall()
-        return rows
-    except Exception as e:
+        return c.fetchall()
+    except Exception:
         try:
             conn.rollback()
         except:
@@ -609,7 +615,6 @@ def save_problem_link(full_code, video_url):
     unit_code = full_code[:-3]
     prob_num = full_code[-3:]
     now_str = get_korean_now_str()
-    
     conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
@@ -627,10 +632,9 @@ def save_problem_link(full_code, video_url):
             ''', (full_code, unit_code, prob_num, video_url, now_str, video_url, now_str))
         conn.commit()
         st.cache_data.clear()
-        success = True
+        return True
     except Exception:
-        success = False
-    return success
+        return False
 
 def bulk_save_problem_links(text_data):
     lines = text_data.strip().split('\n')
@@ -639,7 +643,6 @@ def bulk_save_problem_links(text_data):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     now_str = get_korean_now_str()
-    
     for line in lines:
         line = line.strip()
         if not line:
@@ -679,8 +682,7 @@ def get_problem_links_by_unit(unit_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT full_code, video_url FROM problem_links WHERE unit_code = ? ORDER BY full_code", (unit_code.upper(),))
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 @st.cache_data(ttl=60)
 def get_problem_link_info(full_code):
@@ -718,15 +720,13 @@ def add_notice(student_name, title, content):
     today_str = str(get_korean_today())
     q(c, "INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
     conn.commit()
-    st.cache_data.clear()
 
 @st.cache_data(ttl=30)
 def get_notices_for_student(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 @st.cache_data(ttl=30)
 def get_all_notices():
@@ -734,13 +734,8 @@ def get_all_notices():
         conn, _ = get_db_connection()
         c = conn.cursor()
         q(c, "SELECT id, student_name, title, content, created_at FROM notices ORDER BY id DESC")
-        rows = c.fetchall()
-        return rows
-    except Exception as e:
-        try:
-            conn.rollback()
-        except:
-            pass
+        return c.fetchall()
+    except Exception:
         return []
 
 def delete_notice(notice_id):
@@ -748,7 +743,6 @@ def delete_notice(notice_id):
     c = conn.cursor()
     q(c, "DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
-    st.cache_data.clear()
 
 @st.cache_data(ttl=30)
 def get_student_daily_routines(student_name):
@@ -758,8 +752,7 @@ def get_student_daily_routines(student_name):
         q(c, "SELECT id, title FROM daily_routines WHERE student_name = %s ORDER BY id", (student_name,))
     else:
         q(c, "SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 def bulk_insert_daily_routines(student_name, text_data):
     conn, _ = get_db_connection()
@@ -795,6 +788,18 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     conn.commit()
     st.cache_data.clear()
 
+def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    for routine_id_str, val in routine_checked_dict.items():
+        q(c, '''
+            INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
+        ''', (student_name, str(routine_id_str), log_date, int(val), int(val)))
+    conn.commit()
+    st.cache_data.clear()
+
 @st.cache_data(ttl=30)
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, db_type = get_db_connection()
@@ -809,27 +814,81 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=30)
+def get_routine_completion_rate(student_name, days_limit=7):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    today_obj = get_korean_today()
+    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
+    today_str = str(today_obj)
+    
+    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines_count = c.fetchone()[0]
+    if total_routines_count == 0:
+        return 0, 0, 0
+    total_expected = total_routines_count * days_limit
+    
+    q(c, """
+        SELECT COUNT(*) FROM daily_routine_logs 
+        WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
+    """, (student_name, start_date_str, today_str))
+    completed_count = c.fetchone()[0]
+    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    return rate, completed_count, total_expected
+
+@st.cache_data(ttl=30)
+def get_student_routine_streak(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines = c.fetchone()[0]
+    if total_routines == 0:
+        return 0
+    
+    streak = 0
+    check_date = get_korean_today()
+    while True:
+        d_str = str(check_date)
+        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+        r_cnt = c.fetchone()[0]
+        if r_cnt == 0:
+            break
+        
+        q(c, """
+            SELECT COUNT(*) FROM daily_routine_logs 
+            WHERE student_name = ? AND log_date = ? AND is_checked = 1
+        """, (student_name, d_str))
+        done_cnt = c.fetchone()[0]
+        
+        if done_cnt >= r_cnt:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            if check_date == get_korean_today():
+                check_date -= timedelta(days=1)
+                continue
+            else:
+                break
+    return streak
+
+@st.cache_data(ttl=60)
 def get_homework_templates():
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, title FROM homework_templates ORDER BY id")
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 def add_homework_template(title):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "INSERT INTO homework_templates (title) VALUES (?)", (title,))
     conn.commit()
-    st.cache_data.clear()
 
 def delete_homework_template(t_id):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
-    st.cache_data.clear()
 
 @st.cache_data(ttl=30)
 def get_student_milestones(student_name):
@@ -848,9 +907,8 @@ def get_student_milestones(student_name):
                        COALESCE((SELECT t.video_url FROM chapter_types t JOIN chapters ch ON t.chapter_id = ch.id WHERE ch.name = m.chapter AND t.name = m.type_name LIMIT 1), '') as video_url
                 FROM milestones m WHERE m.student_name = ?
             """, (student_name,))
-        rows = c.fetchall()
-        return rows
-    except Exception as e:
+        return c.fetchall()
+    except Exception:
         try:
             conn.rollback()
         except:
@@ -885,8 +943,7 @@ def get_student_homework_dates(student_name):
         q(c, "SELECT DISTINCT hw_date FROM student_homework WHERE student_name = %s ORDER BY hw_date DESC", (student_name,))
     else:
         q(c, "SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
-    rows = c.fetchall()
-    return [r[0] for r in rows]
+    return [r[0] for r in c.fetchall()]
 
 @st.cache_data(ttl=30)
 def get_student_homework_by_date(student_name, hw_date):
@@ -896,25 +953,21 @@ def get_student_homework_by_date(student_name, hw_date):
         q(c, "SELECT id, title FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
     else:
         q(c, "SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 @st.cache_data(ttl=30)
 def get_all_student_homework(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
-    rows = c.fetchall()
-    return rows
+    return c.fetchall()
 
 def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    
     if message_text.strip():
         msg_header = f"💬 [선생님 메시지]: {message_text.strip()}"
         q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, msg_header))
-        
     lines = text_data.strip().split('\n')
     for line in lines:
         line_str = line.strip()
@@ -951,11 +1004,7 @@ def get_milestone_progress(student_name):
             q(c, "SELECT milestone_id, is_checked FROM milestone_progress WHERE student_name = ?", (student_name,))
         rows = c.fetchall()
         return {r[0]: bool(r[1]) for r in rows}
-    except Exception as e:
-        try:
-            conn.rollback()
-        except:
-            pass
+    except Exception:
         return {}
 
 @st.cache_data(ttl=30)
@@ -1061,9 +1110,9 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
-# ====================================================
+# ----------------------------------------------------
 # 🖼️ 메인 화면 상단 로고 이미지 배치 및 타이틀
-# ====================================================
+# ----------------------------------------------------
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
@@ -1103,7 +1152,6 @@ with st.sidebar:
     
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
-        
         _, current_db_type = get_db_connection()
         if current_db_type == "postgres":
             st.markdown(
@@ -1126,7 +1174,6 @@ with st.sidebar:
         st.divider()
         
         st.markdown("##### 📥/📤 데이터 백업 및 복구")
-        
         st.download_button(
             label="📥 전체 데이터 엑셀 백업하기",
             data=create_excel_backup(),
@@ -1156,7 +1203,6 @@ with st.sidebar:
                     st.success(f"🎉 {msg}")
                 else:
                     st.error(f"❌ {msg}")
-
         st.divider()
 
     st.markdown("<br>" * 3, unsafe_allow_html=True)
@@ -1194,7 +1240,6 @@ if not st.session_state["teacher_authenticated"]:
                 f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 온라인 학습실 (Google Drive) 바로가기 ➔</a>',
                 unsafe_allow_html=True
             )
-        
         st.markdown('</div>', unsafe_allow_html=True)
 
         today_str_check = str(get_korean_today())
@@ -1259,6 +1304,58 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
+        # ⚡ [초고속 최적화] 개별 루프 대신 일괄 쿼리로 미복습 오답 한 번에 계산
+        conn_alert, _ = get_db_connection()
+        c_alert = conn_alert.cursor()
+        q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
+        user_wrong_rows = c_alert.fetchall()
+        
+        solved_map_alert = get_student_wrong_solved_status(selected_student)
+        unsolved_total_count = 0
+        new_video_count = 0
+        now_datetime_alert = datetime.now()
+
+        target_full_codes = []
+        for u_code, nums_txt in user_wrong_rows:
+            parsed_nums = parse_numbers(nums_txt)
+            for n in parsed_nums:
+                target_full_codes.append(f"{u_code}{n:03d}".upper())
+
+        batch_link_info = get_batch_problem_link_info(target_full_codes)
+
+        for f_code in target_full_codes:
+            v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
+            is_solved = solved_map_alert.get(f_code, False)
+            if v_url and not is_solved:
+                unsolved_total_count += 1
+                try:
+                    up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                    if (now_datetime_alert - up_dt).total_seconds() <= 86400:
+                        new_video_count += 1
+                except Exception:
+                    pass
+
+        if unsolved_total_count > 0:
+            st.markdown(
+                f'''
+                <div style="
+                    background-color: rgba(239, 68, 68, 0.1);
+                    border-left: 4px solid #EF4444;
+                    padding: 12px 14px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                ">
+                    <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
+                        🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
+                    </div>
+                    <div style="font-size: 12px; margin-top: 4px; color: inherit;">
+                        "오답·질문 관리" 탭에서 해설을 시청하고 복습 완료를 체크해 주세요! 💡
+                    </div>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         
         with st.container(border=True):
@@ -1299,9 +1396,7 @@ if not st.session_state["teacher_authenticated"]:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name, v_url in milestones:
                     key = (sub, ch)
-                    if key not in grouped_s_milestones:
-                        grouped_s_milestones[key] = []
-                    grouped_s_milestones[key].append((m_id, t_name, v_url))
+                    grouped_s_milestones.setdefault(key, []).append((m_id, t_name, v_url))
 
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
@@ -1340,9 +1435,7 @@ if not st.session_state["teacher_authenticated"]:
                 f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
                 f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
                 f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
-                f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
-                f'{routine_status_text}'
-                f'</div>'
+                f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">{routine_status_text}</div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -1354,16 +1447,13 @@ if not st.session_state["teacher_authenticated"]:
                 with st.container(border=True):
                     st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
                     st.markdown("---")
-
                     daily_routine_checked_dict = {}
                     for r_id, r_title in daily_routines_list:
                         default_val = current_day_logs.get((str(r_id), today_str), False)
-                        chk_v = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                        daily_routine_checked_dict[str(r_id)] = chk_v
-                        if chk_v != default_val:
-                            save_single_routine_log(selected_student, str(r_id), today_str, chk_v)
-                            st.rerun()
+                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
                         st.divider()
+                if daily_routine_checked_dict:
+                    save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
             if hw_dates:
                 st.markdown("")
@@ -1380,9 +1470,7 @@ if not st.session_state["teacher_authenticated"]:
                 hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
 
                 st.markdown(
-                    f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
-                    f'{hw_status_text}'
-                    f'</div>',
+                    f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">{hw_status_text}</div>',
                     unsafe_allow_html=True
                 )
 
@@ -1394,18 +1482,15 @@ if not st.session_state["teacher_authenticated"]:
                         else:
                             default_val = h_progress.get(h_id, False)
                             chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                            val = st.checkbox(f"{title}", value=default_val, key=chk_key)
-                            if val != default_val:
-                                save_single_homework_progress(selected_student, h_id, val)
+                            if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
+                                save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
                                 st.rerun()
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
-            
             with st.container(border=True):
                 st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
-                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
-                
+                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
                 target_code = entered_unit_code if entered_unit_code else "B1353"
 
@@ -1433,17 +1518,44 @@ if not st.session_state["teacher_authenticated"]:
                 c = conn.cursor()
                 q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
                 saved_rows = c.fetchall()
-                
                 saved_units_list = [r[0] for r in saved_rows]
-                unit_display_options = ["-- 저장된 단원을 선택하세요 --"] + saved_units_list
                 
-                selected_display_unit = st.selectbox(
-                    "확인할 단원 선택", 
-                    unit_display_options,
-                    key="saved_unit_select_box"
-                )
+                solved_map_chk = get_student_wrong_solved_status(selected_student)
+                now_datetime_chk = datetime.now()
                 
-                view_target_code = selected_display_unit if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
+                unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
+                unit_map_dict = {}
+                
+                # ⚡ [최적화] 오답 리스트 전체에 대한 링크 정보도 일괄 조회
+                all_saved_full_codes = []
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    for n in parse_numbers(entry_txt):
+                        all_saved_full_codes.append(f"{u_code}{n:03d}".upper())
+                batch_saved_link_info = get_batch_problem_link_info(all_saved_full_codes)
+
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    p_nums = parse_numbers(entry_txt)
+                    has_new_unsolved = False
+                    for n in p_nums:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, v_up_at = batch_saved_link_info.get(f_code, ("", ""))
+                        is_solved = solved_map_chk.get(f_code, False)
+                        if v_url and not is_solved:
+                            try:
+                                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                                if (now_datetime_chk - up_dt).total_seconds() <= 86400:
+                                    has_new_unsolved = True
+                                    break
+                            except Exception:
+                                pass
+                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
+                    unit_map_dict[display_name] = u_code
+                    unit_display_options.append(display_name)
+
+                selected_display_unit = st.selectbox("확인할 단원 선택", unit_display_options, key="saved_unit_select_box")
+                view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
 
                 if view_target_code:
                     existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
@@ -1451,15 +1563,24 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown("---")
                         st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
                         parsed_nums = parse_numbers(existing_wrong)
-                        
                         solved_map = get_student_wrong_solved_status(selected_student)
+                        now_datetime = datetime.now()
                         
                         if parsed_nums:
                             query_params = st.query_params
                             for n in sorted(list(parsed_nums)):
-                                full_code = f"{view_target_code}{n:03d}"
-                                v_url, _ = get_problem_link_info(full_code)
+                                full_code = f"{view_target_code}{n:03d}".upper()
+                                v_url, v_updated_at = batch_saved_link_info.get(full_code, ("", ""))
                                 is_solved = solved_map.get(full_code, False)
+                                
+                                is_new_alert = False
+                                if v_url and v_updated_at:
+                                    try:
+                                        up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                        if (now_datetime - up_dt).total_seconds() <= 86400:
+                                            is_new_alert = True
+                                    except Exception:
+                                        pass
 
                                 action_key = f"toggle_solved_{selected_student}_{full_code}"
                                 if query_params.get(action_key) == "true":
@@ -1468,6 +1589,7 @@ if not st.session_state["teacher_authenticated"]:
                                     query_params.pop(action_key, None)
                                     st.rerun()
 
+                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
                                 text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
                                 checkbox_checked_attr = "checked" if is_solved else ""
                                 
@@ -1477,23 +1599,22 @@ if not st.session_state["teacher_authenticated"]:
                                         <input type="checkbox" {checkbox_checked_attr} 
                                             onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
                                             style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
-                                        <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code})</div>
+                                        <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
                                     </div>
                                     <div style="flex-shrink: 0; margin-left: 10px;">
                                         {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
                                     </div>
                                 </div>
                                 '''
-                                
                                 st.markdown(html_row_content, unsafe_allow_html=True)
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
-                        st.info(f"현재 등록된 오답이 없습니다.")
+                        st.info("현재 등록된 오답이 없습니다.")
 
             st.markdown("")
             with st.container(border=True):
                 st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
-                st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
+                st.caption("궁금한 문제 번호 전체 또는 단원코드만 입력하면 즉시 해설 영상으로 이동합니다.")
                 search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
                 if search_prob_input:
                     if len(search_prob_input) >= 7:
@@ -1623,7 +1744,7 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 관리", expanded=False):
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정 및 다중 날짜 소급 매트릭스", expanded=False):
                 with st.form("add_teacher_routine_form"):
                     st.markdown("##### ➕ 루틴 과제 항목 추가")
                     new_routine_txt = st.text_area("루틴 과제 항목 입력 (줄바꿈으로 여러 개 입력 가능)", placeholder="- 오답노트 오답 정리\n- 영어 단어 20개 암기")
@@ -1637,7 +1758,6 @@ else:
                 if current_routines:
                     st.markdown("---")
                     st.markdown("##### 📋 현재 등록된 루틴 과제 목록 (삭제할 항목 선택)")
-                    
                     routines_to_delete = []
                     for r_id, r_title in current_routines:
                         if st.checkbox(f"📌 {r_title}", key=f"chk_del_routine_{r_id}"):
@@ -1652,27 +1772,47 @@ else:
                         else:
                             st.warning("삭제할 루틴 과제를 체크박스에서 먼저 선택해 주세요.")
 
+                    st.markdown("---")
+                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (일괄 캐시 적용)")
+                    st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
+                    
+                    today_obj = get_korean_today()
+                    date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
+                    batch_routine_logs = get_all_routine_logs_map(selected_hw_student)
+
+                    for r_id, r_title in current_routines:
+                        st.markdown(f"**📌 {r_title}**")
+                        cols = st.columns(7)
+                        for idx, d_str in enumerate(date_columns):
+                            with cols[idx]:
+                                day_name = get_weekday_kr(d_str)[:1]
+                                short_date = d_str[5:]
+                                st.caption(f"{short_date}({day_name})")
+                                def_val = batch_routine_logs.get((str(r_id), d_str), False)
+                                chk_key = f"auto_mat_routine_{selected_hw_student}_{r_id}_{d_str}"
+                                new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
+                                if new_val != def_val:
+                                    save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
+                                    st.rerun()
+                        st.markdown("")
+
             st.markdown("---")
             st.markdown("##### 📝 날짜별 과제 부여 및 수정/삭제")
-            
             existing_hw_dates = get_student_homework_dates(selected_hw_student)
             if existing_hw_dates:
                 with st.expander("✏️ 등록된 날짜별 숙제 내용 통째로 수정 및 삭제하기", expanded=False):
                     chosen_edit_date = st.selectbox("수정할 숙제 날짜 선택", existing_hw_dates, format_func=lambda d: f"{d} ({get_weekday_kr(d)})", key="select_date_to_edit_bulk")
-                    
                     date_hws = get_student_homework_by_date(selected_hw_student, chosen_edit_date)
                     combined_titles = [h_title for _, h_title in date_hws]
                     initial_text_val = "\n".join(combined_titles)
                     
                     with st.form(f"bulk_edit_hw_form_{chosen_edit_date}"):
                         new_bulk_text = st.text_area("해당 날짜 숙제 내용 전체 편집 (줄바꿈으로 구분)", value=initial_text_val, height=150)
-                        
                         col_be1, col_be2 = st.columns(2)
                         with col_be1:
                             do_bulk_update = st.form_submit_button("💾 해당 날짜 숙제 일괄 수정 저장", type="primary")
                         with col_be2:
                             do_bulk_delete = st.form_submit_button("🗑️ 해당 날짜 숙제 전체 삭제")
-                            
                         if do_bulk_update:
                             if new_bulk_text.strip():
                                 update_student_homework_by_date(selected_hw_student, chosen_edit_date, new_bulk_text.strip())
@@ -1684,42 +1824,23 @@ else:
                             st.rerun()
 
             templates = get_homework_templates()
-
             if "hw_text_content" not in st.session_state:
                 st.session_state["hw_text_content"] = ""
 
             if templates:
                 template_options = ["-- 자주 쓰는 숙제 템플릿 불러오기 --"] + [t[1] for t in templates]
-                
                 def on_template_change():
                     chosen = st.session_state.get("select_hw_template_box", "")
                     if chosen and chosen != "-- 자주 쓰는 숙제 템플릿 불러오기 --":
                         current_val = st.session_state.get("hw_text_area_input", "")
-                        if current_val.strip():
-                            st.session_state["hw_text_area_input"] = current_val + "\n" + chosen
-                        else:
-                            st.session_state["hw_text_area_input"] = chosen
+                        st.session_state["hw_text_area_input"] = (current_val + "\n" + chosen) if current_val.strip() else chosen
 
-                st.selectbox(
-                    "📌 템플릿 선택", 
-                    template_options, 
-                    key="select_hw_template_box", 
-                    on_change=on_template_change
-                )
+                st.selectbox("📌 템플릿 선택", template_options, key="select_hw_template_box", on_change=on_template_change)
 
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
-                teacher_msg_input = st.text_input(
-                    "💬 학생에게 전하는 메시지 / 학습 지침 (선택)", 
-                    placeholder="예: 개념 노트 복습 먼저 하고 풀어보자! 화이팅 🔥"
-                )
-                hw_text_area = st.text_area(
-                    "날짜별 과제 내용 입력", 
-                    key="hw_text_area_input",
-                    placeholder="[진도 교재]\n  - p.12~15 문제 풀이",
-                    height=150
-                )
-                
+                teacher_msg_input = st.text_input("💬 학생에게 전하는 메시지 / 학습 지침 (선택)", placeholder="예: 개념 노트 복습 먼저 하고 풀어보자! 화이팅 🔥")
+                hw_text_area = st.text_area("날짜별 과제 내용 입력", key="hw_text_area_input", placeholder="[진도 교재]\n  - p.12~15 문제 풀이", height=150)
                 col_sub_btn1, col_sub_btn2 = st.columns(2)
                 with col_sub_btn1:
                     submit_hw_btn = st.form_submit_button("과제 등록", type="primary")
@@ -1731,7 +1852,6 @@ else:
                         bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input)
                         st.success("과제 및 메시지가 성공적으로 등록되었습니다!")
                         st.rerun()
-                
                 if save_as_tpl_btn:
                     if hw_text_area.strip():
                         add_homework_template(hw_text_area.strip())
@@ -1754,7 +1874,6 @@ else:
 
     with t_cfg_curriculum:
         st.markdown("#### 📚 과목 / 단원 / 세부 유형 폴더형 통합 관리")
-        
         with st.form("unified_sub_form"):
             new_sub_input = st.text_input("새 과목 추가")
             if st.form_submit_button("과목 등록", type="primary"):
@@ -1763,16 +1882,13 @@ else:
                     st.rerun()
         
         subjects_data = get_subjects()
-        
         if subjects_data:
             st.markdown("---")
             st.markdown("##### 📂 단원 및 세부 유형 등록")
-            
             with st.form("add_chapter_and_type_form"):
                 target_subject = st.selectbox("과목 선택", [s[1] for s in subjects_data], key="manage_chapter_sub_sel")
                 new_ch_name = st.text_input("새 단원 이름 (예: 6. 함수)", placeholder="예: 6. 함수")
                 new_types_txt = st.text_area("세부 유형 항목 (줄바꿈으로 여러 개 입력)", placeholder="- 개념 정리\n- 대표 유형\n- 심화 문제")
-                
                 if st.form_submit_button("➕ 단원 및 세부 유형 일괄 등록", type="primary"):
                     if new_ch_name.strip():
                         conn, _ = get_db_connection()
@@ -1780,11 +1896,7 @@ else:
                         try:
                             q(c, "INSERT INTO chapters (subject, name) VALUES (?, ?)", (target_subject, new_ch_name.strip()))
                             ch_id = c.lastrowid
-                            
-                            types_list = [t.strip() for t in new_types_txt.split('\n') if t.strip()]
-                            if not types_list:
-                                types_list = ["단원 기본 학습"]
-                                
+                            types_list = [t.strip() for t in new_types_txt.split('\n') if t.strip()] or ["단원 기본 학습"]
                             for t_name in types_list:
                                 clean_t_name = t_name.lstrip('-•*└\t ').strip()
                                 if clean_t_name:
@@ -1800,8 +1912,6 @@ else:
 
             st.markdown("---")
             st.markdown("##### ✏️ 등록된 단원별 세부 유형 및 해설 링크 관리 (수정/삭제)")
-            st.caption("과목과 단원을 선택하여 하위 유형에 해설 영상 링크를 연결하거나 유형 이름을 수정·삭제할 수 있습니다.")
-            
             selected_manage_sub = st.selectbox("관리할 과목 선택", [s[1] for s in subjects_data], key="manage_edit_sub_sel")
             all_chapters = get_chapters()
             sub_chapters = [ch for ch in all_chapters if ch[1] == selected_manage_sub]
@@ -1809,7 +1919,6 @@ else:
             if sub_chapters:
                 ch_options = {ch[0]: ch[2] for ch in sub_chapters}
                 selected_ch_id = st.selectbox("관리할 단원 선택", options=list(ch_options.keys()), format_func=lambda x: ch_options[x], key="manage_edit_ch_sel")
-                
                 if selected_ch_id:
                     col_ch_del1, col_ch_del2 = st.columns([4, 1])
                     with col_ch_del2:
@@ -1834,7 +1943,6 @@ else:
                                             edited_t_name = st.text_input("유형 이름", value=t_name, key=f"t_name_{t_id}")
                                         with col_t2:
                                             edited_t_url = st.text_input("해설 영상 링크 (URL)", value=t_vurl, key=f"t_url_{t_id}", placeholder="https://...")
-                                        
                                         col_b1, col_b2 = st.columns(2)
                                         with col_b1:
                                             if st.form_submit_button("💾 유형 정보 수정 저장", type="primary"):
@@ -1855,7 +1963,7 @@ else:
                                                 st.success("삭제 완료!")
                                                 st.rerun()
                     else:
-                        st.info("등록된 세부 유형이 없습니다. 위에서 단원 등록 시 세부 유형을 함께 등록해 주세요.")
+                        st.info("등록된 세부 유형이 없습니다.")
             else:
                 st.info("해당 과목에 등록된 단원이 없습니다.")
 
@@ -1865,7 +1973,6 @@ else:
             selected_assign_student = st.selectbox("진도를 배정할 학생 선택", student_list, key="tab4_stu_sel")
             all_chapters = get_chapters()
             assigned_chapters = {m[2] for m in get_student_milestones(selected_assign_student)}
-            
             with st.form("assign_chapters_form"):
                 selected_ch_ids = []
                 for sub_id, sub_name in subjects_data:
@@ -1885,12 +1992,7 @@ else:
         st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
         if student_list:
             chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
-            
-            wrong_view_mode = st.radio(
-                "모아보기 방식 선택", 
-                ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], 
-                horizontal=True
-            )
+            wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
             
             conn, _ = get_db_connection()
             c = conn.cursor()
@@ -1899,8 +2001,7 @@ else:
                 wrong_rows_all = c.fetchall()
             else:
                 q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                rows = c.fetchall()
-                wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in rows]
+                wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in c.fetchall()]
             
             if wrong_rows_all:
                 if wrong_view_mode == "📂 단원별 보기":
@@ -1908,13 +2009,7 @@ else:
                 elif wrong_view_mode == "📅 날짜별 보기":
                     available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
                     selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
-                    
-                    if not available_dates:
-                        target_rows = []
-                    elif selected_date_filter == "전체 날짜 보기 (최근순)":
-                        target_rows = sorted(wrong_rows_all, key=lambda x: x[3] if x[3] else "1900-01-01", reverse=True)
-                    else:
-                        target_rows = [r for r in wrong_rows_all if r[3] == selected_date_filter]
+                    target_rows = wrong_rows_all if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in wrong_rows_all if r[3] == selected_date_filter]
                 elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
                     def get_week_range_str(date_str):
                         try:
@@ -1924,12 +2019,9 @@ else:
                             return f"{start_week} ~ {end_week} (월~일)"
                         except Exception:
                             return "날짜 미상 주간"
-
                     weeks_dict = {}
                     for s_name, u_code, nums_txt, u_date in wrong_rows_all:
-                        w_key = get_week_range_str(u_date) if u_date else "날짜 미상 주간"
-                        weeks_dict.setdefault(w_key, []).append((s_name, u_code, nums_txt, u_date))
-
+                        weeks_dict.setdefault(get_week_range_str(u_date) if u_date else "날짜 미상 주간", []).append((s_name, u_code, nums_txt, u_date))
                     sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                     selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
                     target_rows = weeks_dict.get(selected_week, []) if selected_week else []
@@ -1940,27 +2032,16 @@ else:
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
-                        cnt = len(parsed_s)
-                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + cnt
+                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
                 
                 link_set = get_all_problem_link_set()
-
-                search_missing_total = 0
-                for s_name, u_code, nums_txt, u_date in target_rows:
-                    parsed_s = parse_numbers(nums_txt)
-                    if parsed_s:
-                        for n in parsed_s:
-                            if f"{u_code}{n:03d}".upper() not in link_set:
-                                search_missing_total += 1
+                search_missing_total = sum(1 for s_name, u_code, nums_txt, u_date in target_rows for n in parse_numbers(nums_txt) if f"{u_code}{n:03d}".upper() not in link_set)
 
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
-                    
                     st.markdown(
                         f"""
-                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">
-                            📈 현재 검색 조건 통계 요약
-                        </div>
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
                         <div style="font-size: 13px; margin-bottom: 8px;">
                             🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
                             📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
@@ -1968,80 +2049,21 @@ else:
                         """,
                         unsafe_allow_html=True
                     )
-                    
                     if summary_student_counts:
-                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수 (링크 유무 무관)</div>", unsafe_allow_html=True)
-                        student_stat_strs = [f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]
-                        st.markdown(" | ".join(student_stat_strs))
-                
+                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
+                        st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
                 st.markdown("---")
 
-                if wrong_view_mode == "📂 단원별 보기":
-                    for s_name, u_code, nums_txt, u_date in target_rows:
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
                         with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}".upper()
-                                    if f_code in link_set:
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                
-                elif wrong_view_mode == "📅 날짜별 보기":
-                    for s_name, u_code, nums_txt, u_date in target_rows:
-                        date_label = u_date if u_date else "날짜 미상"
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                st.markdown(f"##### 👤 **{s_name}** | 📅 수정일자: `{date_label}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}".upper()
-                                    if f_code in link_set:
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                
-                elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
-                    for s_name, u_code, nums_txt, u_date in target_rows:
-                        with st.container(border=True):
-                            parsed_s = parse_numbers(nums_txt)
-                            if parsed_s:
-                                st.markdown(f"##### 👤 **{s_name}** | 📅 기록일: `{u_date}` | 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                colored_num_tags = []
-                                for n in sorted(list(parsed_s)):
-                                    f_code = f"{u_code}{n:03d}".upper()
-                                    if f_code in link_set:
-                                        colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                    else:
-                                        colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                
-                elif wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
-                    has_missing = False
-                    for s_name, u_code, nums_txt, u_date in target_rows:
-                        parsed_s = parse_numbers(nums_txt)
-                        missing_nums = []
-                        if parsed_s:
-                            for n in sorted(list(parsed_s)):
-                                f_code = f"{u_code}{n:03d}".upper()
-                                if f_code not in link_set:
-                                    missing_nums.append(n)
-                        
-                        if missing_nums:
-                            has_missing = True
-                            with st.container(border=True):
-                                st.markdown(f"##### 👤 **{s_name}** | 🚨 단원코드: `{u_code}` <span style='font-size:12px; color:#DC2626;'>(해설 링크 없는 문제 발견)</span>", unsafe_allow_html=True)
-                                colored_num_tags = [f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>" for n in missing_nums]
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                    
-                    if not has_missing:
-                        st.success("🎉 축하합니다! 현재 등록된 오답들 중 해설 링크가 누락된 문제가 하나도 없습니다.")
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                            colored_num_tags = [
+                                f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
+                                for n in sorted(list(parsed_s))
+                            ]
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("저장된 오답이 없습니다.")
         else:
@@ -2056,37 +2078,43 @@ else:
         
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})", key="matrix_date_selectbox")
+            today_str_box = str(get_korean_today())
             
-            all_students_hw_map = {}
-            for s_item in student_list:
-                s_hws = get_student_homework_by_date(s_item, selected_matrix_date)
-                if s_hws:
-                    all_students_hw_map[s_item] = s_hws
+            routines_map = get_entire_daily_routines_map()
+            logs_map = get_entire_daily_routine_logs_map(today_str_box)
+            unchecked_students_today = [s_item for s_item in student_list if routines_map.get(s_item) and not all(logs_map.get((s_item, str(r[0])), False) for r in routines_map.get(s_item, []))]
 
-            active_hw_students = list(all_students_hw_map.keys())
+            if unchecked_students_today:
+                st.markdown(
+                    f'<div style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid #EF4444; padding: 10px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 13px; font-weight: bold; color: #EF4444;">🚨 오늘 루틴 미체크 학생 목록: <b>{", ".join(unchecked_students_today)}</b></div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    f'<div style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 13px; font-weight: bold; color: #10B981;">🎉 오늘 모든 학생들이 루틴 과제를 완료했습니다!</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
 
-            if active_hw_students:
-                st.markdown(f"📌 **{selected_matrix_date} 숙제 배정 학생 (총 {len(active_hw_students)}명)**")
-                
-                for s_idx_main, s_name in enumerate(active_hw_students):
-                    hws = all_students_hw_map.get(s_name, [])
-                    
-                    expander_label = f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)"
-                    with st.expander(expander_label, expanded=False):
+            all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
+            entire_hw_prog = get_entire_homework_progress_map()
+
+            for s_idx_main, s_name in enumerate(student_list):
+                hws = all_students_hw_map.get(s_name, [])
+                expander_label = f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)" if hws else f"👤 {s_name} 학생 숙제 없음"
+                with st.expander(expander_label, expanded=False):
+                    if hws:
                         combined_titles_mat = [title for _, title in hws]
                         initial_mat_text = "\n".join(combined_titles_mat)
                         
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
-                                msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
-                                st.info(f"💬 **선생님의 한마디**: {msg_content}")
+                                st.info(f"💬 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                             else:
-                                conn_p, _ = get_db_connection()
-                                c_p = conn_p.cursor()
-                                q(c_p, "SELECT is_checked FROM student_homework_progress WHERE student_name = ? AND student_hw_id = ?", (s_name, h_id))
-                                p_row = c_p.fetchone()
-                                is_done = bool(p_row[0]) if p_row else False
-                                
+                                is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
                                 if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
                                     save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
@@ -2096,13 +2124,11 @@ else:
                             with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
                                 st.markdown(f"##### 📝 {s_name} 학생 ({selected_matrix_date}) 숙제 전체 편집")
                                 edited_bulk_hw_text = st.text_area("줄바꿈으로 숙제 항목들을 수정하세요", value=initial_mat_text, height=120, key=f"mat_text_area_{s_idx_main}_{selected_matrix_date}")
-                                
                                 col_mb1, col_mb2 = st.columns(2)
                                 with col_mb1:
                                     save_mb_btn = st.form_submit_button("💾 일괄 수정 저장", type="primary")
                                 with col_mb2:
                                     del_mb_btn = st.form_submit_button("🗑️ 이 날짜 숙제 전체 삭제")
-                                    
                                 if save_mb_btn:
                                     if edited_bulk_hw_text.strip():
                                         update_student_homework_by_date(s_name, selected_matrix_date, edited_bulk_hw_text.strip())
@@ -2112,8 +2138,8 @@ else:
                                     delete_student_homework_date(s_name, selected_matrix_date)
                                     st.success("숙제가 전체 삭제되었습니다!")
                                     st.rerun()
-            else:
-                st.info(f"선택하신 {selected_matrix_date}에 숙제가 배정된 학생이 없습니다.")
+                    else:
+                        st.caption("해당 날짜에 등록된 과제가 없습니다.")
         else:
             st.info("등록된 숙제 날짜나 학생이 없습니다.")
 
@@ -2132,9 +2158,9 @@ else:
                             st.success("저장되었습니다!")
                             st.rerun()
                         else:
-                            st.error("등록 실패: 문제 번호가 4자리 이상인지, 올바른 형식인지 확인해 주세요.")
+                            st.error("등록 실패: 문제 번호가 4자리 이상인지 확인해 주세요.")
                     else:
-                        st.warning("문제 번호와 네이버 카페 URL을 모두 입력해 주세요.")
+                        st.warning("모두 입력해 주세요.")
             
             with st.form("bulk_problem_link_form"):
                 bulk_txt = st.text_area("일괄 등록 (줄바꿈 입력)", placeholder="B1353015 https://cafe.naver.com/.../123")
@@ -2146,16 +2172,9 @@ else:
                         st.rerun()
         with col_link_tab2:
             st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
-            st.caption("드롭다운에서 단원 코드를 선택하거나, 아래 검색창에 직접 단원코드/문제번호를 입력해 관리하세요.")
-            
             unit_summaries = get_unit_code_summary_list()
-            
-            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"]
-            unit_count_map = {}
-            for u_code, cnt in unit_summaries:
-                label_str = f"{u_code} (총 {cnt}개 해설 링크)"
-                dropdown_options.append(label_str)
-                unit_count_map[label_str] = u_code
+            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
+            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
             
             col_dd, col_sc = st.columns(2)
             with col_dd:
@@ -2163,16 +2182,11 @@ else:
             with col_sc:
                 search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
             
-            target_filter = ""
-            if search_link_input:
-                target_filter = search_link_input
-            elif selected_dropdown_item and selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --":
-                target_filter = unit_count_map[selected_dropdown_item]
+            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
 
             if target_filter:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
-                
                 if searched_links:
                     for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
                         with st.container(border=True):
@@ -2186,12 +2200,10 @@ else:
                 else:
                     st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
             else:
-                st.info("💡 위의 **드롭다운에서 단원을 선택**하시거나 **검색창에 단원코드/문제번호**를 입력하시면 해당 링크 목록이 즉시 나타납니다!")
+                st.info("💡 단원을 선택하시거나 검색어를 입력해 주세요.")
 
     with t_cfg_stats:
         st.markdown("#### 📈 실시간 학습 참여 현황")
-        st.caption("학생들이 접속한 이력을 실시간으로 추적하여 학습 참여도를 파악할 수 있습니다.")
-        
         today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
         
         col_st1, col_st2 = st.columns(2)
@@ -2199,7 +2211,6 @@ else:
             st.metric(label="📌 오늘 접속한 학생 수", value=f"{today_active_cnt}명")
         with col_st2:
             st.metric(label="📈 누적 총 접속 횟수", value=f"{total_visits}회")
-            
         st.markdown("---")
         
         st.markdown("##### 👤 학생별 최근 접속 일시 및 누적 횟수")
@@ -2218,5 +2229,4 @@ else:
         if daily_logs:
             st.markdown("---")
             st.markdown("##### 📅 최근 7일 일자별 접속 요약")
-            df_logs = pd.DataFrame(daily_logs, columns=["날짜", "접속 학생 수 (명)", "총 방문 횟수 (회)"])
-            st.dataframe(df_logs, use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(daily_logs, columns=["날짜", "접속 학생 수 (명)", "총 방문 횟수 (회)"]), use_container_width=True, hide_index=True)
