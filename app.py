@@ -1285,6 +1285,39 @@ with st.sidebar:
                 st.rerun()
 
         st.divider()
+        
+        # 🟢 [추가] 사이드바에서 버튼 하나로 DB 모드 토글 전환
+        st.markdown("##### 🔀 DB 연동 모드 설정")
+        current_mode = st.session_state["db_mode_override"]
+        
+        if current_mode == "supabase":
+            st.markdown(
+                '<div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #10B981; text-align: center;">'
+                '☁️ 현재 Supabase 클라우드 연동 중'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True):
+                st.session_state["db_mode_override"] = "local"
+                st.query_params["db"] = "local"  # URL 파라미터 반영
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+        else:
+            st.markdown(
+                '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
+                '📁 현재 로컬 파일 모드 연동 중'
+                '</div>',
+                unsafe_allow_html=True
+            )
+            if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True):
+                st.session_state["db_mode_override"] = "supabase"
+                st.query_params["db"] = "supabase"  # URL 파라미터 반영
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+
+        st.divider()
 
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
             st.session_state["teacher_authenticated"] = False
