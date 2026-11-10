@@ -755,7 +755,8 @@ def get_all_problem_links_searched(search_filter=""):
         c.execute(query, params)
         rows = c.fetchall()
         return rows, len(rows)
-    except Exception:
+    except Exception as e:
+        st.error(f"DB 검색 중 에러 발생: {e}")
         return [], 0
 
 def delete_problem_link(link_id):
