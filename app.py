@@ -647,24 +647,16 @@ def get_problem_link_info(full_code):
         return row[0], (row[1] if row[1] else "")
     return "", ""
 
-def get_all_problem_links_paginated(search_filter="", page=1, per_page=15):
-    """💡 전체를 한 번에 안 읽고 검색어나 페이징 단위로만 가볍게 읽어와서 7번 탭 속도를 초고속화"""
+def get_all_problem_links_searched(search_filter=""):
+    """💡 기본적으로 목록을 안 보여주고, 검색어나 단원코드를 입력했을 때만 초고속으로 조회하도록 변경"""
+    if not search_filter or not search_filter.strip():
+        return [], 0
     conn, _ = get_db_connection()
     c = conn.cursor()
-    if search_filter:
-        q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (f"%{search_filter}%", f"%{search_filter}%"))
-        rows = c.fetchall()
-        return rows, len(rows), 1
-    else:
-        q(c, "SELECT COUNT(*) FROM problem_links")
-        total_count = c.fetchone()[0]
-        total_pages = max(1, (total_count + per_page - 1) // per_page)
-        page = min(page, total_pages)
-        offset = (page - 1) * per_page
-        
-        q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links ORDER BY unit_code, full_code LIMIT ? OFFSET ?", (per_page, offset))
-        rows = c.fetchall()
-        return rows, total_count, total_pages
+    search_val = f"%{search_filter.strip().upper()}%"
+    q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
+    rows = c.fetchall()
+    return rows, len(rows)
 
 def delete_problem_link(link_id):
     conn, _ = get_db_connection()
@@ -1470,7 +1462,7 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("")
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
-                st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상을 바로 시청하세요.")
+                st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상 바로 시청하세요.")
 
                 conn, _ = get_db_connection()
                 c = conn.cursor()
@@ -2191,43 +2183,49 @@ else:
 
             entire_hw_prog = get_entire_homework_progress_map()
 
-            # 💡 학생별 아코디언(expander)으로 감싸서 한 번에 그리는 부하를 완전히 없앰
             for s_idx_main, s_name in enumerate(student_list):
                 hws = get_student_homework_by_date(s_name, selected_matrix_date)
                 if hws:
                     with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
+                        # 💡 팝오버 대신, 3번 탭처럼 해당 학생의 해당 날짜 숙제를 '줄바꿈 전체 수정'할 수 있는 폼 제공
+                        combined_titles_mat = [title for _, title in hws]
+                        initial_mat_text = "\n".join(combined_titles_mat)
+                        
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
                                 msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
                                 st.info(f"💬 **선생님의 한마디**: {msg_content}")
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
-                                col_m1, col_m2 = st.columns([5, 1])
-                                with col_m1:
-                                    chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                    if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
-                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
+                                if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                    st.rerun()
+
+                        with st.popover("✏️ 이 날짜 숙제 전체 수정 / 편집하기"):
+                            with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
+                                st.markdown(f"##### 📝 {s_name} 학생 ({selected_matrix_date}) 숙제 전체 편집")
+                                edited_bulk_hw_text = st.text_area("줄바꿈으로 숙제 항목들을 수정하세요", value=initial_mat_text, height=120, key=f"mat_text_area_{s_idx_main}_{selected_matrix_date}")
+                                
+                                col_mb1, col_mb2 = st.columns(2)
+                                with col_mb1:
+                                    save_mb_btn = st.form_submit_button("💾 일괄 수정 저장", type="primary")
+                                with col_mb2:
+                                    del_mb_btn = st.form_submit_button("🗑️ 이 날짜 숙제 전체 삭제")
+                                    
+                                if save_mb_btn:
+                                    if edited_bulk_hw_text.strip():
+                                        update_student_homework_by_date(s_name, selected_matrix_date, edited_bulk_hw_text.strip())
+                                        st.success("숙제가 성공적으로 수정되었습니다!")
                                         st.rerun()
-                                with col_m2:
-                                    with st.popover("⚙️ 수정"):
-                                        with st.form(f"matrix_edit_form_{s_idx_main}_{h_id}_{h_idx}"):
-                                            m_new_date = st.date_input("날짜", value=date.fromisoformat(selected_matrix_date), key=f"m_date_{s_idx_main}_{h_id}_{h_idx}")
-                                            m_new_title = st.text_input("내용", value=title, key=f"m_title_{s_idx_main}_{h_id}_{h_idx}")
-                                            m_save = st.form_submit_button("저장", type="primary")
-                                            m_del = st.form_submit_button("삭제")
-                                            if m_save:
-                                                if m_new_title.strip():
-                                                    update_student_homework_by_date(s_name, str(m_new_date), m_new_title.strip())
-                                                    st.success("수정 완료!")
-                                                    st.rerun()
-                                            if m_del:
-                                                delete_student_homework_date(s_name, selected_matrix_date)
-                                                st.success("삭제 완료!")
-                                                st.rerun()
+                                if del_mb_btn:
+                                    delete_student_homework_date(s_name, selected_matrix_date)
+                                    st.success("숙제가 전체 삭제되었습니다!")
+                                    st.rerun()
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
-        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 전체 등록된 링크 목록 및 삭제"])
+        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 검색 및 링크 목록 관리"])
         with col_link_tab1:
             with st.form("add_problem_link_form"):
                 col_pl1, col_pl2 = st.columns([1, 2])
@@ -2253,48 +2251,30 @@ else:
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
         with col_link_tab2:
-            # 💡 초고속 페이징 적용으로 530개 링크가 있어도 탭 진입 시 딜레이 0초
-            search_filter_input = st.text_input("🔍 단원코드 또는 문제번호 검색", placeholder="예: B1353 또는 B1353015").strip().upper()
+            # 💡 530개가 처음에 한 번에 안 뜨도록, 검색어를 입력했을 때만 쿼리해서 보여주도록 완전히 최적화
+            st.markdown("##### 🔍 해설 링크 검색 및 관리")
+            st.caption("등록된 530개 이상의 링크 중 찾으려는 단원코드(예: B1353)나 문제번호(예: B1353015)를 입력해 주세요.")
             
-            if "link_page_num" not in st.session_state:
-                st.session_state["link_page_num"] = 1
+            search_link_input = st.text_input("검색어 입력 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
+            
+            if search_link_input:
+                searched_links, search_cnt = get_all_problem_links_searched(search_link_input)
+                st.markdown(f"**검색 결과: 총 {search_cnt}개**")
                 
-            if search_filter_input:
-                filtered_links, total_cnt, total_pages = get_all_problem_links_paginated(search_filter=search_filter_input)
-                st.caption(f"검색 결과: 총 {total_cnt}개의 링크")
-                page_links = filtered_links
+                if searched_links:
+                    for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
+                        with st.container(border=True):
+                            col_li_info, col_li_del = st.columns([5, 1])
+                            with col_li_info:
+                                st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
+                            with col_li_del:
+                                if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
+                                    delete_problem_link(l_id)
+                                    st.rerun()
+                else:
+                    st.info("검색된 해설 링크가 없습니다.")
             else:
-                curr_p = st.session_state["link_page_num"]
-                filtered_links, total_cnt, total_pages = get_all_problem_links_paginated(search_filter="", page=curr_p, per_page=15)
-                st.caption(f"전체 등록된 링크: 총 {total_cnt}개 (페이지 {curr_p} / {total_pages})")
-                page_links = filtered_links
-
-            if page_links:
-                for item_idx, (l_id, f_code, v_url, u_code) in enumerate(page_links):
-                    with st.container(border=True):
-                        col_li_info, col_li_del = st.columns([5, 1])
-                        with col_li_info:
-                            st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                        with col_li_del:
-                            if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
-                                delete_problem_link(l_id)
-                                st.rerun()
-                
-                if not search_filter_input and total_pages > 1:
-                    st.markdown("---")
-                    cp1, cp2, cp3 = st.columns([1, 2, 1])
-                    with cp1:
-                        if st.button("◀ 이전 페이지", disabled=(st.session_state["link_page_num"] <= 1), use_container_width=True):
-                            st.session_state["link_page_num"] -= 1
-                            st.rerun()
-                    with cp2:
-                        st.markdown(f"<div style='text-align:center; padding-top:5px;'><b>{st.session_state['link_page_num']} / {total_pages} 페이지</b></div>", unsafe_allow_html=True)
-                    with cp3:
-                        if st.button("다음 페이지 ▶", disabled=(st.session_state["link_page_num"] >= total_pages), use_container_width=True):
-                            st.session_state["link_page_num"] += 1
-                            st.rerun()
-            else:
-                st.info("등록된 해설 링크가 없습니다.")
+                st.info("💡 검색창에 단원코드(예: B1353)나 문제번호를 입력하시면 해당 링크 목록이 즉시 나타납니다. (초기 로딩 속도 최적화)")
 
     with t_cfg_stats:
         st.markdown("#### 📈 실시간 학습 참여 현황")
