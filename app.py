@@ -12,9 +12,8 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
-# 🟢 [추가] 앱 내에서 버튼으로 모드를 바꿀 수 있는 세션 상태 관리 (기본값: 로컬)
-# 🟢 [수정 후] URL 파라미터나 세션 상태로 DB 모드 유지
-if "db_mode" in st.query_params:
+# 🟢 [수정] URL 파라미터 key('db')를 일치시켜 F5 새로고침 시에도 모드 완전 유지
+if "db" in st.query_params:
     st.session_state["db_mode_override"] = st.query_params["db"]
 elif "db_mode_override" not in st.session_state:
     st.session_state["db_mode_override"] = "local"
@@ -452,6 +451,19 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL);')
+            
+            # 🟢 [추가] PostgreSQL 전용 오답 로그 테이블 생성
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS student_wrong_logs (
+                    id SERIAL PRIMARY KEY,
+                    student_name TEXT NOT NULL,
+                    unit_code TEXT NOT NULL,
+                    prob_num INTEGER NOT NULL,
+                    registered_date TEXT NOT NULL,
+                    created_at TEXT DEFAULT ''
+                );
+            ''')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date);')
             conn.commit()
         else:
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
@@ -526,9 +538,9 @@ def init_db():
                             VALUES (?, ?, ?, ?, ?)
                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
                     else:
-                        q(c, '''
+                        c.execute('''
                             INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                            VALUES (?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s)
                             ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
             conn.commit()
@@ -1155,11 +1167,11 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                     VALUES (?, ?, ?, ?, ?)
                 ''', (student_name, unit_code, int(num), today_str, now_str))
             else:
-                q(c, '''
+                c.execute('''
                     INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
-                ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                ''', (student_name, unit_code, int(num), today_str, now_str))
 
         conn.commit()
         st.cache_data.clear()
@@ -2138,11 +2150,10 @@ else:
                                             VALUES (?, ?, ?, ?, ?)
                                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
                                     else:
-                                        # q() 함수가 ?를 자동으로 %s로 변환해 줍니다!
-                                        q(c, '''
+                                        c.execute('''
                                             INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                                            VALUES (?, ?, ?, ?, ?)
-                                            ON CONFLICT DO NOTHING
+                                            VALUES (%s, %s, %s, %s, %s)
+                                            ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
                                         ''', (s_name, u_code, int(num), reg_date, now_default_str))
                             conn.commit()
                             st.success("🎉 성공적으로 변환되었습니다! 화면을 새로고침합니다.")
