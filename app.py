@@ -45,7 +45,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# ⚡ 전체 속도 극대화를 위한 일괄 캐시 함수들
+# 🚀 클라우드 속도 극대화를 위한 공격적 캐시 함수들
 # ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
@@ -88,6 +88,16 @@ def get_all_routine_logs_map(student_name):
         return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
     except Exception:
         return {}
+
+@st.cache_data(ttl=30)
+def get_unit_code_summary_list():
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, "SELECT unit_code, COUNT(*) FROM problem_links WHERE video_url IS NOT NULL AND trim(video_url) != '' GROUP BY unit_code ORDER BY unit_code")
+        return c.fetchall()
+    except Exception:
+        return []
 
 def get_korean_today():
     try:
@@ -447,6 +457,7 @@ def log_student_visit(student_name):
         conn.commit()
         st.session_state[session_key] = True
 
+@st.cache_data(ttl=30)
 def get_students():
     try:
         conn, _ = get_db_connection()
@@ -479,6 +490,7 @@ def update_student_drive_url(name, drive_url):
     c = conn.cursor()
     q(c, "UPDATE students SET drive_url = ? WHERE name = ?", (drive_url, name))
     conn.commit()
+    st.cache_data.clear()
 
 def add_student(name):
     conn, _ = get_db_connection()
@@ -486,6 +498,7 @@ def add_student(name):
     try:
         q(c, "INSERT INTO students (name, drive_url) VALUES (?, ?)", (name, ""))
         conn.commit()
+        st.cache_data.clear()
         success = True
     except Exception:
         success = False
@@ -507,7 +520,9 @@ def delete_student(name):
     q(c, "DELETE FROM notices WHERE student_name = ?", (name,))
     q(c, "DELETE FROM visitor_logs WHERE student_name = ?", (name,))
     conn.commit()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=60)
 def get_subjects():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -523,10 +538,12 @@ def add_subject(name):
         if not c.fetchone():
             q(c, "INSERT INTO subjects (name) VALUES (?)", (name,))
             conn.commit()
+            st.cache_data.clear()
         return True
     except Exception:
         return False
 
+@st.cache_data(ttl=60)
 def get_chapters():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -582,6 +599,7 @@ def save_problem_link(full_code, video_url):
                 ON CONFLICT(full_code) DO UPDATE SET video_url = ?, updated_at = ?
             ''', (full_code, unit_code, prob_num, video_url, now_str, video_url, now_str))
         conn.commit()
+        st.cache_data.clear()
         success = True
     except Exception:
         success = False
@@ -627,6 +645,7 @@ def bulk_save_problem_links(text_data):
         else:
             fail_count += 1
     conn.commit()
+    st.cache_data.clear()
     return success_count, fail_count
 
 def get_problem_links_by_unit(unit_code):
@@ -636,6 +655,7 @@ def get_problem_links_by_unit(unit_code):
     rows = c.fetchall()
     return rows
 
+@st.cache_data(ttl=60)
 def get_problem_link_info(full_code):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -647,17 +667,6 @@ def get_problem_link_info(full_code):
     if row:
         return row[0], (row[1] if row[1] else "")
     return "", ""
-
-@st.cache_data(ttl=30)
-def get_unit_code_summary_list():
-    """💡 드롭다운에 표시할 단원 코드별 등록된 링크 개수를 초고속 집계"""
-    try:
-        conn, _ = get_db_connection()
-        c = conn.cursor()
-        q(c, "SELECT unit_code, COUNT(*) FROM problem_links WHERE video_url IS NOT NULL AND trim(video_url) != '' GROUP BY unit_code ORDER BY unit_code")
-        return c.fetchall()
-    except Exception:
-        return []
 
 def get_all_problem_links_searched(search_filter=""):
     if not search_filter or not search_filter.strip():
@@ -674,6 +683,7 @@ def delete_problem_link(link_id):
     c = conn.cursor()
     q(c, "DELETE FROM problem_links WHERE id = ?", (link_id,))
     conn.commit()
+    st.cache_data.clear()
 
 def add_notice(student_name, title, content):
     conn, _ = get_db_connection()
@@ -682,6 +692,7 @@ def add_notice(student_name, title, content):
     q(c, "INSERT INTO notices (student_name, title, content, created_at) VALUES (?, ?, ?, ?)", (student_name, title, content, today_str))
     conn.commit()
 
+@st.cache_data(ttl=30)
 def get_notices_for_student(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -689,6 +700,7 @@ def get_notices_for_student(student_name):
     rows = c.fetchall()
     return rows
 
+@st.cache_data(ttl=30)
 def get_all_notices():
     try:
         conn, _ = get_db_connection()
@@ -709,6 +721,7 @@ def delete_notice(notice_id):
     q(c, "DELETE FROM notices WHERE id = ?", (notice_id,))
     conn.commit()
 
+@st.cache_data(ttl=30)
 def get_student_daily_routines(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -731,6 +744,7 @@ def bulk_insert_daily_routines(student_name, text_data):
         q(c, "INSERT INTO daily_routines (student_name, title) VALUES (?, ?)", (student_name, title))
         added_count += 1
     conn.commit()
+    st.cache_data.clear()
     return added_count
 
 def delete_daily_routine(r_id):
@@ -739,6 +753,7 @@ def delete_daily_routine(r_id):
     q(c, "DELETE FROM daily_routines WHERE id = ?", (r_id,))
     q(c, "DELETE FROM daily_routine_logs WHERE routine_id = ?", (str(r_id),))
     conn.commit()
+    st.cache_data.clear()
 
 def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     conn, _ = get_db_connection()
@@ -749,6 +764,7 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
         ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
     ''', (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
     conn.commit()
+    st.cache_data.clear()
 
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn, _ = get_db_connection()
@@ -760,7 +776,9 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
             ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?
         ''', (student_name, str(routine_id_str), log_date, int(val), int(val)))
     conn.commit()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=30)
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -774,6 +792,7 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
+@st.cache_data(ttl=30)
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -796,6 +815,7 @@ def get_routine_completion_rate(student_name, days_limit=7):
     rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     return rate, completed_count, total_expected
 
+@st.cache_data(ttl=30)
 def get_student_routine_streak(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -830,6 +850,7 @@ def get_student_routine_streak(student_name):
                 break
     return streak
 
+@st.cache_data(ttl=60)
 def get_homework_templates():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -849,6 +870,7 @@ def delete_homework_template(t_id):
     q(c, "DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
 
+@st.cache_data(ttl=30)
 def get_student_milestones(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -892,7 +914,9 @@ def assign_chapters_to_student(student_name, chapter_ids):
             if (ch_name, t_name) not in existing:
                 q(c, "INSERT INTO milestones (student_name, subject, chapter, type_name) VALUES (?, ?, ?, ?)", (student_name, sub, ch_name, t_name))
     conn.commit()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=30)
 def get_student_homework_dates(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -903,6 +927,7 @@ def get_student_homework_dates(student_name):
     rows = c.fetchall()
     return [r[0] for r in rows]
 
+@st.cache_data(ttl=30)
 def get_student_homework_by_date(student_name, hw_date):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -913,6 +938,7 @@ def get_student_homework_by_date(student_name, hw_date):
     rows = c.fetchall()
     return rows
 
+@st.cache_data(ttl=30)
 def get_all_student_homework(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -935,6 +961,7 @@ def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=
             continue
         q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, line_str))
     conn.commit()
+    st.cache_data.clear()
 
 def update_student_homework_by_date(student_name, hw_date, text_data):
     conn, _ = get_db_connection()
@@ -943,13 +970,16 @@ def update_student_homework_by_date(student_name, hw_date, text_data):
     q(c, "DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
     conn.commit()
     bulk_insert_student_homework(student_name, hw_date, text_data)
+    st.cache_data.clear()
 
 def delete_student_homework_date(student_name, hw_date):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     conn.commit()
+    st.cache_data.clear()
 
+@st.cache_data(ttl=30)
 def get_milestone_progress(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -967,6 +997,7 @@ def get_milestone_progress(student_name):
             pass
         return {}
 
+@st.cache_data(ttl=30)
 def get_student_homework_progress(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -988,6 +1019,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
                 ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?
             ''', (student_name, milestone_id, int(val), int(val)))
         conn.commit()
+        st.cache_data.clear()
     except Exception:
         pass
 
@@ -1005,9 +1037,11 @@ def save_single_homework_progress(student_name, student_hw_id, val):
                 ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?
             ''', (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
+        st.cache_data.clear()
     except Exception:
         pass
 
+@st.cache_data(ttl=30)
 def get_student_wrong_entry(student_name, unit_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1030,9 +1064,11 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
             ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
         conn.commit()
+        st.cache_data.clear()
     except Exception:
         pass
 
+@st.cache_data(ttl=30)
 def get_student_wrong_solved_status(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1054,6 +1090,7 @@ def save_single_wrong_solved_status(student_name, full_code, is_solved_val):
                 ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?
             ''', (student_name, full_code, int(is_solved_val), int(is_solved_val)))
         conn.commit()
+        st.cache_data.clear()
     except Exception:
         pass
 
@@ -1905,6 +1942,7 @@ else:
                                 if clean_t_name:
                                     q(c, "INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (ch_id, clean_t_name, ""))
                             conn.commit()
+                            st.cache_data.clear()
                             st.success("단원과 세부 유형이 성공적으로 등록되었습니다!")
                             st.rerun()
                         except Exception as e:
@@ -1933,6 +1971,7 @@ else:
                             q(c, "DELETE FROM chapter_types WHERE chapter_id = ?", (selected_ch_id,))
                             q(c, "DELETE FROM chapters WHERE id = ?", (selected_ch_id,))
                             conn.commit()
+                            st.cache_data.clear()
                             st.success("단원이 삭제되었습니다!")
                             st.rerun()
                     
@@ -1955,6 +1994,7 @@ else:
                                                 c = conn.cursor()
                                                 q(c, "UPDATE chapter_types SET name = ?, video_url = ? WHERE id = ?", (edited_t_name.strip(), edited_t_url.strip(), t_id))
                                                 conn.commit()
+                                                st.cache_data.clear()
                                                 st.success("수정 완료!")
                                                 st.rerun()
                                         with col_b2:
@@ -1963,6 +2003,7 @@ else:
                                                 c = conn.cursor()
                                                 q(c, "DELETE FROM chapter_types WHERE id = ?", (t_id,))
                                                 conn.commit()
+                                                st.cache_data.clear()
                                                 st.success("삭제 완료!")
                                                 st.rerun()
                     else:
@@ -2261,11 +2302,10 @@ else:
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
         with col_link_tab2:
-            # 💡 선생님 아이디어 적용: 단원코드별 개수가 나오는 드롭다운 셀렉트 + 직접 검색 기능 결합
             st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
             st.caption("드롭다운에서 단원 코드를 선택하거나, 아래 검색창에 직접 단원코드/문제번호를 입력해 관리하세요.")
             
-            unit_summaries = get_unit_code_summary_list() # [(unit_code, count), ...]
+            unit_summaries = get_unit_code_summary_list()
             
             dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"]
             unit_count_map = {}
