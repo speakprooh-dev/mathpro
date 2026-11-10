@@ -1508,7 +1508,6 @@ if not st.session_state["teacher_authenticated"]:
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
         with tab1:
-            with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
             st.caption("체크박스를 눌러도 창이 접히지 않고 편하게 연속으로 체크할 수 있습니다! 🔥")
             if milestones:
@@ -1519,7 +1518,6 @@ if not st.session_state["teacher_authenticated"]:
 
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                    # 🟢 st.expander 대신 고정형 컨테이너를 사용하여 체크 시 접힘 방지
                     with st.container(border=True):
                         st.markdown(f"**[{sub}] {ch}** &nbsp; <span style='font-size:12px; color:#0284C7; font-weight:bold;'>(완료: {done_cnt}/{len(items)})</span>", unsafe_allow_html=True)
                         st.markdown("---")
