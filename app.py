@@ -1264,9 +1264,10 @@ with st.sidebar:
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True):
+            # 🟢 key="btn_switch_to_local" 추가
+            if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True, key="btn_switch_to_local"):
                 st.session_state["db_mode_override"] = "local"
-                st.query_params["db"] = "local"  # URL 파라미터 반영
+                st.query_params["db"] = "local"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
@@ -1277,9 +1278,10 @@ with st.sidebar:
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True):
+            # 🟢 key="btn_switch_to_supabase" 추가
+            if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True, key="btn_switch_to_supabase"):
                 st.session_state["db_mode_override"] = "supabase"
-                st.query_params["db"] = "supabase"  # URL 파라미터 반영
+                st.query_params["db"] = "supabase"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
