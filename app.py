@@ -1516,9 +1516,8 @@ if not st.session_state["teacher_authenticated"]:
 
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                    with st.container(border=True):
-                        st.markdown(f"**[{sub}] {ch}** &nbsp; <span style='font-size:12px; color:#0284C7; font-weight:bold;'>(완료: {done_cnt}/{len(items)})</span>", unsafe_allow_html=True)
-                        st.markdown("---")
+                    # 🟢 [수정] st.expander를 적용하여 기본은 접혀 있고 터치하면 펼쳐지도록 변경
+                    with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
                             cols = st.columns([4, 1])
