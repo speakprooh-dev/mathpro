@@ -374,7 +374,6 @@ def migrate_local_to_supabase():
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
         
-        # 일시적으로 Supabase 연결을 맺어 데이터 전송
         sec = st.secrets["supabase"]
         conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
         cloud_conn = psycopg2.connect(conn_url, connect_timeout=5)
@@ -452,7 +451,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL);')
             
-            # 🟢 [추가] PostgreSQL 전용 오답 로그 테이블 생성
             c.execute('''
                 CREATE TABLE IF NOT EXISTS student_wrong_logs (
                     id SERIAL PRIMARY KEY,
@@ -481,7 +479,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
             
-            # 🟢 [추가] 날짜별 오답 이력 로그 테이블 생성
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, prob_num INTEGER NOT NULL, registered_date TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date)')
             
@@ -520,16 +517,14 @@ def init_db():
                     pass
             conn.commit()
 
-        # 🟢 [강제 동기화] 기존 오답 데이터를 날짜별 로그 테이블에 완전히 새로 채워넣기
         try:
-            c.execute("DELETE FROM student_wrong_logs") # 기존 로그 초기화 후 재적재
+            c.execute("DELETE FROM student_wrong_logs")
             c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
             existing_wrong_rows = c.fetchall()
             today_default_str = str(get_korean_today())
             now_default_str = get_korean_now_str()
             
             for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
-                # updated_at이 있으면 그 날짜를 쓰고, 없으면 오늘 날짜 사용
                 reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
                 for num in parse_numbers(nums_txt):
                     if db_type == "sqlite":
@@ -776,11 +771,9 @@ def get_all_problem_links_searched(search_filter=""):
         c = conn.cursor()
         search_val = f"%{search_filter.strip().upper()}%"
         
-        # id 컬럼이 없는 구형 DB 구조일 경우를 대비해 안전하게 조회
         try:
             q(c, "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
         except Exception:
-            # id 컬럼이 없다면 id 대신 0을 반환하도록 대체
             q(c, "SELECT 0, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code", (search_val, search_val))
             
         rows = c.fetchall()
@@ -1147,7 +1140,6 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     today_str = str(get_korean_today())
     now_str = get_korean_now_str()
     try:
-        # 1. 기존 덮어쓰기 유지 (호환용)
         if db_type == "sqlite":
             q(c, "DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
@@ -1158,7 +1150,6 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
             ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
         
-        # 2. 🟢 [핵심] 오늘 날짜 기준 날짜별 오답 로그(Log) 쌓기
         parsed_nums = parse_numbers(numbers_text)
         for num in parsed_nums:
             if db_type == "sqlite":
@@ -1253,7 +1244,7 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         
-        # 🟢 [추가] 사이드바에서 버튼 하나로 DB 모드 토글 전환
+        # 🟢 [정돈 완료] DB 연동 모드 설정 버튼 (중복 없이 단 하나만 깔끔하게 배치)
         st.markdown("##### 🔀 DB 연동 모드 설정")
         current_mode = st.session_state["db_mode_override"]
         
@@ -1264,7 +1255,6 @@ with st.sidebar:
                 '</div>',
                 unsafe_allow_html=True
             )
-            # 🟢 key="btn_switch_to_local" 추가된 첫 번째 버튼
             if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True, key="btn_switch_to_local"):
                 st.session_state["db_mode_override"] = "local"
                 st.query_params["db"] = "local"
@@ -1278,7 +1268,6 @@ with st.sidebar:
                 '</div>',
                 unsafe_allow_html=True
             )
-            # 🟢 key="btn_switch_to_supabase" 추가된 첫 번째 버튼
             if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True, key="btn_switch_to_supabase"):
                 st.session_state["db_mode_override"] = "supabase"
                 st.query_params["db"] = "supabase"
@@ -1532,7 +1521,6 @@ if not st.session_state["teacher_authenticated"]:
                                     value=default_val, 
                                     key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
                                 )
-                                # ⚡ [속도 최적화] 체크 상태가 바뀔 때 화면 전체 리프레시(st.rerun)를 제거하여 렉 방지
                                 if val != default_val:
                                     save_single_milestone_progress(selected_student, m_id, val)
                             with cols[1]:
@@ -1820,7 +1808,6 @@ else:
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 for (sub, ch), items in grouped_t_milestones.items():
-                    # 🟢 여기도 st.expander 대신 고정형 컨테이너로 변경
                     with st.container(border=True):
                         st.markdown(f"**[{sub}] {ch}**", unsafe_allow_html=True)
                         st.markdown("---")
@@ -2131,7 +2118,6 @@ else:
                 target_rows = c.fetchall()
 
             elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                # ⚡ [안전 장치] 로그 테이블이 비어있으면 자동으로 채우고 초고속 조회
                 conn_check, db_type_check = get_db_connection()
                 c_check = conn_check.cursor()
                 
@@ -2158,7 +2144,7 @@ else:
                                         ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
                                     ''', (s_name, u_code, int(num), reg_date, now_default_str))
                         conn_check.commit()
-                        st.cache_data.clear() # 캐시 초기화로 빈 화면 방지
+                        st.cache_data.clear()
                     except Exception:
                         pass
 
@@ -2190,7 +2176,7 @@ else:
                             nums_txt = ", ".join(map(str, sorted(num_list)))
                             target_rows.append((s_name, u_code, nums_txt, reg_date))
                     
-                    else: # 주간별 모아보기
+                    else:
                         def get_week_range_str(date_str):
                             try:
                                 d = date.fromisoformat(date_str)
@@ -2217,17 +2203,16 @@ else:
                             nums_txt = ", ".join(map(str, sorted(num_list)))
                             target_rows.append((s_name, u_code, nums_txt, reg_date))
 
-            else: # 해설 링크 없는 문제 모아보기
+            else:
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
                 else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 target_rows = c.fetchall()
 
-           # --- 결과 렌더링 영역 ---
             if target_rows:
                 summary_student_counts = {}
-                all_target_full_codes = [] # 🟢 [최적화] 모든 문제 코드를 담을 리스트
+                all_target_full_codes = []
                 
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
@@ -2236,11 +2221,9 @@ else:
                         for n in parsed_s:
                             all_target_full_codes.append(f"{u_code}{n:03d}".upper())
                 
-                # ⚡ [속도 핵심] 전체 목록을 다 불러오지 않고, 현재 화면에 필요한 문제들의 해설 정보만 1번에 일괄 조회
                 unique_codes = list(set(all_target_full_codes))
                 batch_link_cache = get_batch_problem_link_info(unique_codes)
                 
-                # 해설 링크가 누락된 개수 계산 (캐시 dict에 없거나 url이 비어있는 경우)
                 search_missing_total = sum(1 for f_code in unique_codes if not batch_link_cache.get(f_code, ("", ""))[0])
 
                 with st.container(border=True):
@@ -2270,7 +2253,6 @@ else:
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}".upper()
                                 v_url, _ = batch_link_cache.get(f_code, ("", ""))
-                                # 해설 링크가 존재하면 파란색, 없으면 빨간색으로 표시
                                 if v_url and v_url.strip():
                                     colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                 else:
@@ -2422,11 +2404,9 @@ else:
                     for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
                         target_col = cols[item_idx % 2]
                         with target_col:
-                            # 2단 그리드 안에서 [문제번호 링크 (넓게), 삭제 버튼 (좁게)] 로 컴팩트하게 구성
                             c_code, c_btn = st.columns([5, 1])
                             
                             with c_code:
-                                # 문제 번호를 누르면 해설 링크가 바로 연결됨
                                 st.markdown(f"📌 **[{f_code}]({v_url})** <span style='font-size:11px; color:gray;'>🔗 해설연결</span>", unsafe_allow_html=True)
                             
                             with c_btn:
@@ -2434,7 +2414,6 @@ else:
                                     delete_problem_link(l_id)
                                     st.rerun()
                             
-                            # 항목 간 구분을 위한 아주 얇은 구분선
                             st.markdown("<hr style='margin: 4px 0px 8px 0px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);'>", unsafe_allow_html=True)
                 else:
                     st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
