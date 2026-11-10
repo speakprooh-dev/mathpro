@@ -51,7 +51,6 @@ def q(c, query, params=None):
     except Exception:
         pass
         
-    # 🟢 파라미터가 비어있거나 빈 튜플인 경우 에러 방지를 위해 None으로 처리
     if params is not None and len(params) > 0:
         c.execute(query, params)
     else:
@@ -430,8 +429,15 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date));')
-            # 🟢 [개선] 오답노트를 날짜/시간별 개별 로그(Log) 테이블로 변경 (id를 PK로 하여 단원별 중복 등록 허용)
+            
+            # 🟢 [개선] 기존 구형 student_wrong_entries 테이블이 있다면 안전하게 DROP 후 최신 로그 구조로 생성
+            try:
+                c.execute('DROP TABLE IF EXISTS student_wrong_entries;')
+                conn.commit()
+            except Exception:
+                pass
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, numbers_text TEXT NOT NULL, updated_at TEXT NOT NULL);')
+            
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code));')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL);')
@@ -451,15 +457,21 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
-            # 🟢 [개선] SQLite 오답노트 로그 테이블
+            
+            # 🟢 [개선] 기존 구형 SQLite 오답노트 테이블 DROP 후 최신 로그 구조로 생성
+            try:
+                c.execute('DROP TABLE IF EXISTS student_wrong_entries;')
+                conn.commit()
+            except Exception:
+                pass
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, numbers_text TEXT NOT NULL, updated_at TEXT NOT NULL)')
+            
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
             conn.commit()
 
-        # 기존 단일 고유 인덱스가 남아있다면 충돌 방지를 위해 안전하게 제거 시도
         try:
             c.execute('DROP INDEX IF EXISTS idx_student_wrong_unique;')
             conn.commit()
@@ -1068,7 +1080,6 @@ def save_single_homework_progress(student_name, student_hw_id, val):
     except Exception:
         pass
 
-# 🟢 [개선] 오답 등록 시 덮어쓰지 않고 새로운 로그 행을 추가하도록 변경
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1081,7 +1092,6 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     except Exception as e:
         print(f"오답 저장 오류: {e}")
 
-# 학생 전용 탭에서 단원별 현재 전체 오답 번호를 계산하기 위한 합산 함수
 @st.cache_data(ttl=30)
 def get_student_wrong_entry(student_name, unit_code):
     conn, _ = get_db_connection()
@@ -1515,7 +1525,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
                     if entered_unit_code and (add_txt.strip() or del_txt.strip()):
-                        # 추가할 번호가 있으면 로그로 기록
                         if add_txt.strip():
                             save_student_wrong_entry(selected_student, target_code, add_txt.strip())
                         st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
@@ -1990,7 +1999,6 @@ else:
             
             if wrong_rows_all:
                 if wrong_view_mode == "📂 단원별 보기":
-                    # 단원별 보기에서는 학생별, 단원별로 모든 오답 번호를 합산하여 보여줌
                     aggregated_dict = {}
                     for row in wrong_rows_all:
                         r_id, s_name, u_code, nums_txt, u_date = row
@@ -2038,7 +2046,7 @@ else:
                         aggregated_dict.setdefault(key, set()).update(parse_numbers(nums_txt))
                     target_rows = [(s_name, u_code, sorted(list(nums))) for (s_name, u_code), nums in aggregated_dict.items()]
 
-                else: # 해설 링크 없는 문제 모아보기
+                else:
                     aggregated_dict = {}
                     for row in wrong_rows_all:
                         r_id, s_name, u_code, nums_txt, u_date = row
@@ -2048,7 +2056,6 @@ else:
 
                 link_set = get_all_problem_link_set()
 
-                # 통계 요약 계산
                 total_sum_all = 0
                 summary_student_counts = {}
                 search_missing_total = 0
