@@ -46,7 +46,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 캐시 적용 함수들
+# 🚀 강력한 캐시 적용 함수들 (로딩 지연 원인 원천 차단)
 # ==========================================
 @st.cache_data(ttl=300)
 def get_all_problem_link_set():
@@ -68,6 +68,64 @@ def get_unit_code_summary_list():
         return c.fetchall()
     except Exception:
         return []
+
+@st.cache_data(ttl=30)
+def get_student_routine_streak(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines = c.fetchone()[0]
+    if total_routines == 0:
+        return 0
+    
+    streak = 0
+    check_date = get_korean_today()
+    while True:
+        d_str = str(check_date)
+        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+        r_cnt = c.fetchone()[0]
+        if r_cnt == 0:
+            break
+        
+        q(c, """
+            SELECT COUNT(*) FROM daily_routine_logs 
+            WHERE student_name = ? AND log_date = ? AND is_checked = 1
+        """, (student_name, d_str))
+        done_cnt = c.fetchone()[0]
+        
+        if done_cnt >= r_cnt:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            if check_date == get_korean_today():
+                check_date -= timedelta(days=1)
+                continue
+            else:
+                break
+    return streak
+
+@st.cache_data(ttl=30)
+def get_routine_completion_rate(student_name, days_limit=7):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    today_obj = get_korean_today()
+    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
+    today_str = str(today_obj)
+    
+    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    total_routines_count = c.fetchone()[0]
+    if total_routines_count == 0:
+        return 0, 0, 0
+    total_expected = total_routines_count * days_limit
+    
+    q(c, """
+        SELECT COUNT(*) FROM daily_routine_logs 
+        WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
+    """, (student_name, start_date_str, today_str))
+    completed_count = c.fetchone()[0]
+    
+    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    return rate, completed_count, total_expected
 
 def get_korean_today():
     try:
@@ -750,64 +808,6 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
     for r_id, val in rows:
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
-
-@st.cache_data(ttl=30)
-def get_routine_completion_rate(student_name, days_limit=7):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    today_obj = get_korean_today()
-    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
-    today_str = str(today_obj)
-    
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines_count = c.fetchone()[0]
-    if total_routines_count == 0:
-        return 0, 0, 0
-    total_expected = total_routines_count * days_limit
-    
-    q(c, """
-        SELECT COUNT(*) FROM daily_routine_logs 
-        WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1
-    """, (student_name, start_date_str, today_str))
-    completed_count = c.fetchone()[0]
-    
-    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
-    return rate, completed_count, total_expected
-
-@st.cache_data(ttl=30)
-def get_student_routine_streak(student_name):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines = c.fetchone()[0]
-    if total_routines == 0:
-        return 0
-    
-    streak = 0
-    check_date = get_korean_today()
-    while True:
-        d_str = str(check_date)
-        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-        r_cnt = c.fetchone()[0]
-        if r_cnt == 0:
-            break
-        
-        q(c, """
-            SELECT COUNT(*) FROM daily_routine_logs 
-            WHERE student_name = ? AND log_date = ? AND is_checked = 1
-        """, (student_name, d_str))
-        done_cnt = c.fetchone()[0]
-        
-        if done_cnt >= r_cnt:
-            streak += 1
-            check_date -= timedelta(days=1)
-        else:
-            if check_date == get_korean_today():
-                check_date -= timedelta(days=1)
-                continue
-            else:
-                break
-    return streak
 
 @st.cache_data(ttl=300)
 def get_homework_templates():
@@ -2062,8 +2062,6 @@ else:
                 s_hws = get_student_homework_by_date(s_item, selected_matrix_date)
                 if s_hws:
                     all_students_hw_map[s_item] = s_hws
-                    
-            entire_hw_prog = get_student_homework_progress(selected_matrix_date) # Fallback handling
 
             active_hw_students = list(all_students_hw_map.keys())
 
