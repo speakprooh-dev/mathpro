@@ -2252,11 +2252,13 @@ else:
                         for n in parsed_s:
                             all_target_full_codes.append(f"{u_code}{n:03d}".upper())
                 
-                # ⚡ 단 1회의 쿼리로 현재 화면에 필요한 모든 해설 정보를 한 번에 가져옴 (초고속 캐시 활용)
-                batch_link_cache = get_batch_problem_link_info(list(set(all_target_full_codes)))
-                link_set = get_all_problem_link_set()
+                # ⚡ [속도 핵심] 전체 목록을 다 불러오지 않고, 현재 화면에 필요한 문제들의 해설 정보만 1번에 일괄 조회
+                unique_codes = list(set(all_target_full_codes))
+                batch_link_cache = get_batch_problem_link_info(unique_codes)
                 
-                search_missing_total = sum(1 for f_code in all_target_full_codes if f_code not in link_set)
+                # 해설 링크가 누락된 개수 계산 (캐시 dict에 없거나 url이 비어있는 경우)
+                search_missing_total = sum(1 for f_code in unique_codes if not batch_link_cache.get(f_code, ("", ""))[0])
+
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
                     st.markdown(
@@ -2285,7 +2287,7 @@ else:
                                 f_code = f"{u_code}{n:03d}".upper()
                                 v_url, _ = batch_link_cache.get(f_code, ("", ""))
                                 # 해설 링크가 존재하면 파란색, 없으면 빨간색으로 표시
-                                if v_url:
+                                if v_url and v_url.strip():
                                     colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                 else:
                                     colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
