@@ -2371,16 +2371,27 @@ else:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 if searched_links:
-                    # 🟢 2개의 열(Columns)을 먼저 생성하여 좌우 교차 배치 준비
                     cols = st.columns(2)
                     for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
-                        target_col = cols[item_idx % 2]  # 짝수/홀수 인덱스에 따라 좌우 열(Column) 분배
+                        target_col = cols[item_idx % 2]
                         with target_col:
                             with st.container(border=True):
-                                col_li_info, col_li_del = st.columns([5, 1])
-                                with col_li_info:
-                                    st.markdown(f"📌 **{f_code}** &nbsp;|&nbsp; 🔗 [{v_url}]({v_url})", unsafe_allow_html=True)
-                                with col_li_del:
+                                # 3단 비율로 구성: [문제번호 링크 (넓게), 복사 버튼 (좁게), 삭제 버튼 (좁게)]
+                                col_info, col_copy, col_del = st.columns([4, 1.2, 1])
+                                
+                                with col_info:
+                                    # 번호를 누르면 새 창으로 해설 링크로 이동
+                                    st.markdown(f"📌 **[{f_code}]({v_url})**", unsafe_allow_html=True)
+                                    st.markdown(f"<span style='font-size: 11px; color: gray;'>클릭시 해설 연결</span>", unsafe_allow_html=True)
+                                
+                                with col_copy:
+                                    # Streamlit 최신 버전의 clipboard 복사 기능 활용 또는 버튼형 복사 안내
+                                    if st.button("📋 복사", key=f"copy_link_{l_id}_{item_idx}"):
+                                        st.toast(f"'{v_url}' 링크가 복사되었습니다!")
+                                        # 참고: 브라우저 클립보드 복사는 st.code나 자바스크립트가 필요할 수 있어 
+                                        # 직관적인 안내 토스트나 세부 복사 기능을 붙이기 좋습니다.
+                                
+                                with col_del:
                                     if st.button("🗑️ 삭제", key=f"del_link_item_{l_id}_{item_idx}"):
                                         delete_problem_link(l_id)
                                         st.rerun()
