@@ -1279,441 +1279,450 @@ with st.sidebar:
                         st.error("비밀번호가 틀렸습니다.")
 
 # ====================================================
-# 🚀 학생 화면 전체를 감싸는 초고속 프래그먼트 컴포넌트
+# 🚀 개념 진도 탭 전용 조각 컴포넌트
 # ====================================================
 @st.fragment
-def render_student_portal_fragment(selected_student):
+def render_student_milestones_fragment(selected_student, milestones, m_progress):
+    st.markdown("### 📘 나의 개념 학습 목록")
+    if milestones:
+        grouped_s_milestones = {}
+        for m_id, sub, ch, t_name, v_url in milestones:
+            key = (sub, ch)
+            if key not in grouped_s_milestones:
+                grouped_s_milestones[key] = []
+            grouped_s_milestones[key].append((m_id, t_name, v_url))
+
+        for (sub, ch), items in grouped_s_milestones.items():
+            done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
+            with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
+                for idx, (m_id, t_name, v_url) in enumerate(items):
+                    default_val = m_progress.get(m_id, False)
+                    cols = st.columns([4, 1])
+                    with cols[0]:
+                        val = st.checkbox(
+                            f"{t_name}", 
+                            value=default_val, 
+                            key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
+                        )
+                        if val != default_val:
+                            save_single_milestone_progress(selected_student, m_id, val)
+                            st.rerun(scope="fragment")
+                    with cols[1]:
+                        if v_url and v_url.strip() != "":
+                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
+    else:
+        st.info("아직 배정된 개념 학습 목록이 없습니다.")
+
+# ====================================================
+# 🚀 날짜별 숙제 탭 전용 조각 컴포넌트
+# ====================================================
+@st.fragment
+def render_student_homework_fragment(selected_student, hw_dates, h_progress):
+    today_obj = get_korean_today()
+    today_str = str(today_obj)
+    daily_routines_list = get_student_daily_routines(selected_student)
+    current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
+    
+    total_r_cnt = len(daily_routines_list)
+    done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
+    
+    routine_status_text = f"🔥 오늘 루틴: {done_r_cnt} / {total_r_cnt}개 완료 " + ("(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료! 🚨)")
+    routine_color = "#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"
+
     st.markdown(
-        f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
-        f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
-        f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
+        f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
+        f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
+        f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
+        f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
+        f'{routine_status_text}'
+        f'</div>'
+        f'</div>',
         unsafe_allow_html=True
     )
-    
-    student_drive = get_student_drive_url(selected_student)
-    if student_drive and student_drive.strip() != "":
-        st.markdown(
-            f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 온라인 학습실 (Google Drive) 바로가기 ➔</a>',
-            unsafe_allow_html=True
-        )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    today_str_check = str(get_korean_today())
-    routines_chk_list = get_student_daily_routines(selected_student)
-    today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
-    unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
-    current_streak = get_student_routine_streak(selected_student)
+    st.markdown("### 🔥 매일 반복 루틴 체크")
+    st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
 
-    if unchecked_count > 0:
-        st.markdown(
-            f'<div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
-            f'<div style="font-size: 14px; font-weight: bold; color: #EF4444;">🚨 오늘 아직 완료하지 않은 루틴 과제가 <u>{unchecked_count}개</u> 있습니다!</div>'
-            f'<div style="font-size: 12px; margin-top: 4px; color: inherit;">"날짜별 숙제" 탭에서 오늘 루틴을 체크하고 완료해 주세요! 🔥</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-    else:
-        if routines_chk_list:
-            st.markdown(
-                f'<div style="background-color: rgba(16, 185, 129, 0.1); border-left: 4px solid #10B981; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
-                f'<div style="font-size: 14px; font-weight: bold; color: #10B981;">🎉 완벽합니다! 오늘의 모든 루틴 과제를 완료하셨습니다!</div>'
-                f'<div style="font-size: 13px; margin-top: 4px;">🔥 현재 연속 스트릭: <b>{current_streak}일째</b> 진행 중! 계속 멋진 모습을 보여주세요!</div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-    student_notices = get_notices_for_student(selected_student)
-    if student_notices:
-        with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
-            for n_id, n_title, n_content, n_date, n_target in student_notices:
-                target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
-                st.markdown(
-                    f'<div style="background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
-                    f'<div style="font-size: 12px;">{target_badge} | {n_date}</div>'
-                    f'<div style="font-size: 14px; font-weight: bold;">📌 {n_title}</div>'
-                    f'<div style="font-size: 13px; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-    with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
-        st.markdown("""
-        - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
-        - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
-        - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 콤팩트한 리스트에서 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
-        """)
-
-    milestones = get_student_milestones(selected_student)
-    hw_dates = get_student_homework_dates(selected_student)
-    m_progress = get_milestone_progress(selected_student)
-    h_progress = get_student_homework_progress(selected_student)
-    all_hws_flat = get_all_student_homework(selected_student)
-
-    total_m = len(milestones)
-    completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
-    m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
-
-    actual_hws_flat = [h for h in all_hws_flat if not h[2].startswith("💬 [선생님 메시지]:")]
-    total_h = len(actual_hws_flat)
-    completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
-    h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
-
-    r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
-
-    conn_alert, _ = get_db_connection()
-    c_alert = conn_alert.cursor()
-    q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
-    user_wrong_rows = c_alert.fetchall()
-    
-    solved_map_alert = get_student_wrong_solved_status(selected_student)
-    unsolved_total_count = 0
-    new_video_count = 0
-    now_datetime_alert = datetime.now()
-
-    target_full_codes = []
-    for u_code, nums_txt in user_wrong_rows:
-        parsed_nums = parse_numbers(nums_txt)
-        for n in parsed_nums:
-            target_full_codes.append(f"{u_code}{n:03d}".upper())
-
-    batch_link_info = get_batch_problem_link_info(target_full_codes)
-
-    for f_code in target_full_codes:
-        v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
-        is_solved = solved_map_alert.get(f_code, False)
-        
-        if v_url and not is_solved:
-            unsolved_total_count += 1
-            try:
-                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                if (now_datetime_alert - up_dt).total_seconds() <= 86400:
-                    new_video_count += 1
-            except Exception:
-                pass
-
-    if unsolved_total_count > 0:
-        st.markdown(
-            f'''
-            <div style="
-                background-color: rgba(239, 68, 68, 0.1);
-                border-left: 4px solid #EF4444;
-                padding: 12px 14px;
-                border-radius: 8px;
-                margin-bottom: 15px;
-            ">
-                <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
-                    🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
-                </div>
-                <div style="font-size: 12px; margin-top: 4px; color: inherit;">
-                    "오답·질문 관리" 탭에서 해설을 시청하고 복습 완료를 체크해 주세요! 💡
-                </div>
-            </div>
-            ''',
-            unsafe_allow_html=True
-        )
-
-    st.markdown("##### 📊 나의 학습 성취도 대시보드")
-    
-    with st.container(border=True):
-        st.markdown("🎯 **개념 진도**")
-        cols_m = st.columns([4, 1])
-        with cols_m[0]:
-            st.progress(m_percent / 100 if total_m > 0 else 0)
-        with cols_m[1]:
-            st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
-        st.caption(f"완료: {completed_m} / 총 {total_m}개")
-
-    with st.container(border=True):
-        st.markdown("📚 **숙제 완료**")
-        cols_h = st.columns([4, 1])
-        with cols_h[0]:
-            st.progress(h_percent / 100 if total_h > 0 else 0)
-        with cols_h[1]:
-            st.markdown(f"<div style='text-align:right; font-weight:bold; color:#10B981;'>{h_percent}%</div>", unsafe_allow_html=True)
-        st.caption(f"완료: {completed_h} / 총 {total_h}개")
-
-    with st.container(border=True):
-        st.markdown(f"🔥 **루틴 연속 달성 (스트릭: {current_streak}일 연속!)**")
-        r_progress_val = (r_rate / 100) if r_rate <= 100 else 1.0
-        cols_r = st.columns([4, 1])
-        with cols_r[0]:
-            st.progress(r_progress_val)
-        with cols_r[1]:
-            st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
-        st.caption(f"최근 7일 기준 완료: {r_completed} / 총 {r_total}개")
-
-    st.divider()
-
-    tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
-
-    with tab1:
-        st.markdown("### 📘 나의 개념 학습 목록")
-        if milestones:
-            grouped_s_milestones = {}
-            for m_id, sub, ch, t_name, v_url in milestones:
-                key = (sub, ch)
-                if key not in grouped_s_milestones:
-                    grouped_s_milestones[key] = []
-                grouped_s_milestones[key].append((m_id, t_name, v_url))
-
-            for (sub, ch), items in grouped_s_milestones.items():
-                done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
-                    for idx, (m_id, t_name, v_url) in enumerate(items):
-                        default_val = m_progress.get(m_id, False)
-                        cols = st.columns([4, 1])
-                        with cols[0]:
-                            val = st.checkbox(
-                                f"{t_name}", 
-                                value=default_val, 
-                                key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
-                            )
-                            if val != default_val:
-                                save_single_milestone_progress(selected_student, m_id, val)
-                                st.rerun(scope="fragment")
-                        with cols[1]:
-                            if v_url and v_url.strip() != "":
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
-        else:
-            st.info("아직 배정된 개념 학습 목록이 없습니다.")
-
-    with tab2:
-        today_obj = get_korean_today()
-        today_str = str(today_obj)
-        daily_routines_list = get_student_daily_routines(selected_student)
-        current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
-        
-        total_r_cnt = len(daily_routines_list)
-        done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
-        
-        routine_status_text = f"🔥 오늘 루틴: {done_r_cnt} / {total_r_cnt}개 완료 " + ("(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료! 🚨)")
-        routine_color = "#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"
-
-        st.markdown(
-            f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
-            f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
-            f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
-            f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
-            f'{routine_status_text}'
-            f'</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
-
-        st.markdown("### 🔥 매일 반복 루틴 체크")
-        st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
-
-        if daily_routines_list:
-            with st.container(border=True):
-                st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
-                st.markdown("---")
-
-                daily_routine_checked_dict = {}
-                for r_id, r_title in daily_routines_list:
-                    default_val = current_day_logs.get((str(r_id), today_str), False)
-                    chk_v = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                    daily_routine_checked_dict[str(r_id)] = chk_v
-                    if chk_v != default_val:
-                        save_single_routine_log(selected_student, str(r_id), today_str, chk_v)
-                        st.rerun(scope="fragment")
-                    st.divider()
-
-        if hw_dates:
-            st.markdown("")
+    if daily_routines_list:
+        with st.container(border=True):
+            st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
             st.markdown("---")
-            st.markdown("### 📚 날짜별 개별 숙제")
-            st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
-            
-            selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-            hws = get_student_homework_by_date(selected_student, selected_date)
-            
-            total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
-            done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
-            hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
-            hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
 
-            st.markdown(
-                f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
-                f'{hw_status_text}'
-                f'</div>',
-                unsafe_allow_html=True
-            )
+            daily_routine_checked_dict = {}
+            for r_id, r_title in daily_routines_list:
+                default_val = current_day_logs.get((str(r_id), today_str), False)
+                chk_v = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                daily_routine_checked_dict[str(r_id)] = chk_v
+                if chk_v != default_val:
+                    save_single_routine_log(selected_student, str(r_id), today_str, chk_v)
+                    st.rerun(scope="fragment")
+                st.divider()
 
-            with st.container(border=True):
-                for h_idx, (h_id, title) in enumerate(hws):
-                    if title.startswith("💬 [선생님 메시지]:"):
-                        msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
-                        st.info(f"📌 **선생님의 한마디**: {msg_content}")
-                    else:
-                        default_val = h_progress.get(h_id, False)
-                        chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                        val = st.checkbox(f"{title}", value=default_val, key=chk_key)
-                        if val != default_val:
-                            save_single_homework_progress(selected_student, h_id, val)
-                            st.rerun(scope="fragment")
-
-    with tab3:
-        st.markdown("### 💬 오답 및 질문 관리")
+    if hw_dates:
+        st.markdown("")
+        st.markdown("---")
+        st.markdown("### 📚 날짜별 개별 숙제")
+        st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
         
+        selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+        hws = get_student_homework_by_date(selected_student, selected_date)
+        
+        total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
+        done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
+        hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
+        hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
+
+        st.markdown(
+            f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
+            f'{hw_status_text}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
         with st.container(border=True):
-            st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
-            st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
-            
-            entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
-            target_code = entered_unit_code if entered_unit_code else "B1353"
-
-            col_add, col_del = st.columns(2)
-            with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
-            with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
-            
-            if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
-                if entered_unit_code:
-                    saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
-                    final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
-                    save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
-                    st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
-                    st.success("저장되었습니다!")
-                    st.rerun()
+            for h_idx, (h_id, title) in enumerate(hws):
+                if title.startswith("💬 [선생님 메시지]:"):
+                    msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
+                    st.info(f"📌 **선생님의 한마디**: {msg_content}")
                 else:
-                    st.warning("단원코드를 먼저 입력해 주세요.")
-
-        st.markdown("")
-        with st.container(border=True):
-            st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
-            st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상 바로 시청하세요.")
-
-            conn, _ = get_db_connection()
-            c = conn.cursor()
-            q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-            saved_rows = c.fetchall()
-            
-            saved_units_list = [r[0] for r in saved_rows]
-            
-            solved_map_chk = get_student_wrong_solved_status(selected_student)
-            now_datetime_chk = datetime.now()
-            
-            unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
-            unit_map_dict = {}
-            
-            for u_code in saved_units_list:
-                entry_txt = get_student_wrong_entry(selected_student, u_code)
-                p_nums = parse_numbers(entry_txt)
-                
-                has_new_unsolved = False
-                for n in p_nums:
-                    f_code = f"{u_code}{n:03d}"
-                    v_url, v_up_at = get_problem_link_info(f_code)
-                    is_solved = solved_map_chk.get(f_code, False)
-                    
-                    if v_url and not is_solved:
-                        try:
-                            up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                            if (now_datetime_chk - up_dt).total_seconds() <= 86400:
-                                has_new_unsolved = True
-                                break
-                        except Exception:
-                            pass
-                
-                display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
-                unit_map_dict[display_name] = u_code
-                unit_display_options.append(display_name)
-
-            selected_display_unit = st.selectbox(
-                "확인할 단원 선택", 
-                unit_display_options,
-                key="saved_unit_select_box"
-            )
-            
-            view_target_code = ""
-            if selected_display_unit and selected_display_unit != "-- 저장된 단원을 선택하세요 --":
-                view_target_code = unit_map_dict[selected_display_unit]
-
-            if view_target_code:
-                existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
-                if existing_wrong:
-                    st.markdown("---")
-                    st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
-                    parsed_nums = parse_numbers(existing_wrong)
-                    
-                    solved_map = get_student_wrong_solved_status(selected_student)
-                    now_datetime = datetime.now()
-                    
-                    if parsed_nums:
-                        query_params = st.query_params
-                        for n in sorted(list(parsed_nums)):
-                            full_code = f"{view_target_code}{n:03d}"
-                            v_url, v_updated_at = get_problem_link_info(full_code)
-                            is_solved = solved_map.get(full_code, False)
-                            
-                            is_new_alert = False
-                            if v_url and v_updated_at:
-                                try:
-                                    up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                    if (now_datetime - up_dt).total_seconds() <= 86400:
-                                        is_new_alert = True
-                                except Exception:
-                                    pass
-
-                            action_key = f"toggle_solved_{selected_student}_{full_code}"
-                            if query_params.get(action_key) == "true":
-                                new_state = not is_solved
-                                save_single_wrong_solved_status(selected_student, full_code, new_state)
-                                query_params.pop(action_key, None)
-                                st.rerun()
-
-                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
-                            
-                            checkbox_checked_attr = "checked" if is_solved else ""
-                            
-                            html_row_content = f'''
-                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
-                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                                    <input type="checkbox" {checkbox_checked_attr} 
-                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
-                                        style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
-                                    <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
-                                </div>
-                                <div style="flex-shrink: 0; margin-left: 10px;">
-                                    {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
-                                </div>
-                            </div>
-                            '''
-                            
-                            st.markdown(html_row_content, unsafe_allow_html=True)
-                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
-                else:
-                    st.info(f"현재 등록된 오답이 없습니다.")
-
-        st.markdown("")
-        with st.container(border=True):
-            st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
-            st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
-            search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
-            if search_prob_input:
-                if len(search_prob_input) >= 7:
-                    matched_url, _ = get_problem_link_info(search_prob_input)
-                    if matched_url:
-                        st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                        st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
-                    else:
-                        st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
-                else:
-                    unit_results = get_problem_links_by_unit(search_prob_input)
-                    if unit_results:
-                        st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
-                        for f_code, v_url in unit_results:
-                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
-                    else:
-                        st.info("단원코드 형식으로 올바르게 입력해 주세요.")
+                    default_val = h_progress.get(h_id, False)
+                    chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                    val = st.checkbox(f"{title}", value=default_val, key=chk_key)
+                    if val != default_val:
+                        save_single_homework_progress(selected_student, h_id, val)
+                        st.rerun(scope="fragment")
 
 # ====================================================
 # 1. [학생 전용 모드 / 일반 사용자 화면]
 # ====================================================
 if not st.session_state["teacher_authenticated"]:
     if url_student and url_student in student_list:
-        render_student_portal_fragment(url_student)
+        selected_student = url_student
+        
+        st.markdown(
+            f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
+            f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
+            f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
+            unsafe_allow_html=True
+        )
+        
+        student_drive = get_student_drive_url(selected_student)
+        if student_drive and student_drive.strip() != "":
+            st.markdown(
+                f'<a href="{student_drive}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:12px 16px; border-radius:8px; font-size:15px; text-decoration:none; font-weight:bold; text-align:center; margin-bottom:15px;">📁 온라인 학습실 (Google Drive) 바로가기 ➔</a>',
+                unsafe_allow_html=True
+            )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        today_str_check = str(get_korean_today())
+        routines_chk_list = get_student_daily_routines(selected_student)
+        today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
+        unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
+        current_streak = get_student_routine_streak(selected_student)
+
+        if unchecked_count > 0:
+            st.markdown(
+                f'<div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
+                f'<div style="font-size: 14px; font-weight: bold; color: #EF4444;">🚨 오늘 아직 완료하지 않은 루틴 과제가 <u>{unchecked_count}개</u> 있습니다!</div>'
+                f'<div style="font-size: 12px; margin-top: 4px; color: inherit;">"날짜별 숙제" 탭에서 오늘 루틴을 체크하고 완료해 주세요! 🔥</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            if routines_chk_list:
+                st.markdown(
+                    f'<div style="background-color: rgba(16, 185, 129, 0.1); border-left: 4px solid #10B981; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
+                    f'<div style="font-size: 14px; font-weight: bold; color: #10B981;">🎉 완벽합니다! 오늘의 모든 루틴 과제를 완료하셨습니다!</div>'
+                    f'<div style="font-size: 13px; margin-top: 4px;">🔥 현재 연속 스트릭: <b>{current_streak}일째</b> 진행 중! 계속 멋진 모습을 보여주세요!</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+        student_notices = get_notices_for_student(selected_student)
+        if student_notices:
+            with st.expander("📢 [중요 공지사항] 확인하기", expanded=True):
+                for n_id, n_title, n_content, n_date, n_target in student_notices:
+                    target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
+                    st.markdown(
+                        f'<div style="background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
+                        f'<div style="font-size: 12px;">{target_badge} | {n_date}</div>'
+                        f'<div style="font-size: 14px; font-weight: bold;">📌 {n_title}</div>'
+                        f'<div style="font-size: 13px; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+        with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
+            st.markdown("""
+            - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
+            - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 콤팩트한 리스트에서 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
+            """)
+
+        milestones = get_student_milestones(selected_student)
+        hw_dates = get_student_homework_dates(selected_student)
+        m_progress = get_milestone_progress(selected_student)
+        h_progress = get_student_homework_progress(selected_student)
+        all_hws_flat = get_all_student_homework(selected_student)
+
+        total_m = len(milestones)
+        completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
+        m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
+
+        actual_hws_flat = [h for h in all_hws_flat if not h[2].startswith("💬 [선생님 메시지]:")]
+        total_h = len(actual_hws_flat)
+        completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
+        h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
+
+        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
+
+        conn_alert, _ = get_db_connection()
+        c_alert = conn_alert.cursor()
+        q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
+        user_wrong_rows = c_alert.fetchall()
+        
+        solved_map_alert = get_student_wrong_solved_status(selected_student)
+        unsolved_total_count = 0
+        new_video_count = 0
+        now_datetime_alert = datetime.now()
+
+        target_full_codes = []
+        for u_code, nums_txt in user_wrong_rows:
+            parsed_nums = parse_numbers(nums_txt)
+            for n in parsed_nums:
+                target_full_codes.append(f"{u_code}{n:03d}".upper())
+
+        batch_link_info = get_batch_problem_link_info(target_full_codes)
+
+        for f_code in target_full_codes:
+            v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
+            is_solved = solved_map_alert.get(f_code, False)
+            
+            if v_url and not is_solved:
+                unsolved_total_count += 1
+                try:
+                    up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                    if (now_datetime_alert - up_dt).total_seconds() <= 86400:
+                        new_video_count += 1
+                except Exception:
+                    pass
+
+        if unsolved_total_count > 0:
+            st.markdown(
+                f'''
+                <div style="
+                    background-color: rgba(239, 68, 68, 0.1);
+                    border-left: 4px solid #EF4444;
+                    padding: 12px 14px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                ">
+                    <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
+                        🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
+                    </div>
+                    <div style="font-size: 12px; margin-top: 4px; color: inherit;">
+                        "오답·질문 관리" 탭에서 해설을 시청하고 복습 완료를 체크해 주세요! 💡
+                    </div>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+
+        st.markdown("##### 📊 나의 학습 성취도 대시보드")
+        
+        with st.container(border=True):
+            st.markdown("🎯 **개념 진도**")
+            cols_m = st.columns([4, 1])
+            with cols_m[0]:
+                st.progress(m_percent / 100 if total_m > 0 else 0)
+            with cols_m[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
+            st.caption(f"완료: {completed_m} / 총 {total_m}개")
+
+        with st.container(border=True):
+            st.markdown("📚 **숙제 완료**")
+            cols_h = st.columns([4, 1])
+            with cols_h[0]:
+                st.progress(h_percent / 100 if total_h > 0 else 0)
+            with cols_h[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#10B981;'>{h_percent}%</div>", unsafe_allow_html=True)
+            st.caption(f"완료: {completed_h} / 총 {total_h}개")
+
+        with st.container(border=True):
+            st.markdown(f"🔥 **루틴 연속 달성 (스트릭: {current_streak}일 연속!)**")
+            r_progress_val = (r_rate / 100) if r_rate <= 100 else 1.0
+            cols_r = st.columns([4, 1])
+            with cols_r[0]:
+                st.progress(r_progress_val)
+            with cols_r[1]:
+                st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{r_rate}%</div>", unsafe_allow_html=True)
+            st.caption(f"최근 7일 기준 완료: {r_completed} / 총 {r_total}개")
+
+        st.divider()
+
+        tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
+
+        with tab1:
+            render_student_milestones_fragment(selected_student, milestones, m_progress)
+
+        with tab2:
+            render_student_homework_fragment(selected_student, hw_dates, h_progress)
+
+        with tab3:
+            st.markdown("### 💬 오답 및 질문 관리")
+            
+            with st.container(border=True):
+                st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
+                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요. (기록은 영구 보관됩니다)")
+                
+                entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
+                target_code = entered_unit_code if entered_unit_code else "B1353"
+
+                col_add, col_del = st.columns(2)
+                with col_add: add_txt = st.text_input("➕ 추가할 번호 (예: 15, 35)")
+                with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
+                
+                if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
+                    if entered_unit_code:
+                        saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
+                        final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
+                        save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
+                        st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
+                        st.success("저장되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("단원코드를 먼저 입력해 주세요.")
+
+            st.markdown("")
+            with st.container(border=True):
+                st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
+                st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상 바로 시청하세요.")
+
+                conn, _ = get_db_connection()
+                c = conn.cursor()
+                q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
+                saved_rows = c.fetchall()
+                
+                saved_units_list = [r[0] for r in saved_rows]
+                
+                solved_map_chk = get_student_wrong_solved_status(selected_student)
+                now_datetime_chk = datetime.now()
+                
+                unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
+                unit_map_dict = {}
+                
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    p_nums = parse_numbers(entry_txt)
+                    
+                    has_new_unsolved = False
+                    for n in p_nums:
+                        f_code = f"{u_code}{n:03d}"
+                        v_url, v_up_at = get_problem_link_info(f_code)
+                        is_solved = solved_map_chk.get(f_code, False)
+                        
+                        if v_url and not is_solved:
+                            try:
+                                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                                if (now_datetime_chk - up_dt).total_seconds() <= 86400:
+                                    has_new_unsolved = True
+                                    break
+                            except Exception:
+                                pass
+                    
+                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
+                    unit_map_dict[display_name] = u_code
+                    unit_display_options.append(display_name)
+
+                selected_display_unit = st.selectbox(
+                    "확인할 단원 선택", 
+                    unit_display_options,
+                    key="saved_unit_select_box"
+                )
+                
+                view_target_code = ""
+                if selected_display_unit and selected_display_unit != "-- 저장된 단원을 선택하세요 --":
+                    view_target_code = unit_map_dict[selected_display_unit]
+
+                if view_target_code:
+                    existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
+                    if existing_wrong:
+                        st.markdown("---")
+                        st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
+                        parsed_nums = parse_numbers(existing_wrong)
+                        
+                        solved_map = get_student_wrong_solved_status(selected_student)
+                        now_datetime = datetime.now()
+                        
+                        if parsed_nums:
+                            query_params = st.query_params
+                            for n in sorted(list(parsed_nums)):
+                                full_code = f"{view_target_code}{n:03d}"
+                                v_url, v_updated_at = get_problem_link_info(full_code)
+                                is_solved = solved_map.get(full_code, False)
+                                
+                                is_new_alert = False
+                                if v_url and v_updated_at:
+                                    try:
+                                        up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                        if (now_datetime - up_dt).total_seconds() <= 86400:
+                                            is_new_alert = True
+                                    except Exception:
+                                        pass
+
+                                action_key = f"toggle_solved_{selected_student}_{full_code}"
+                                if query_params.get(action_key) == "true":
+                                    new_state = not is_solved
+                                    save_single_wrong_solved_status(selected_student, full_code, new_state)
+                                    query_params.pop(action_key, None)
+                                    st.rerun()
+
+                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
+                                text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
+                                
+                                checkbox_checked_attr = "checked" if is_solved else ""
+                                
+                                html_row_content = f'''
+                                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
+                                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                        <input type="checkbox" {checkbox_checked_attr} 
+                                            onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
+                                            style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
+                                        <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
+                                    </div>
+                                    <div style="flex-shrink: 0; margin-left: 10px;">
+                                        {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
+                                    </div>
+                                </div>
+                                '''
+                                
+                                st.markdown(html_row_content, unsafe_allow_html=True)
+                                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                    else:
+                        st.info(f"현재 등록된 오답이 없습니다.")
+
+            st.markdown("")
+            with st.container(border=True):
+                st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
+                st.caption("궁금한 문제 번호 전체(예: B1353015) 또는 단원코드만(예: B1353) 입력하면 즉시 해설 영상 또는 해당 단원 해설 목록으로 이동합니다.")
+                search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
+                if search_prob_input:
+                    if len(search_prob_input) >= 7:
+                        matched_url, _ = get_problem_link_info(search_prob_input)
+                        if matched_url:
+                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                        else:
+                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+                    else:
+                        unit_results = get_problem_links_by_unit(search_prob_input)
+                        if unit_results:
+                            st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                            for f_code, v_url in unit_results:
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                        else:
+                            st.info("단원코드 형식으로 올바르게 입력해 주세요.")
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다. 링크를 확인해 주세요.")
 
