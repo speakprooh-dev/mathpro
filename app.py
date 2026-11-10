@@ -13,7 +13,10 @@ if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
 # 🟢 [추가] 앱 내에서 버튼으로 모드를 바꿀 수 있는 세션 상태 관리 (기본값: 로컬)
-if "db_mode_override" not in st.session_state:
+# 🟢 [수정 후] URL 파라미터나 세션 상태로 DB 모드 유지
+if "db_mode" in st.query_params:
+    st.session_state["db_mode_override"] = st.query_params["db"]
+elif "db_mode_override" not in st.session_state:
     st.session_state["db_mode_override"] = "local"
 
 # ==========================================
@@ -1251,6 +1254,7 @@ with st.sidebar:
             )
             if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True):
                 st.session_state["db_mode_override"] = "local"
+                st.query_params["db"] = "local"  # URL 파라미터 반영
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
@@ -1263,6 +1267,7 @@ with st.sidebar:
             )
             if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True):
                 st.session_state["db_mode_override"] = "supabase"
+                st.query_params["db"] = "supabase"  # URL 파라미터 반영
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
