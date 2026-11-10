@@ -8,7 +8,7 @@ import io
 import os
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (연결 캐싱 적용으로 속도 극대화)
+# ☁️ Supabase URL 방식 연동 설정 (안전성 및 속도 최적화)
 # ==========================================
 try:
     import psycopg2
@@ -17,26 +17,14 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
-@st.cache_resource(show_spinner=False)
-def get_persistent_postgres_connection(conn_url):
-    """클라우드 DB 연결을 한 번만 맺고 메모리에 유지하여 속도를 로컬 수준으로 끌어올립니다."""
-    conn = psycopg2.connect(conn_url, connect_timeout=5)
-    conn.autocommit = True
-    return conn
-
 def get_db_connection():
     if SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
             
-            conn = get_persistent_postgres_connection(conn_url)
-            
-            # 혹시라도 연결이 끊어졌을 경우 자동 재연결
-            if conn.closed != 0:
-                st.cache_resource.clear()
-                conn = get_persistent_postgres_connection(conn_url)
-                
+            conn = psycopg2.connect(conn_url, connect_timeout=5)
+            conn.autocommit = True
             return conn, "postgres"
         except Exception as e:
             pass
@@ -58,7 +46,7 @@ def q(c, query, params=None):
     return c
 
 # ==========================================
-# 🚀 클라우드 속도 극대화를 위한 일괄 캐시 함수들
+# 🚀 일괄 캐시 함수들
 # ==========================================
 @st.cache_data(ttl=300)
 def get_all_problem_link_set():
@@ -1295,6 +1283,120 @@ with st.sidebar:
                         st.error("비밀번호가 틀렸습니다.")
 
 # ====================================================
+# 🚀 속도 극대화를 위한 @st.fragment 조각 컴포넌트들
+# ====================================================
+
+@st.fragment
+def render_student_milestones_fragment(selected_student, milestones, m_progress):
+    """📘 개념 진도 탭 전용 조각 (체크 시 해당 영역만 0.1초 즉시 갱신)"""
+    st.markdown("### 📘 나의 개념 학습 목록")
+    if milestones:
+        grouped_s_milestones = {}
+        for m_id, sub, ch, t_name, v_url in milestones:
+            key = (sub, ch)
+            if key not in grouped_s_milestones:
+                grouped_s_milestones[key] = []
+            grouped_s_milestones[key].append((m_id, t_name, v_url))
+
+        for (sub, ch), items in grouped_s_milestones.items():
+            done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
+            with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
+                for idx, (m_id, t_name, v_url) in enumerate(items):
+                    default_val = m_progress.get(m_id, False)
+                    cols = st.columns([4, 1])
+                    with cols[0]:
+                        val = st.checkbox(
+                            f"{t_name}", 
+                            value=default_val, 
+                            key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
+                        )
+                        if val != default_val:
+                            save_single_milestone_progress(selected_student, m_id, val)
+                            st.rerun(scope="fragment")
+                    with cols[1]:
+                        if v_url and v_url.strip() != "":
+                            st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
+    else:
+        st.info("아직 배정된 개념 학습 목록이 없습니다.")
+
+@st.fragment
+def render_student_homework_fragment(selected_student, hw_dates, h_progress):
+    """📚 날짜별 숙제 및 매일 루틴 탭 전용 조각 (체크 시 해당 영역만 0.1초 즉시 갱신)"""
+    today_obj = get_korean_today()
+    today_str = str(today_obj)
+    daily_routines_list = get_student_daily_routines(selected_student)
+    current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
+    
+    total_r_cnt = len(daily_routines_list)
+    done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
+    
+    routine_status_text = f"🔥 오늘 루틴: {done_r_cnt} / {total_r_cnt}개 완료 " + ("(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료! 🚨)")
+    routine_color = "#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"
+
+    st.markdown(
+        f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
+        f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
+        f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
+        f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
+        f'{routine_status_text}'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown("### 🔥 매일 반복 루틴 체크")
+    st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
+
+    if daily_routines_list:
+        with st.container(border=True):
+            st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
+            st.markdown("---")
+
+            daily_routine_checked_dict = {}
+            for r_id, r_title in daily_routines_list:
+                default_val = current_day_logs.get((str(r_id), today_str), False)
+                chk_v = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                daily_routine_checked_dict[str(r_id)] = chk_v
+                if chk_v != default_val:
+                    save_single_routine_log(selected_student, str(r_id), today_str, chk_v)
+                    st.rerun(scope="fragment")
+                st.divider()
+
+    if hw_dates:
+        st.markdown("")
+        st.markdown("---")
+        st.markdown("### 📚 날짜별 개별 숙제")
+        st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
+        
+        selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+        hws = get_student_homework_by_date(selected_student, selected_date)
+        
+        total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
+        done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
+        hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
+        hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
+
+        st.markdown(
+            f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
+            f'{hw_status_text}'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+        with st.container(border=True):
+            for h_idx, (h_id, title) in enumerate(hws):
+                if title.startswith("💬 [선생님 메시지]:"):
+                    msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
+                    st.info(f"📌 **선생님의 한마디**: {msg_content}")
+                else:
+                    default_val = h_progress.get(h_id, False)
+                    chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
+                    val = st.checkbox(f"{title}", value=default_val, key=chk_key)
+                    if val != default_val:
+                        save_single_homework_progress(selected_student, h_id, val)
+                        st.rerun(scope="fragment")
+
+# ====================================================
 # 1. [학생 전용 모드 / 일반 사용자 화면]
 # ====================================================
 if not st.session_state["teacher_authenticated"]:
@@ -1466,107 +1568,10 @@ if not st.session_state["teacher_authenticated"]:
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
         with tab1:
-            st.markdown("### 📘 나의 개념 학습 목록")
-            if milestones:
-                grouped_s_milestones = {}
-                for m_id, sub, ch, t_name, v_url in milestones:
-                    key = (sub, ch)
-                    if key not in grouped_s_milestones:
-                        grouped_s_milestones[key] = []
-                    grouped_s_milestones[key].append((m_id, t_name, v_url))
-
-                for (sub, ch), items in grouped_s_milestones.items():
-                    done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                    with st.expander(f"[{sub}] {ch} (완료: {done_cnt}/{len(items)})", expanded=False):
-                        for idx, (m_id, t_name, v_url) in enumerate(items):
-                            default_val = m_progress.get(m_id, False)
-                            cols = st.columns([4, 1])
-                            with cols[0]:
-                                val = st.checkbox(
-                                    f"{t_name}", 
-                                    value=default_val, 
-                                    key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
-                                )
-                                if val != default_val:
-                                    save_single_milestone_progress(selected_student, m_id, val)
-                                    st.rerun()
-                            with cols[1]:
-                                if v_url and v_url.strip() != "":
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
-            else:
-                st.info("아직 배정된 개념 학습 목록이 없습니다.")
+            render_student_milestones_fragment(selected_student, milestones, m_progress)
 
         with tab2:
-            today_obj = get_korean_today()
-            today_str = str(today_obj)
-            daily_routines_list = get_student_daily_routines(selected_student)
-            current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
-            
-            total_r_cnt = len(daily_routines_list)
-            done_r_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
-            
-            routine_status_text = f"🔥 오늘 루틴: {done_r_cnt} / {total_r_cnt}개 완료 " + ("(올클리어! 🎉)" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "(미완료! 🚨)")
-            routine_color = "#10B981" if total_r_cnt > 0 and done_r_cnt == total_r_cnt else "#EF4444"
-
-            st.markdown(
-                f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.3); padding: 14px; border-radius: 10px; margin-bottom: 15px;">'
-                f'<div style="font-size: 15px; font-weight: bold; margin-bottom: 4px;">⚡ 오늘의 학습 시작 전 필수 체크!</div>'
-                f'<div style="font-size: 13px; color: gray; margin-bottom: 8px;">매일 루틴과 날짜별 숙제를 완료하고 체크박스를 꼭 눌러주세요.</div>'
-                f'<div style="font-size: 13px; font-weight: bold; color: {routine_color}; white-space: nowrap;">'
-                f'{routine_status_text}'
-                f'</div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-
-            st.markdown("### 🔥 매일 반복 루틴 체크")
-            st.caption("오늘 해야 할 루틴을 완료하고 체크박스를 눌러주세요.")
-
-            if daily_routines_list:
-                with st.container(border=True):
-                    st.markdown(f"**오늘 ({today_str}) 루틴 항목**")
-                    st.markdown("---")
-
-                    daily_routine_checked_dict = {}
-                    for r_id, r_title in daily_routines_list:
-                        default_val = current_day_logs.get((str(r_id), today_str), False)
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
-                        st.divider()
-                if daily_routine_checked_dict:
-                    save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
-
-            if hw_dates:
-                st.markdown("")
-                st.markdown("---")
-                st.markdown("### 📚 날짜별 개별 숙제")
-                st.caption("선생님이 배정해주신 날짜별 숙제를 확인하고 완료 체크를 해보세요.")
-                
-                selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-                hws = get_student_homework_by_date(selected_student, selected_date)
-                
-                total_hw_cnt = len([h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")])
-                done_hw_cnt = sum(1 for h_id, title in hws if not title.startswith("💬 [선생님 메시지]:") and h_progress.get(h_id, False))
-                hw_status_text = f"📚 선택일 숙제: {done_hw_cnt} / {total_hw_cnt}개 완료 " + ("(올클리어! 🎉)" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "(미완료! 🚨)")
-                hw_color = "#10B981" if total_hw_cnt > 0 and done_hw_cnt == total_hw_cnt else "#EF4444"
-
-                st.markdown(
-                    f'<div style="background-color: var(--secondary-background-color); border: 1px solid rgba(128,128,128,0.2); padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: {hw_color}; white-space: nowrap;">'
-                    f'{hw_status_text}'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-
-                with st.container(border=True):
-                    for h_idx, (h_id, title) in enumerate(hws):
-                        if title.startswith("💬 [선생님 메시지]:"):
-                            msg_content = title.replace("💬 [선생님 메시지]:", "").strip()
-                            st.info(f"📌 **선생님의 한마디**: {msg_content}")
-                        else:
-                            default_val = h_progress.get(h_id, False)
-                            chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                            if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
-                                save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
-                                st.rerun()
+            render_student_homework_fragment(selected_student, hw_dates, h_progress)
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
