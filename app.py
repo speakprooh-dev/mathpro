@@ -12,14 +12,14 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
-# 🟢 [수정] URL 파라미터 key('db')를 일치시켜 F5 새로고침 시에도 모드 완전 유지
+# 🟢 [안전 장치] 기본 접속 모드는 무조건 'supabase'로 고정하여 학생 데이터 유실 방지
 if "db" in st.query_params:
     st.session_state["db_mode_override"] = st.query_params["db"]
 elif "db_mode_override" not in st.session_state:
     st.session_state["db_mode_override"] = "supabase"
 
 # ==========================================
-# ☁️ Supabase URL 방식 연동 설정 (버튼 토글 연동)
+# ☁️ Supabase URL 방식 연동 설정
 # ==========================================
 try:
     import psycopg2
@@ -36,7 +36,7 @@ def get_persistent_postgres_connection(conn_url):
     return conn
 
 def get_db_connection():
-    # 🟢 사용자가 앱 내에서 'supabase' 모드를 켰을 때만 작동
+    # 🟢 학생들이 링크를 타고 들어오거나 기본 접속 시 항상 Supabase 클라우드 사용
     if st.session_state["db_mode_override"] == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
@@ -52,7 +52,7 @@ def get_db_connection():
         except Exception as e:
             pass
     
-    # 기본값 또는 'local' 모드 선택 시 SQLite 파일 사용
+    # 선생님 본인 테스트 전용 로컬 SQLite 파일 모드
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
@@ -1244,8 +1244,8 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         
-        # 🟢 [정돈 완료] DB 연동 모드 설정 버튼 (중복 없이 단 하나만 깔끔하게 배치)
-        st.markdown("##### 🔀 DB 연동 모드 설정")
+        # 🟢 [안전한 관리자 전용 테스트 토글] 선생님 본인 화면에서만 로컬/클라우드 전환 제어
+        st.markdown("##### 🔀 DB 연동 모드 설정 (선생님 테스트용)")
         current_mode = st.session_state["db_mode_override"]
         
         if current_mode == "supabase":
@@ -1255,7 +1255,7 @@ with st.sidebar:
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("📁 로컬 모드로 전환 (SQLite)", use_container_width=True, key="btn_switch_to_local"):
+            if st.button("📁 로컬 테스트 모드로 전환", use_container_width=True, key="btn_switch_to_local"):
                 st.session_state["db_mode_override"] = "local"
                 st.query_params["db"] = "local"
                 st.cache_resource.clear()
@@ -1264,11 +1264,11 @@ with st.sidebar:
         else:
             st.markdown(
                 '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
-                '📁 현재 로컬 파일 모드 연동 중'
+                '📁 현재 로컬 테스트 모드 중'
                 '</div>',
                 unsafe_allow_html=True
             )
-            if st.button("☁️ Supabase 클라우드 모드로 전환", use_container_width=True, key="btn_switch_to_supabase"):
+            if st.button("☁️ Supabase 클라우드로 복귀", use_container_width=True, key="btn_switch_to_supabase"):
                 st.session_state["db_mode_override"] = "supabase"
                 st.query_params["db"] = "supabase"
                 st.cache_resource.clear()
