@@ -726,32 +726,37 @@ def get_all_problem_links_searched(search_filter=""):
     try:
         conn, db_type = get_db_connection()
         c = conn.cursor()
-        search_val = f"%{search_filter.strip().upper()}%"
+        clean_filter = search_filter.strip().upper()
+        search_val = f"%{clean_filter}%"
         
         if db_type == "postgres":
-            query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE %s OR unit_code LIKE %s ORDER BY unit_code, full_code"
+            query = """
+                SELECT id, full_code, video_url, unit_code 
+                FROM problem_links 
+                WHERE UPPER(TRIM(unit_code)) = %s 
+                   OR UPPER(TRIM(full_code)) = %s 
+                   OR UPPER(TRIM(unit_code)) LIKE %s 
+                   OR UPPER(TRIM(full_code)) LIKE %s 
+                ORDER BY unit_code, full_code
+            """
+            params = (clean_filter, clean_filter, search_val, search_val)
         else:
-            query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code"
+            query = """
+                SELECT id, full_code, video_url, unit_code 
+                FROM problem_links 
+                WHERE UPPER(TRIM(unit_code)) = ? 
+                   OR UPPER(TRIM(full_code)) = ? 
+                   OR UPPER(TRIM(unit_code)) LIKE ? 
+                   OR UPPER(TRIM(full_code)) LIKE ? 
+                ORDER BY unit_code, full_code
+            """
+            params = (clean_filter, clean_filter, search_val, search_val)
             
-        c.execute(query, (search_val, search_val))
+        c.execute(query, params)
         rows = c.fetchall()
         return rows, len(rows)
     except Exception:
-        # 🟢 테이블이 없거나 오류 발생 시 자동으로 DB를 초기화하고 재시도
-        try:
-            init_db()
-            conn, db_type = get_db_connection()
-            c = conn.cursor()
-            search_val = f"%{search_filter.strip().upper()}%"
-            if db_type == "postgres":
-                query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE %s OR unit_code LIKE %s ORDER BY unit_code, full_code"
-            else:
-                query = "SELECT id, full_code, video_url, unit_code FROM problem_links WHERE full_code LIKE ? OR unit_code LIKE ? ORDER BY unit_code, full_code"
-            c.execute(query, (search_val, search_val))
-            rows = c.fetchall()
-            return rows, len(rows)
-        except Exception:
-            return [], 0
+        return [], 0
 
 def delete_problem_link(link_id):
     conn, _ = get_db_connection()
