@@ -372,6 +372,7 @@ def migrate_local_to_supabase():
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
         
+        # 일시적으로 Supabase 연결을 맺어 데이터 전송
         sec = st.secrets["supabase"]
         conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
         cloud_conn = psycopg2.connect(conn_url, connect_timeout=5)
@@ -445,12 +446,6 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date));')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code));')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code));')
-            # 🟢 problem_links 테이블에 id 컬럼이 확실히 포함되도록 재생성
-            try:
-                c.execute('DROP TABLE IF EXISTS problem_links;')
-                conn.commit()
-            except Exception:
-                pass
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL);')
@@ -1181,6 +1176,7 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         
+        # 🟢 [추가] 사이드바에서 버튼 하나로 DB 모드 토글 전환
         st.markdown("##### 🔀 DB 연동 모드 설정")
         current_mode = st.session_state["db_mode_override"]
         
@@ -2100,9 +2096,6 @@ else:
                     if parsed_s:
                         with st.container(border=True):
                             st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
-                            
-                            # 🟢 [수정 포인트] 날짜별 보기 모드일 때, 해당 날짜(selected_date_filter)와 수정일이 일치하는 경우에만 번호 표시 또는 전체 표시 제어
-                            # 만약 날짜별 보기에서 해당 날짜에 추가된 내역만 명확히 구분하고 싶다면 아래와 같이 렌더링하거나 별도 로그 테이블 구조로 고도화할 수 있습니다.
                             colored_num_tags = [
                                 f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
                                 for n in sorted(list(parsed_s))
