@@ -465,6 +465,11 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
+            
+            # 🟢 [추가] 날짜별 오답 이력 로그 테이블 생성
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, prob_num INTEGER NOT NULL, registered_date TEXT NOT NULL, created_at TEXT NOT NULL)')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date)')
+            
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
@@ -1086,7 +1091,9 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
+    now_str = get_korean_now_str()
     try:
+        # 1. 기존 덮어쓰기 유지 (호환용)
         if db_type == "sqlite":
             q(c, "DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
@@ -1096,10 +1103,26 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 VALUES (?, ?, ?, ?)
                 ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
             ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
+        
+        # 2. 🟢 [핵심] 오늘 날짜 기준 날짜별 오답 로그(Log) 쌓기
+        parsed_nums = parse_numbers(numbers_text)
+        for num in parsed_nums:
+            if db_type == "sqlite":
+                q(c, '''
+                    INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (student_name, unit_code, int(num), today_str, now_str))
+            else:
+                q(c, '''
+                    INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                ''', (student_name, unit_code, int(num), today_str, now_str))
+
         conn.commit()
         st.cache_data.clear()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"오답 저장 중 예외: {e}")
 
 @st.cache_data(ttl=30)
 def get_student_wrong_solved_status(student_name):
@@ -2033,21 +2056,29 @@ else:
             
             conn, _ = get_db_connection()
             c = conn.cursor()
-            if chk_student_choice == "전체 학생 (모두 보기)":
-                q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
-                wrong_rows_all = c.fetchall()
-            else:
-                q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in c.fetchall()]
             
-            if wrong_rows_all:
-                if wrong_view_mode == "📂 단원별 보기":
-                    target_rows = wrong_rows_all
-                elif wrong_view_mode == "📅 날짜별 보기":
-                    available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
+            if wrong_view_mode == "📂 단원별 보기":
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                target_rows = c.fetchall()
+
+            elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
+                # 🟢 오답 로그 테이블에서 날짜별 이력 조회
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (chk_student_choice,))
+                log_rows = c.fetchall()
+
+                if wrong_view_mode == "📅 날짜별 보기":
+                    available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
                     selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
-                    target_rows = wrong_rows_all if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in wrong_rows_all if r[3] == selected_date_filter]
-                elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
+                    
+                    filtered_logs = log_rows if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                
+                else: # 주간별 모아보기
                     def get_week_range_str(date_str):
                         try:
                             d = date.fromisoformat(date_str)
@@ -2056,15 +2087,77 @@ else:
                             return f"{start_week} ~ {end_week} (월~일)"
                         except Exception:
                             return "날짜 미상 주간"
+                    
                     weeks_dict = {}
-                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
-                        weeks_dict.setdefault(get_week_range_str(u_date) if u_date else "날짜 미상 주간", []).append((s_name, u_code, nums_txt, u_date))
+                    for s_name, u_code, p_num, reg_date in log_rows:
+                        weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                    
                     sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                     selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
-                    target_rows = weeks_dict.get(selected_week, []) if selected_week else []
-                else:
-                    target_rows = wrong_rows_all
+                    filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
 
+                # (학생, 단원, 날짜) 단위로 그룹핑
+                grouped_map = {}
+                for s_name, u_code, p_num, reg_date in filtered_logs:
+                    key = (s_name, u_code, reg_date)
+                    grouped_map.setdefault(key, []).append(p_num)
+                
+                target_rows = []
+                for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                    nums_txt = ", ".join(map(str, sorted(num_list)))
+                    target_rows.append((s_name, u_code, nums_txt, reg_date))
+            
+            else: # 해설 링크 없는 문제 모아보기
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                target_rows = c.fetchall()
+
+                if wrong_view_mode == "📅 날짜별 보기":
+                    available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
+                    selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
+                    
+                    filtered_logs = log_rows if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                
+                else: # 주간별 모아보기
+                    def get_week_range_str(date_str):
+                        try:
+                            d = date.fromisoformat(date_str)
+                            start_week = d - timedelta(days=d.weekday())
+                            end_week = start_week + timedelta(days=6)
+                            return f"{start_week} ~ {end_week} (월~일)"
+                        except Exception:
+                            return "날짜 미상 주간"
+                    
+                    weeks_dict = {}
+                    for s_name, u_code, p_num, reg_date in log_rows:
+                        weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                    
+                    sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
+                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
+                    filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
+
+                # (학생, 단원, 날짜) 단위로 그룹핑하여 렌더링 형식 맞춤
+                grouped_map = {}
+                for s_name, u_code, p_num, reg_date in filtered_logs:
+                    key = (s_name, u_code, reg_date)
+                    grouped_map.setdefault(key, []).append(p_num)
+                
+                target_rows = []
+                for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                    nums_txt = ", ".join(map(str, sorted(num_list)))
+                    target_rows.append((s_name, u_code, nums_txt, reg_date))
+            
+            else: # 해설 링크 없는 문제 모아보기
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                target_rows = c.fetchall()
+
+            # --- 이하는 기존 출력 로직 동일 ---
+            if target_rows:
                 summary_student_counts = {}
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
@@ -2095,7 +2188,7 @@ else:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
                         with st.container(border=True):
-                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
                             colored_num_tags = [
                                 f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
                                 for n in sorted(list(parsed_s))
