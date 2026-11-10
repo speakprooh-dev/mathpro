@@ -519,12 +519,13 @@ def add_subject(name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     try:
-        q(c, "INSERT INTO subjects (name) VALUES (?)", (name,))
-        conn.commit()
-        success = True
+        q(c, "SELECT id FROM subjects WHERE name = ?", (name,))
+        if not c.fetchone():
+            q(c, "INSERT INTO subjects (name) VALUES (?)", (name,))
+            conn.commit()
+        return True
     except Exception:
-        success = False
-    return success
+        return False
 
 def get_chapters():
     conn, _ = get_db_connection()
@@ -647,8 +648,18 @@ def get_problem_link_info(full_code):
         return row[0], (row[1] if row[1] else "")
     return "", ""
 
+@st.cache_data(ttl=30)
+def get_unit_code_summary_list():
+    """💡 드롭다운에 표시할 단원 코드별 등록된 링크 개수를 초고속 집계"""
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, "SELECT unit_code, COUNT(*) FROM problem_links WHERE video_url IS NOT NULL AND trim(video_url) != '' GROUP BY unit_code ORDER BY unit_code")
+        return c.fetchall()
+    except Exception:
+        return []
+
 def get_all_problem_links_searched(search_filter=""):
-    """💡 기본적으로 목록을 안 보여주고, 검색어나 단원코드를 입력했을 때만 초고속으로 조회하도록 변경"""
     if not search_filter or not search_filter.strip():
         return [], 0
     conn, _ = get_db_connection()
@@ -2187,7 +2198,6 @@ else:
                 hws = get_student_homework_by_date(s_name, selected_matrix_date)
                 if hws:
                     with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
-                        # 💡 팝오버 대신, 3번 탭처럼 해당 학생의 해당 날짜 숙제를 '줄바꿈 전체 수정'할 수 있는 폼 제공
                         combined_titles_mat = [title for _, title in hws]
                         initial_mat_text = "\n".join(combined_titles_mat)
                         
@@ -2225,7 +2235,7 @@ else:
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
-        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 검색 및 링크 목록 관리"])
+        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 단원별 드롭다운 및 검색 관리"])
         with col_link_tab1:
             with st.form("add_problem_link_form"):
                 col_pl1, col_pl2 = st.columns([1, 2])
@@ -2251,15 +2261,34 @@ else:
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
         with col_link_tab2:
-            # 💡 530개가 처음에 한 번에 안 뜨도록, 검색어를 입력했을 때만 쿼리해서 보여주도록 완전히 최적화
-            st.markdown("##### 🔍 해설 링크 검색 및 관리")
-            st.caption("등록된 530개 이상의 링크 중 찾으려는 단원코드(예: B1353)나 문제번호(예: B1353015)를 입력해 주세요.")
+            # 💡 선생님 아이디어 적용: 단원코드별 개수가 나오는 드롭다운 셀렉트 + 직접 검색 기능 결합
+            st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
+            st.caption("드롭다운에서 단원 코드를 선택하거나, 아래 검색창에 직접 단원코드/문제번호를 입력해 관리하세요.")
             
-            search_link_input = st.text_input("검색어 입력 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
+            unit_summaries = get_unit_code_summary_list() # [(unit_code, count), ...]
             
+            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"]
+            unit_count_map = {}
+            for u_code, cnt in unit_summaries:
+                label_str = f"{u_code} (총 {cnt}개 해설 링크)"
+                dropdown_options.append(label_str)
+                unit_count_map[label_str] = u_code
+            
+            col_dd, col_sc = st.columns(2)
+            with col_dd:
+                selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
+            with col_sc:
+                search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
+            
+            target_filter = ""
             if search_link_input:
-                searched_links, search_cnt = get_all_problem_links_searched(search_link_input)
-                st.markdown(f"**검색 결과: 총 {search_cnt}개**")
+                target_filter = search_link_input
+            elif selected_dropdown_item and selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --":
+                target_filter = unit_count_map[selected_dropdown_item]
+
+            if target_filter:
+                searched_links, search_cnt = get_all_problem_links_searched(target_filter)
+                st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
                     for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
@@ -2272,9 +2301,9 @@ else:
                                     delete_problem_link(l_id)
                                     st.rerun()
                 else:
-                    st.info("검색된 해설 링크가 없습니다.")
+                    st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
             else:
-                st.info("💡 검색창에 단원코드(예: B1353)나 문제번호를 입력하시면 해당 링크 목록이 즉시 나타납니다. (초기 로딩 속도 최적화)")
+                st.info("💡 위의 **드롭다운에서 단원을 선택**하시거나 **검색창에 단원코드/문제번호**를 입력하시면 해당 링크 목록이 즉시 나타납니다!")
 
     with t_cfg_stats:
         st.markdown("#### 📈 실시간 학습 참여 현황")
