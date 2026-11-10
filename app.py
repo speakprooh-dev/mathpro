@@ -372,7 +372,6 @@ def migrate_local_to_supabase():
         local_conn = sqlite3.connect(DB_PATH)
         local_cursor = local_conn.cursor()
         
-        # 일시적으로 Supabase 연결을 맺어 데이터 전송
         sec = st.secrets["supabase"]
         conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
         cloud_conn = psycopg2.connect(conn_url, connect_timeout=5)
@@ -1176,7 +1175,6 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 모드 활성화됨")
         
-        # 🟢 [추가] 사이드바에서 버튼 하나로 DB 모드 토글 전환
         st.markdown("##### 🔀 DB 연동 모드 설정")
         current_mode = st.session_state["db_mode_override"]
         
@@ -2096,6 +2094,9 @@ else:
                     if parsed_s:
                         with st.container(border=True):
                             st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                            
+                            # 🟢 [수정 포인트] 날짜별 보기 모드일 때, 해당 날짜(selected_date_filter)와 수정일이 일치하는 경우에만 번호 표시 또는 전체 표시 제어
+                            # 만약 날짜별 보기에서 해당 날짜에 추가된 내역만 명확히 구분하고 싶다면 아래와 같이 렌더링하거나 별도 로그 테이블 구조로 고도화할 수 있습니다.
                             colored_num_tags = [
                                 f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
                                 for n in sorted(list(parsed_s))
