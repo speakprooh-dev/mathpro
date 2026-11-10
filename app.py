@@ -2085,6 +2085,8 @@ else:
             conn, _ = get_db_connection()
             c = conn.cursor()
             
+            target_rows = []
+            
             if wrong_view_mode == "📂 단원별 보기":
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
@@ -2092,21 +2094,41 @@ else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 target_rows = c.fetchall()
 
-            elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                # 🟢 오답 로그 테이블에서 날짜별 이력 조회
+            elif wrong_view_mode == "📅 날짜별 보기":
+                # 1. 로그 테이블에서 데이터 조회
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
                 else:
                     q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (chk_student_choice,))
                 log_rows = c.fetchall()
 
-                if wrong_view_mode == "📅 날짜별 보기":
+                if log_rows:
                     available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
-                    selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
+                    # 🟢 화면에 날짜를 고를 수 있는 셀렉트박스를 확실하게 생성
+                    selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates)
                     
-                    filtered_logs = log_rows if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
-                
-                else: # 주간별 모아보기
+                    filtered_logs = log_rows if selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                    
+                    # (학생, 단원, 날짜) 단위로 그룹핑
+                    grouped_map = {}
+                    for s_name, u_code, p_num, reg_date in filtered_logs:
+                        key = (s_name, u_code, reg_date)
+                        grouped_map.setdefault(key, []).append(p_num)
+                    
+                    for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                        nums_txt = ", ".join(map(str, sorted(num_list)))
+                        target_rows.append((s_name, u_code, nums_txt, reg_date))
+                else:
+                    st.info("등록된 오답 로그가 없습니다.")
+
+            elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (chk_student_choice,))
+                log_rows = c.fetchall()
+
+                if log_rows:
                     def get_week_range_str(date_str):
                         try:
                             d = date.fromisoformat(date_str)
@@ -2121,20 +2143,20 @@ else:
                         weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
                     
                     sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
-                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
+                    selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
                     filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
 
-                # (학생, 단원, 날짜) 단위로 그룹핑
-                grouped_map = {}
-                for s_name, u_code, p_num, reg_date in filtered_logs:
-                    key = (s_name, u_code, reg_date)
-                    grouped_map.setdefault(key, []).append(p_num)
-                
-                target_rows = []
-                for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                    nums_txt = ", ".join(map(str, sorted(num_list)))
-                    target_rows.append((s_name, u_code, nums_txt, reg_date))
-            
+                    grouped_map = {}
+                    for s_name, u_code, p_num, reg_date in filtered_logs:
+                        key = (s_name, u_code, reg_date)
+                        grouped_map.setdefault(key, []).append(p_num)
+                    
+                    for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                        nums_txt = ", ".join(map(str, sorted(num_list)))
+                        target_rows.append((s_name, u_code, nums_txt, reg_date))
+                else:
+                    st.info("등록된 오답 로그가 없습니다.")
+
             else: # 해설 링크 없는 문제 모아보기
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
@@ -2142,7 +2164,7 @@ else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
                 target_rows = c.fetchall()
 
-            # --- 이하는 기존 출력 로직 동일 ---
+            # --- 결과 렌더링 영역 ---
             if target_rows:
                 summary_student_counts = {}
                 for s_name, u_code, nums_txt, u_date in target_rows:
@@ -2181,7 +2203,8 @@ else:
                             ]
                             st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
-                st.info("저장된 오답이 없습니다.")
+                if wrong_view_mode not in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
+                    st.info("저장된 오답이 없습니다.")
         else:
             st.warning("등록된 학생이 없습니다.")
 
