@@ -504,6 +504,32 @@ def init_db():
                 except Exception:
                     pass
             conn.commit()
+
+        # 🟢 [추가] 기존에 입력되어 있던 오답 데이터를 로그 테이블로 1회성 마이그레이션
+        try:
+            c.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
+            existing_wrong_rows = c.fetchall()
+            today_default_str = str(get_korean_today())
+            now_default_str = get_korean_now_str()
+            
+            for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
+                reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
+                for num in parse_numbers(nums_txt):
+                    if db_type == "sqlite":
+                        c.execute('''
+                            INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                    else:
+                        c.execute('''
+                            INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT DO NOTHING
+                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
+            conn.commit()
+        except Exception as e:
+            print(f"오답 로그 마이그레이션 예외: {e}")
+
     except Exception as e:
         print(f"DB 초기화 중 예외 발생: {e}")
 
