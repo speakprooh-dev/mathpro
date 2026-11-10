@@ -12,9 +12,13 @@ st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_ico
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
+# 🟢 [추가] 앱 내에서 버튼으로 모드를 바꿀 수 있는 세션 상태 관리 (기본값: 로컬)
 if "db_mode_override" not in st.session_state:
     st.session_state["db_mode_override"] = "local"
 
+# ==========================================
+# ☁️ Supabase URL 방식 연동 설정 (버튼 토글 연동)
+# ==========================================
 try:
     import psycopg2
     from urllib.parse import urlparse
@@ -24,23 +28,29 @@ except ImportError:
 
 @st.cache_resource(show_spinner=False)
 def get_persistent_postgres_connection(conn_url):
+    """클라우드 DB 연결을 한 번만 맺고 메모리에 유지하여 속도를 로컬 수준으로 끌어올립니다."""
     conn = psycopg2.connect(conn_url, connect_timeout=5)
     conn.autocommit = True
     return conn
 
 def get_db_connection():
+    # 🟢 사용자가 앱 내에서 'supabase' 모드를 켰을 때만 작동
     if st.session_state["db_mode_override"] == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
+            
             conn = get_persistent_postgres_connection(conn_url)
+            
             if conn.closed != 0:
                 st.cache_resource.clear()
                 conn = get_persistent_postgres_connection(conn_url)
+                
             return conn, "postgres"
         except Exception as e:
             pass
     
+    # 기본값 또는 'local' 모드 선택 시 SQLite 파일 사용
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
     return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False), "sqlite"
 
@@ -51,12 +61,15 @@ def q(c, query, params=None):
     except Exception:
         pass
         
-    if params is not None and len(params) > 0:
+    if params is not None:
         c.execute(query, params)
     else:
         c.execute(query)
     return c
 
+# ==========================================
+# 🚀 딜레이를 없애기 위한 초고속 일괄 캐시 함수들
+# ==========================================
 @st.cache_data(ttl=60)
 def get_all_problem_link_set():
     conn, _ = get_db_connection()
@@ -70,6 +83,7 @@ def get_all_problem_link_set():
 
 @st.cache_data(ttl=30)
 def get_batch_problem_link_info(full_codes):
+    """⚡ 여러 문제의 해설 링크 정보를 단 1회의 쿼리로 일괄 조회"""
     if not full_codes:
         return {}
     conn, db_type = get_db_connection()
@@ -429,15 +443,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date));')
-            
-            # 🟢 [개선] 기존 구형 student_wrong_entries 테이블이 있다면 안전하게 DROP 후 최신 로그 구조로 생성
-            try:
-                c.execute('DROP TABLE IF EXISTS student_wrong_entries;')
-                conn.commit()
-            except Exception:
-                pass
-            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, numbers_text TEXT NOT NULL, updated_at TEXT NOT NULL);')
-            
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code));')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code));')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id SERIAL PRIMARY KEY, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id SERIAL PRIMARY KEY, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL);')
@@ -457,26 +463,12 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER)')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER)')
-            
-            # 🟢 [개선] 기존 구형 SQLite 오답노트 테이블 DROP 후 최신 로그 구조로 생성
-            try:
-                c.execute('DROP TABLE IF EXISTS student_wrong_entries;')
-                conn.commit()
-            except Exception:
-                pass
-            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, unit_code TEXT NOT NULL, numbers_text TEXT NOT NULL, updated_at TEXT NOT NULL)')
-            
+            c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code))')
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
             conn.commit()
-
-        try:
-            c.execute('DROP INDEX IF EXISTS idx_student_wrong_unique;')
-            conn.commit()
-        except Exception:
-            pass
 
         try:
             c.execute("ALTER TABLE problem_links ADD COLUMN updated_at TEXT DEFAULT ''")
@@ -487,6 +479,7 @@ def init_db():
         try:
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_hw_prog_unique ON student_homework_progress (student_name, student_hw_id)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_routine_logs_unique ON daily_routine_logs (student_name, routine_id, log_date)')
+            c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_unique ON student_wrong_entries (student_name, unit_code)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_links_unique ON problem_links (full_code)')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_solved_unique ON student_wrong_solved (student_name, full_code)')
             conn.commit()
@@ -1080,30 +1073,32 @@ def save_single_homework_progress(student_name, student_hw_id, val):
     except Exception:
         pass
 
-def save_student_wrong_entry(student_name, unit_code, numbers_text):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    today_str = str(get_korean_today())
-    try:
-        q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", 
-          (student_name, unit_code.strip().upper(), numbers_text, today_str))
-        conn.commit()
-        st.cache_data.clear()
-    except Exception as e:
-        print(f"오답 저장 오류: {e}")
-
 @st.cache_data(ttl=30)
 def get_student_wrong_entry(student_name, unit_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
-    q(c, "SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code.upper()))
-    rows = c.fetchall()
-    if not rows:
-        return ""
-    all_nums = set()
-    for r in rows:
-        all_nums.update(parse_numbers(r[0]))
-    return ", ".join(map(str, sorted(list(all_nums))))
+    q(c, "SELECT numbers_text FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
+    row = c.fetchone()
+    return row[0] if row else ""
+
+def save_student_wrong_entry(student_name, unit_code, numbers_text):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    today_str = str(get_korean_today())
+    try:
+        if db_type == "sqlite":
+            q(c, "DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
+            q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
+        else:
+            q(c, '''
+                INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?
+            ''', (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
+        conn.commit()
+        st.cache_data.clear()
+    except Exception:
+        pass
 
 @st.cache_data(ttl=30)
 def get_student_wrong_solved_status(student_name):
@@ -1137,6 +1132,9 @@ def parse_numbers(text):
     nums = re.findall(r'\d+', text)
     return set(int(n) for n in nums)
 
+# ----------------------------------------------------
+# 🖼️ 메인 화면 상단 로고 이미지 배치 및 타이틀
+# ----------------------------------------------------
 if os.path.exists("mathpro_logo.png"):
     st.image("mathpro_logo.png", use_container_width=True)
 
@@ -1168,6 +1166,9 @@ url_student = query_params.get("student", None)
 if url_student and url_student in student_list:
     log_student_visit(url_student)
 
+# ----------------------------------------------------
+# 🧭 사이드바 구성
+# ----------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 MathPro 시스템")
     
@@ -1256,6 +1257,9 @@ with st.sidebar:
                     else:
                         st.error("비밀번호가 틀렸습니다.")
 
+# ====================================================
+# 1. [학생 전용 모드 / 일반 사용자 화면]
+# ====================================================
 if not st.session_state["teacher_authenticated"]:
     if url_student and url_student in student_list:
         selected_student = url_student
@@ -1312,6 +1316,13 @@ if not st.session_state["teacher_authenticated"]:
                         f'</div>',
                         unsafe_allow_html=True
                     )
+
+        with st.expander("📖 💡 [어플 100% 활용 가이드] 꼭 읽어보세요!", expanded=False):
+            st.markdown("""
+            - **📘 개념 진도 탭**: 선생님이 배정해주신 단원별 개념 학습 현황을 확인하고, 학습이 완료되면 체크박스를 눌러주세요. `🎥 개념해설` 버튼을 통해 복습 영상도 언제든 시청할 수 있습니다.
+            - **📚 날짜별 숙제 탭**: 날짜별로 부여된 숙제와 매일 반복 루틴 과제를 확인하고, **과제를 완료할 때마다 체크박스를 꾹 눌러 완료 상태로 기록**해 주세요!
+            - **💬 오답·질문 관리 탭**: 틀린 문제의 번호나 단원코드를 입력해 나만의 오답 노트를 만들고, 콤팩트한 리스트에서 복습이 끝난 문제는 **[복습 완료]** 체크를 해두어 체계적으로 학습을 관리할 수 있습니다.
+            """)
 
         milestones = get_student_milestones(selected_student)
         hw_dates = get_student_homework_dates(selected_student)
@@ -1524,14 +1535,15 @@ if not st.session_state["teacher_authenticated"]:
                 with col_del: del_txt = st.text_input("➖ 삭제할 번호 (예: 7)")
                 
                 if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
-                    if entered_unit_code and (add_txt.strip() or del_txt.strip()):
-                        if add_txt.strip():
-                            save_student_wrong_entry(selected_student, target_code, add_txt.strip())
+                    if entered_unit_code:
+                        saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
+                        final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
+                        save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
                         st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
                         st.success("저장되었습니다!")
                         st.rerun()
                     else:
-                        st.warning("단원코드와 추가할 번호를 입력해 주세요.")
+                        st.warning("단원코드를 먼저 입력해 주세요.")
 
             st.markdown("")
             with st.container(border=True):
@@ -1540,16 +1552,45 @@ if not st.session_state["teacher_authenticated"]:
 
                 conn, _ = get_db_connection()
                 c = conn.cursor()
-                q(c, "SELECT DISTINCT unit_code FROM student_wrong_entries WHERE student_name = ? ORDER BY unit_code", (selected_student,))
+                q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
                 saved_rows = c.fetchall()
                 saved_units_list = [r[0] for r in saved_rows]
                 
                 solved_map_chk = get_student_wrong_solved_status(selected_student)
                 now_datetime_chk = datetime.now()
                 
-                unit_display_options = ["-- 저장된 단원을 선택하세요 --"] + saved_units_list
+                unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
+                unit_map_dict = {}
+                
+                all_saved_full_codes = []
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    for n in parse_numbers(entry_txt):
+                        all_saved_full_codes.append(f"{u_code}{n:03d}".upper())
+                batch_saved_link_info = get_batch_problem_link_info(all_saved_full_codes)
+
+                for u_code in saved_units_list:
+                    entry_txt = get_student_wrong_entry(selected_student, u_code)
+                    p_nums = parse_numbers(entry_txt)
+                    has_new_unsolved = False
+                    for n in p_nums:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, v_up_at = batch_saved_link_info.get(f_code, ("", ""))
+                        is_solved = solved_map_chk.get(f_code, False)
+                        if v_url and not is_solved:
+                            try:
+                                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                                if (now_datetime_chk - up_dt).total_seconds() <= 86400:
+                                    has_new_unsolved = True
+                                    break
+                            except Exception:
+                                pass
+                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
+                    unit_map_dict[display_name] = u_code
+                    unit_display_options.append(display_name)
+
                 selected_display_unit = st.selectbox("확인할 단원 선택", unit_display_options, key="saved_unit_select_box")
-                view_target_code = selected_display_unit if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
+                view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
 
                 if view_target_code:
                     existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
@@ -1560,9 +1601,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
-                        all_saved_full_codes = [f"{view_target_code}{n:03d}".upper() for n in parsed_nums]
-                        batch_saved_link_info = get_batch_problem_link_info(all_saved_full_codes)
-
                         if parsed_nums:
                             query_params = st.query_params
                             for n in sorted(list(parsed_nums)):
@@ -1632,6 +1670,9 @@ if not st.session_state["teacher_authenticated"]:
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다. 링크를 확인해 주세요.")
 
+# ====================================================
+# 2. [선생님 전용 관리 모드 화면]
+# ====================================================
 else:
     with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
         col_s2, col_s3 = st.columns(2)
@@ -1991,34 +2032,19 @@ else:
             conn, _ = get_db_connection()
             c = conn.cursor()
             if chk_student_choice == "전체 학생 (모두 보기)":
-                q(c, "SELECT id, student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
+                q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
                 wrong_rows_all = c.fetchall()
             else:
-                q(c, "SELECT id, student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                wrong_rows_all = c.fetchall()
+                q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                wrong_rows_all = [(chk_student_choice, r[1], r[2], r[3]) for r in c.fetchall()]
             
             if wrong_rows_all:
                 if wrong_view_mode == "📂 단원별 보기":
-                    aggregated_dict = {}
-                    for row in wrong_rows_all:
-                        r_id, s_name, u_code, nums_txt, u_date = row
-                        key = (s_name, u_code)
-                        aggregated_dict.setdefault(key, set()).update(parse_numbers(nums_txt))
-                    target_rows = [(s_name, u_code, sorted(list(nums))) for (s_name, u_code), nums in aggregated_dict.items()]
-                
+                    target_rows = wrong_rows_all
                 elif wrong_view_mode == "📅 날짜별 보기":
-                    available_dates = sorted(list(set(r[4] for r in wrong_rows_all if r[4])), reverse=True)
+                    available_dates = sorted(list(set(r[3] for r in wrong_rows_all if r[3])), reverse=True)
                     selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates) if available_dates else None
-                    
-                    filtered_logs = wrong_rows_all if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in wrong_rows_all if r[4] == selected_date_filter]
-                    
-                    aggregated_dict = {}
-                    for row in filtered_logs:
-                        r_id, s_name, u_code, nums_txt, u_date = row
-                        key = (s_name, u_code, u_date)
-                        aggregated_dict.setdefault(key, set()).update(parse_numbers(nums_txt))
-                    target_rows = [(s_name, u_code, sorted(list(nums)), u_date) for (s_name, u_code, u_date), nums in aggregated_dict.items()]
-
+                    target_rows = wrong_rows_all if not available_dates or selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in wrong_rows_all if r[3] == selected_date_filter]
                 elif wrong_view_mode == "📆 주간별(월~일) 한 주 모아보기":
                     def get_week_range_str(date_str):
                         try:
@@ -2028,56 +2054,26 @@ else:
                             return f"{start_week} ~ {end_week} (월~일)"
                         except Exception:
                             return "날짜 미상 주간"
-                    
                     weeks_dict = {}
-                    for row in wrong_rows_all:
-                        r_id, s_name, u_code, nums_txt, u_date = row
-                        w_str = get_week_range_str(u_date) if u_date else "날짜 미상 주간"
-                        weeks_dict.setdefault(w_str, []).append(row)
-                        
+                    for s_name, u_code, nums_txt, u_date in wrong_rows_all:
+                        weeks_dict.setdefault(get_week_range_str(u_date) if u_date else "날짜 미상 주간", []).append((s_name, u_code, nums_txt, u_date))
                     sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                     selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks) if sorted_weeks else None
-                    week_logs = weeks_dict.get(selected_week, []) if selected_week else []
-                    
-                    aggregated_dict = {}
-                    for row in week_logs:
-                        r_id, s_name, u_code, nums_txt, u_date = row
-                        key = (s_name, u_code)
-                        aggregated_dict.setdefault(key, set()).update(parse_numbers(nums_txt))
-                    target_rows = [(s_name, u_code, sorted(list(nums))) for (s_name, u_code), nums in aggregated_dict.items()]
-
+                    target_rows = weeks_dict.get(selected_week, []) if selected_week else []
                 else:
-                    aggregated_dict = {}
-                    for row in wrong_rows_all:
-                        r_id, s_name, u_code, nums_txt, u_date = row
-                        key = (s_name, u_code)
-                        aggregated_dict.setdefault(key, set()).update(parse_numbers(nums_txt))
-                    target_rows = [(s_name, u_code, sorted(list(nums))) for (s_name, u_code), nums in aggregated_dict.items()]
+                    target_rows = wrong_rows_all
 
-                link_set = get_all_problem_link_set()
-
-                total_sum_all = 0
                 summary_student_counts = {}
-                search_missing_total = 0
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
                 
-                if wrong_view_mode == "📅 날짜별 보기":
-                    for item in target_rows:
-                        s_name, u_code, nums_list, u_date = item
-                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(nums_list)
-                        total_sum_all += len(nums_list)
-                        for n in nums_list:
-                            if f"{u_code}{n:03d}".upper() not in link_set:
-                                search_missing_total += 1
-                else:
-                    for item in target_rows:
-                        s_name, u_code, nums_list = item
-                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(nums_list)
-                        total_sum_all += len(nums_list)
-                        for n in nums_list:
-                            if f"{u_code}{n:03d}".upper() not in link_set:
-                                search_missing_total += 1
+                link_set = get_all_problem_link_set()
+                search_missing_total = sum(1 for s_name, u_code, nums_txt, u_date in target_rows for n in parse_numbers(nums_txt) if f"{u_code}{n:03d}".upper() not in link_set)
 
                 with st.container(border=True):
+                    total_sum_all = sum(summary_student_counts.values())
                     st.markdown(
                         f"""
                         <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
@@ -2093,36 +2089,19 @@ else:
                         st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
                 st.markdown("---")
 
-                if wrong_view_mode == "📅 날짜별 보기":
-                    for item in target_rows:
-                        s_name, u_code, nums_list, u_date = item
-                        if nums_list:
-                            with st.container(border=True):
-                                st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
-                                colored_num_tags = [
-                                    f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
-                                    for n in nums_list
-                                ]
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
-                else:
-                    for item in target_rows:
-                        s_name, u_code, nums_list = item
-                        if nums_list:
-                            if wrong_view_mode == "🚨 해설 링크 없는 문제 모아보기":
-                                missing_nums_in_unit = [n for n in nums_list if f"{u_code}{n:03d}".upper() not in link_set]
-                                if not missing_nums_in_unit:
-                                    continue
-                                display_nums = missing_nums_in_unit
-                            else:
-                                display_nums = nums_list
-
-                            with st.container(border=True):
-                                st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}`", unsafe_allow_html=True)
-                                colored_num_tags = [
-                                    f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
-                                    for n in display_nums
-                                ]
-                                st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        with st.container(border=True):
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(수정일: {u_date})</span>", unsafe_allow_html=True)
+                            
+                            # 🟢 [수정 포인트] 날짜별 보기 모드일 때, 해당 날짜(selected_date_filter)와 수정일이 일치하는 경우에만 번호 표시 또는 전체 표시 제어
+                            # 만약 날짜별 보기에서 해당 날짜에 추가된 내역만 명확히 구분하고 싶다면 아래와 같이 렌더링하거나 별도 로그 테이블 구조로 고도화할 수 있습니다.
+                            colored_num_tags = [
+                                f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>" if f"{u_code}{n:03d}".upper() in link_set else f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>"
+                                for n in sorted(list(parsed_s))
+                            ]
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("저장된 오답이 없습니다.")
         else:
