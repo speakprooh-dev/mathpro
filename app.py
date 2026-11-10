@@ -2262,7 +2262,7 @@ else:
             with col_sc:
                 search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
             
-            # 🟢 직접 검색어가 있으면 검색어 우선, 없으면 드롭다운의 맨 앞 단원코드만 추출
+            # 🟢 드롭다운에서 선택한 값에서 괄호 앞의 단원코드(예: 1131)만 정확하게 추출
             if search_link_input:
                 target_filter = search_link_input
             elif selected_dropdown_item and not selected_dropdown_item.startswith("--"):
