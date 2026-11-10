@@ -1982,7 +1982,7 @@ else:
             conn, _ = get_db_connection()
             c = conn.cursor()
             if chk_student_choice == "전체 학생 (모두 보기)":
-                q(c, "SELECT id, student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                q(c, "SELECT id, student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
                 wrong_rows_all = c.fetchall()
             else:
                 q(c, "SELECT id, student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
