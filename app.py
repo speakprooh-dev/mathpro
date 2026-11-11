@@ -1504,9 +1504,9 @@ if not st.session_state["teacher_authenticated"]:
                             with cols[0]:
                                 chk_key = f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"
                                 current_chk_val = st.checkbox(f"{t_name}", value=default_val, key=chk_key)
+                                # ⚡ 단일 체크 변경 감지 시 즉시 저장 (새로고침 없이 안전하게 처리)
                                 if current_chk_val != default_val:
                                     save_single_milestone_progress(selected_student, m_id, current_chk_val)
-                                    st.rerun()
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
                                     st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
@@ -1542,7 +1542,6 @@ if not st.session_state["teacher_authenticated"]:
                             current_chk_val = st.checkbox(f"{title}", value=default_val, key=chk_key)
                             if current_chk_val != default_val:
                                 save_single_homework_progress(selected_student, h_id, current_chk_val)
-                                st.rerun()
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
@@ -1565,7 +1564,6 @@ if not st.session_state["teacher_authenticated"]:
                             new_s_val = st.checkbox(f"복습 완료 ({full_code})", value=is_solved, key=chk_w_key)
                             if new_s_val != is_solved:
                                 save_single_wrong_solved_status(selected_student, full_code, new_s_val)
-                                st.rerun()
                         with cols_w[1]:
                             if v_url:
                                 st.markdown(f'<a href="{v_url}" target="_blank">🎥 해설 영상</a>', unsafe_allow_html=True)
@@ -1595,7 +1593,6 @@ else:
         if student_list:
             selected_student = st.selectbox("조회할 학생 선택", student_list, key="tab1_stu_sel")
             s_milestones = get_student_milestones(selected_student)
-            s_m_progress = get_milestone_progress(selected_student)
             
             if s_milestones:
                 grouped_t_milestones = {}
@@ -1603,7 +1600,7 @@ else:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 
                 for (sub, ch), items in grouped_t_milestones.items():
-                    # 🛠️ [실시간 완료 개수 즉시 반영 수정]: 데이터베이스에서 최신 값을 조회해 실시간 카운트 일치화
+                    # ⚡ [초고속 렉 방지 구조]: st.rerun()을 제거하여 여러 개를 연속 체크해도 렉이 전혀 걸리지 않습니다.
                     current_live_progress = get_milestone_progress(selected_student)
                     done_cnt = sum(1 for m_id, _, _ in items if current_live_progress.get(m_id, False))
                     
@@ -1613,10 +1610,8 @@ else:
                             chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
                             current_chk_val = st.checkbox(f"{t_name}", value=is_done, key=chk_key)
                             
-                            # ⚡ 즉각적인 DB 저장 및 즉시 리런으로 상태 꼬임 및 카운트 오류 원천 차단
                             if current_chk_val != is_done:
                                 save_single_milestone_progress(selected_student, m_id, current_chk_val)
-                                st.rerun()
 
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
@@ -1735,7 +1730,6 @@ else:
                             current_chk_val = st.checkbox(f"📌 {title}", value=is_done, key=chk_key)
                             if current_chk_val != is_done:
                                 save_single_homework_progress(s_name, h_id, current_chk_val)
-                                st.rerun()
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
