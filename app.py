@@ -92,16 +92,6 @@ def get_batch_problem_link_info(full_codes):
         return {}
 
 @st.cache_data(ttl=30)
-def get_all_homework_progress_map(student_name):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    try:
-        q(c, "SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
-        return {r[0]: bool(r[1]) for r in c.fetchall()}
-    except Exception:
-        return {}
-
-@st.cache_data(ttl=30)
 def get_entire_homework_progress_map():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -109,61 +99,6 @@ def get_entire_homework_progress_map():
         q(c, "SELECT student_name, student_hw_id, is_checked FROM student_homework_progress")
         rows = c.fetchall()
         return {(r[0], r[1]): bool(r[2]) for r in rows}
-    except Exception:
-        return {}
-
-@st.cache_data(ttl=30)
-def get_all_routine_logs_map(student_name):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    try:
-        q(c, "SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ?", (student_name,))
-        return {(str(r[0]), r[1]): bool(r[2]) for r in c.fetchall()}
-    except Exception:
-        return {}
-
-@st.cache_data(ttl=30)
-def get_entire_daily_routines_map():
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    try:
-        q(c, "SELECT student_name, id, title FROM daily_routines ORDER BY id")
-        rows = c.fetchall()
-        routines_map = {}
-        for s_name, r_id, title in rows:
-            routines_map.setdefault(s_name, []).append((r_id, title))
-        return routines_map
-    except Exception:
-        return {}
-
-@st.cache_data(ttl=30)
-def get_entire_daily_routine_logs_map(target_date_str):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    try:
-        q(c, "SELECT student_name, routine_id, is_checked FROM daily_routine_logs WHERE log_date = ?", (target_date_str,))
-        rows = c.fetchall()
-        logs_map = {}
-        for s_name, r_id, is_chk in rows:
-            logs_map[(s_name, str(r_id))] = bool(is_chk)
-        return logs_map
-    except Exception:
-        return {}
-
-@st.cache_data(ttl=30)
-def get_all_students_homework_map(hw_date):
-    conn, db_type = get_db_connection()
-    c = conn.cursor()
-    try:
-        if db_type == "postgres":
-            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
-        else:
-            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = ? ORDER BY student_name, id", (hw_date,))
-        rows = c.fetchall()
-        hw_map = {}
-        for h_id, s_name, title in rows:
-            hw_map.setdefault(s_name, []).append((h_id, title))
-        return hw_map
     except Exception:
         return {}
 
@@ -886,6 +821,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     except Exception:
         pass
 
+# ⚡ [최적화 핵심] st.rerun()을 제거하여 로딩 대기 시간 제거
 def save_single_homework_progress(student_name, student_hw_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -1110,8 +1046,6 @@ if not st.session_state["teacher_authenticated"]:
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
         unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
         current_streak = get_student_routine_streak(selected_student)
-        
-        # 📌 루틴 과제 달성률은 다시 최근 7일 기준으로 원복
         routine_rate, _, _ = get_routine_completion_rate(selected_student, days_limit=7)
 
         if unchecked_count > 0:
@@ -1145,7 +1079,6 @@ if not st.session_state["teacher_authenticated"]:
         completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
         m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
 
-        # 📌 숙제 진도 완료 현황: 가장 최근 3일치 날짜의 숙제들을 대상으로 계산
         recent_3_dates = hw_dates[:3] if hw_dates else []
         recent_3_hws = []
         for d_str in recent_3_dates:
@@ -1209,7 +1142,6 @@ if not st.session_state["teacher_authenticated"]:
             with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
 
-            # 📌 루틴 타이틀 오른쪽에 Streak 문구 배치 & 루틴은 최근 7일 유지
             cols_rt_title, cols_rt_streak = st.columns([2.2, 1.8])
             with cols_rt_title:
                 st.markdown("🔥 **루틴 과제 달성률 (최근 7일)**")
@@ -1237,7 +1169,16 @@ if not st.session_state["teacher_authenticated"]:
                 for m_id, sub, ch, t_name, v_url in sorted_milestones:
                     grouped_s_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
 
-                for (sub, ch), items in grouped_s_milestones.items():
+                def parse_chapter_sort_key(sub_ch_tuple):
+                    sub, ch = sub_ch_tuple
+                    match = re.search(r'(\d+)', ch)
+                    num = int(match.group(1)) if match else 999
+                    return (sub, num, ch)
+
+                sorted_grouped_keys = sorted(grouped_s_milestones.keys(), key=parse_chapter_sort_key)
+
+                for (sub, ch) in sorted_grouped_keys:
+                    items = grouped_s_milestones[(sub, ch)]
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
@@ -1295,9 +1236,11 @@ if not st.session_state["teacher_authenticated"]:
                         else:
                             default_val = h_progress.get(h_id, False)
                             chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                            if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
-                                save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
-                                st.rerun()
+                            
+                            # ⚡ [최적화 핵심] 체크박스 상태 변경 시 st.rerun()을 제거하여 즉시 저장되도록 함
+                            current_val = st.checkbox(f"{title}", value=default_val, key=chk_key)
+                            if current_val != default_val:
+                                save_single_homework_progress(selected_student, h_id, current_val)
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
@@ -1493,7 +1436,16 @@ else:
                 for m_id, sub, ch, t_name, v_url in sorted_s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 
-                for (sub, ch), items in grouped_t_milestones.items():
+                def parse_chapter_sort_key_teacher(sub_ch_tuple):
+                    sub, ch = sub_ch_tuple
+                    match = re.search(r'(\d+)', ch)
+                    num = int(match.group(1)) if match else 999
+                    return (sub, num, ch)
+
+                sorted_t_grouped_keys = sorted(grouped_t_milestones.keys(), key=parse_chapter_sort_key_teacher)
+
+                for (sub, ch) in sorted_t_grouped_keys:
+                    items = grouped_t_milestones[(sub, ch)]
                     done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
@@ -1940,7 +1892,7 @@ else:
                         if is_checked:
                             links_to_delete.append(l_id)
                     
-                    st.markdown("")
+                    st.markdown("---")
                     if st.button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True):
                         if links_to_delete:
                             conn, _ = get_db_connection()
@@ -1969,8 +1921,8 @@ else:
         st.markdown("#### 📈 실시간 학습 참여 현황")
         today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
         col_st1, col_st2 = st.columns(2)
-        with col_st1: st.metric(label="📌 오늘 접속 학생", value=f"{today_active_cnt}명")
-        with col_st2: st.metric(label="📈 누적 방문", value=f"{total_visits}회")
+        with col_st1: st.metric(label="📌 오늘 접속 학생 현황", value=f"{today_active_cnt}명")
+        with col_st2: st.metric(label="📈 누적 방문 횟수", value=f"{total_visits}회")
         st.markdown("---")
         if s_summary:
             for s_name, last_time, v_count in s_summary:
