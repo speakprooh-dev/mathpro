@@ -2342,18 +2342,34 @@ else:
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
+                    # 🚀 [해결 포인트]: 세션 상태 콜백을 이용하여 전체선택 상태를 즉시 동기화합니다.
+                    if "select_all_links_state" not in st.session_state:
+                        st.session_state["select_all_links_state"] = False
+
+                    def toggle_select_all():
+                        st.session_state["select_all_links_state"] = not st.session_state["select_all_links_state"]
+                        # 개별 체크박스 상태도 일괄적으로 변경해 줍니다.
+                        for item_idx, (l_id, _, _, _) in enumerate(searched_links):
+                            st.session_state[f"batch_chk_link_{l_id}_{item_idx}"] = st.session_state["select_all_links_state"]
+
+                    st.button(
+                        "☑️ 전체 선택 / 해제 토글하기", 
+                        on_click=toggle_select_all, 
+                        use_container_width=True
+                    )
+                    st.markdown("---")
+
                     with st.form("batch_delete_links_form"):
-                        st.markdown("💡 *삭제할 링크들을 선택한 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
-                        
-                        # 🚀 [추가]: 전체 선택/해제 토글 버튼
-                        select_all = st.checkbox("☑️ 전체 선택 / 해제", key="select_all_links_toggle")
-                        st.markdown("---")
+                        st.markdown("💡 *삭제할 링크들을 확인하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
                         
                         links_to_delete = []
                         for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
                             chk_label = f"📌 [{f_code}] ({v_url})"
-                            # 전체선택이 켜져 있으면 기본적으로 체크된 상태로 유지
-                            is_checked = st.checkbox(chk_label, value=select_all, key=f"batch_chk_link_{l_id}_{item_idx}")
+                            # 세션 상태에 저장된 값을 기본값으로 사용
+                            if l_id not in st.session_state:
+                                st.session_state[f"batch_chk_link_{l_id}_{item_idx}"] = st.session_state["select_all_links_state"]
+                                
+                            is_checked = st.checkbox(chk_label, key=f"batch_chk_link_{l_id}_{item_idx}")
                             if is_checked:
                                 links_to_delete.append(l_id)
                         
