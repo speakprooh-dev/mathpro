@@ -1189,12 +1189,12 @@ if not st.session_state["teacher_authenticated"]:
 
         st.markdown("##### 📊 나의 학습 성취도 대시보드")
         with st.container(border=True):
-            st.markdown("🎯 **개념 진도**")
+            st.markdown(f"🎯 **개념 진도 완료 현황** ({completed_m} / {total_m}개 완료)")
             cols_m = st.columns([4, 1])
             with cols_m[0]: st.progress(m_percent / 100 if total_m > 0 else 0)
             with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
             
-            st.markdown("📚 **숙제 진도**")
+            st.markdown(f"📚 **숙제 진도 완료 현황** ({completed_h} / {total_h}개 완료)")
             cols_h = st.columns([4, 1])
             with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
