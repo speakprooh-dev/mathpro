@@ -1296,7 +1296,6 @@ if not st.session_state["teacher_authenticated"]:
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
             
-            # 1번 기능: 오답 등록/수정
             with st.container(border=True):
                 st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
@@ -1317,7 +1316,6 @@ if not st.session_state["teacher_authenticated"]:
 
             st.markdown("")
             
-            # 2번 기능: 나의 오답노트 및 해설 바로가기 (복습 완료 체크 및 해설 링크)
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
                 saved_units_list = [u_code for u_code, _ in saved_wrong_entries]
@@ -1403,7 +1401,6 @@ if not st.session_state["teacher_authenticated"]:
 
             st.markdown("")
             
-            # 3번 기능: 해설 영상 즉시 검색하기
             with st.container(border=True):
                 st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
                 search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
@@ -1489,16 +1486,19 @@ else:
                 grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
+                
+                # 🚀 [개선]: 선생님 화면에서도 학생 진도 관리가 단원별 접기/펼치기(expander)로 깔끔하게 정돈되도록 변경
                 for (sub, ch), items in grouped_t_milestones.items():
-                    with st.container(border=True):
-                        st.markdown(f"**[{sub}] {ch}**", unsafe_allow_html=True)
-                        st.markdown("---")
+                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                    with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             is_done = s_m_progress.get(m_id, False)
                             chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
                             if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
                                 save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
                                 st.rerun()
+            else:
+                st.info("해당 학생에게 배정된 단원이 없습니다.")
 
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
@@ -1845,7 +1845,7 @@ else:
                         initial_mat_text = "\n".join([title for _, title in hws])
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
-                                st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
+                                st.info(f"💬 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
