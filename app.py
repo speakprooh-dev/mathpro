@@ -2342,14 +2342,19 @@ else:
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
-                    # 🚀 [개선 포인트]: form을 사용하여 여러 개를 체크한 뒤 한 번에 삭제하도록 변경
                     with st.form("batch_delete_links_form"):
-                        st.markdown("💡 *삭제할 링크들을 체크박스로 선택한 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                        st.markdown("💡 *삭제할 링크들을 선택한 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                        
+                        # 🚀 [추가]: 전체 선택/해제 토글 버튼
+                        select_all = st.checkbox("☑️ 전체 선택 / 해제", key="select_all_links_toggle")
+                        st.markdown("---")
                         
                         links_to_delete = []
                         for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
                             chk_label = f"📌 [{f_code}] ({v_url})"
-                            if st.checkbox(chk_label, key=f"batch_chk_link_{l_id}_{item_idx}"):
+                            # 전체선택이 켜져 있으면 기본적으로 체크된 상태로 유지
+                            is_checked = st.checkbox(chk_label, value=select_all, key=f"batch_chk_link_{l_id}_{item_idx}")
+                            if is_checked:
                                 links_to_delete.append(l_id)
                         
                         st.markdown("")
