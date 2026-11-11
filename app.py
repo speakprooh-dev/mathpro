@@ -917,37 +917,57 @@ def get_routine_completion_rate(student_name, days_limit=7):
 
 @st.cache_data(ttl=30)
 def get_student_routine_streak(student_name):
-    conn, _ = get_db_connection()
+    conn, db_type = get_db_connection()
     c = conn.cursor()
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
+    
+    # 1. 등록된 총 루틴 개수 확인
+    if db_type == "postgres":
+        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = %s", (student_name,))
+    else:
+        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
     total_routines = c.fetchone()[0]
     if total_routines == 0:
         return 0
     
+    # 2. 최근 60일간의 완료된 루틴 로그를 단 1회의 쿼리로 일괄 조회
+    today_obj = get_korean_today()
+    start_date_obj = today_obj - timedelta(days=60)
+    
+    if db_type == "postgres":
+        q(c, """
+            SELECT log_date, COUNT(*) 
+            FROM daily_routine_logs 
+            WHERE student_name = %s AND log_date >= %s AND is_checked = 1 
+            GROUP BY log_date
+        """, (student_name, str(start_date_obj)))
+    else:
+        q(c, """
+            SELECT log_date, COUNT(*) 
+            FROM daily_routine_logs 
+            WHERE student_name = ? AND log_date >= ? AND is_checked = 1 
+            GROUP BY log_date
+        """, (student_name, str(start_date_obj)))
+    
+    rows = c.fetchall()
+    completed_days = {r[0]: r[1] for r in rows}
+    
+    # 3. 메모리에서 날짜별 스트릭을 0.01초 만에 즉시 계산
     streak = 0
-    check_date = get_korean_today()
+    check_date = today_obj
+    
+    # 오늘 아직 안 끝났다면 어제부터 역추적
+    if completed_days.get(str(check_date), 0) < total_routines:
+        check_date -= timedelta(days=1)
+        
     while True:
         d_str = str(check_date)
-        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-        r_cnt = c.fetchone()[0]
-        if r_cnt == 0:
-            break
-        
-        q(c, """
-            SELECT COUNT(*) FROM daily_routine_logs 
-            WHERE student_name = ? AND log_date = ? AND is_checked = 1
-        """, (student_name, d_str))
-        done_cnt = c.fetchone()[0]
-        
-        if done_cnt >= r_cnt:
+        done_cnt = completed_days.get(d_str, 0)
+        if done_cnt >= total_routines:
             streak += 1
             check_date -= timedelta(days=1)
         else:
-            if check_date == get_korean_today():
-                check_date -= timedelta(days=1)
-                continue
-            else:
-                break
+            break
+            
     return streak
 
 @st.cache_data(ttl=60)
