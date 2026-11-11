@@ -92,16 +92,19 @@ def get_all_problem_link_set():
     except Exception:
         return set()
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=60)
 def get_batch_problem_link_info(full_codes):
     if not full_codes:
+        return {}
+    full_codes_tuple = tuple(sorted(list(set(full_codes))))
+    if not full_codes_tuple:
         return {}
     conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
-        placeholders = ', '.join(['%s' if db_type == "postgres" else '?'] * len(full_codes))
+        placeholders = ', '.join(['%s' if db_type == "postgres" else '?'] * len(full_codes_tuple))
         query = f"SELECT full_code, video_url, updated_at FROM problem_links WHERE full_code IN ({placeholders})"
-        q(c, query, tuple(full_codes))
+        q(c, query, full_codes_tuple)
         rows = c.fetchall()
         return {r[0].upper(): (r[1], r[2] if r[2] else "") for r in rows}
     except Exception:
@@ -1135,6 +1138,13 @@ def get_student_wrong_entry(student_name, unit_code):
     row = c.fetchone()
     return row[0] if row else ""
 
+@st.cache_data(ttl=30)
+def get_all_student_wrong_entries(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (student_name,))
+    return c.fetchall()
+
 def save_student_wrong_entry(student_name, unit_code, numbers_text):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -1419,10 +1429,8 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
-        conn_alert, _ = get_db_connection()
-        c_alert = conn_alert.cursor()
-        q(c_alert, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (selected_student,))
-        user_wrong_rows = c_alert.fetchall()
+        # ⚡ [최적화 1] 학생의 모든 저장 오답 단원 한 번에 쿼리
+        saved_wrong_entries = get_all_student_wrong_entries(selected_student)
         
         solved_map_alert = get_student_wrong_solved_status(selected_student)
         unsolved_total_count = 0
@@ -1430,17 +1438,19 @@ if not st.session_state["teacher_authenticated"]:
         now_datetime_alert = datetime.now()
 
         target_full_codes = []
-        for u_code, nums_txt in user_wrong_rows:
+        parsed_entry_dict = {}
+        for u_code, nums_txt in saved_wrong_entries:
             parsed_nums = parse_numbers(nums_txt)
+            parsed_entry_dict[u_code] = parsed_nums
             for n in parsed_nums:
                 target_full_codes.append(f"{u_code}{n:03d}".upper())
 
+        # ⚡ [최적화 2] 묶음 배치 조회 (단 한 번의 DB/캐시 연산)
         batch_link_info = get_batch_problem_link_info(target_full_codes)
 
         for f_code in target_full_codes:
             v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
             is_solved = solved_map_alert.get(f_code, False)
-            # 🟢 [수정] 복습 완료되지 않고, 30일(2592000초) 이내 등록된 해설인 경우 새 해설 카운트
             if v_url and not is_solved:
                 unsolved_total_count += 1
                 try:
@@ -1629,34 +1639,22 @@ if not st.session_state["teacher_authenticated"]:
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
                 st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상 바로 시청하세요.")
 
-                conn, _ = get_db_connection()
-                c = conn.cursor()
-                q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (selected_student,))
-                saved_rows = c.fetchall()
-                saved_units_list = [r[0] for r in saved_rows]
+                saved_units_list = [u_code for u_code, _ in saved_wrong_entries]
                 
                 solved_map_chk = get_student_wrong_solved_status(selected_student)
                 now_datetime_chk = datetime.now()
                 
                 unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
                 unit_map_dict = {}
-                
-                all_saved_full_codes = []
-                for u_code in saved_units_list:
-                    entry_txt = get_student_wrong_entry(selected_student, u_code)
-                    for n in parse_numbers(entry_txt):
-                        all_saved_full_codes.append(f"{u_code}{n:03d}".upper())
-                batch_saved_link_info = get_batch_problem_link_info(all_saved_full_codes)
 
+                # ⚡ [최적화 3] 이미 상단에서 계산된 batch_link_info 및 parsed_entry_dict 재활용으로 드롭다운 렉 완벽 제거
                 for u_code in saved_units_list:
-                    entry_txt = get_student_wrong_entry(selected_student, u_code)
-                    p_nums = parse_numbers(entry_txt)
+                    p_nums = parsed_entry_dict.get(u_code, set())
                     has_new_unsolved = False
                     for n in p_nums:
                         f_code = f"{u_code}{n:03d}".upper()
-                        v_url, v_up_at = batch_saved_link_info.get(f_code, ("", ""))
+                        v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
                         is_solved = solved_map_chk.get(f_code, False)
-                        # 🟢 [수정] 복습 완료되지 않았고, 30일 이내 등록된 해설인 경우 단원 드롭다운에 [새해설 대기] 표시
                         if v_url and not is_solved:
                             try:
                                 up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
@@ -1673,57 +1671,54 @@ if not st.session_state["teacher_authenticated"]:
                 view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
 
                 if view_target_code:
-                    existing_wrong = get_student_wrong_entry(selected_student, view_target_code)
-                    if existing_wrong:
+                    parsed_nums = parsed_entry_dict.get(view_target_code, set())
+                    if parsed_nums:
                         st.markdown("---")
                         st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
-                        parsed_nums = parse_numbers(existing_wrong)
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
-                        if parsed_nums:
-                            query_params = st.query_params
-                            for n in sorted(list(parsed_nums)):
-                                full_code = f"{view_target_code}{n:03d}".upper()
-                                v_url, v_updated_at = batch_saved_link_info.get(full_code, ("", ""))
-                                is_solved = solved_map.get(full_code, False)
-                                
-                                is_new_alert = False
-                                # 🟢 [수정] 복습 완료되지 않았고, 30일 이내 등록된 경우에만 🔥 새해설 배지 표시 (복습 완료 시 즉시 소멸)
-                                if v_url and v_updated_at and not is_solved:
-                                    try:
-                                        up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                        if (now_datetime - up_dt).total_seconds() <= 30 * 86400:
-                                            is_new_alert = True
-                                    except Exception:
-                                        pass
+                        query_params = st.query_params
+                        for n in sorted(list(parsed_nums)):
+                            full_code = f"{view_target_code}{n:03d}".upper()
+                            v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
+                            is_solved = solved_map.get(full_code, False)
+                            
+                            is_new_alert = False
+                            if v_url and v_updated_at and not is_solved:
+                                try:
+                                    up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                    if (now_datetime - up_dt).total_seconds() <= 30 * 86400:
+                                        is_new_alert = True
+                                except Exception:
+                                    pass
 
-                                action_key = f"toggle_solved_{selected_student}_{full_code}"
-                                if query_params.get(action_key) == "true":
-                                    new_state = not is_solved
-                                    save_single_wrong_solved_status(selected_student, full_code, new_state)
-                                    query_params.pop(action_key, None)
-                                    st.rerun()
+                            action_key = f"toggle_solved_{selected_student}_{full_code}"
+                            if query_params.get(action_key) == "true":
+                                new_state = not is_solved
+                                save_single_wrong_solved_status(selected_student, full_code, new_state)
+                                query_params.pop(action_key, None)
+                                st.rerun()
 
-                                badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                                text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
-                                checkbox_checked_attr = "checked" if is_solved else ""
-                                
-                                html_row_content = f'''
-                                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
-                                    <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                                        <input type="checkbox" {checkbox_checked_attr} 
-                                            onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
-                                            style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
-                                        <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
-                                    </div>
-                                    <div style="flex-shrink: 0; margin-left: 10px;">
-                                        {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
-                                    </div>
+                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
+                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
+                            checkbox_checked_attr = "checked" if is_solved else ""
+                            
+                            html_row_content = f'''
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                    <input type="checkbox" {checkbox_checked_attr} 
+                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
+                                        style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
+                                    <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
                                 </div>
-                                '''
-                                st.markdown(html_row_content, unsafe_allow_html=True)
-                                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                                <div style="flex-shrink: 0; margin-left: 10px;">
+                                    {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
+                                </div>
+                            </div>
+                            '''
+                            st.markdown(html_row_content, unsafe_allow_html=True)
+                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
 
