@@ -762,12 +762,31 @@ def get_student_homework_by_date(student_name, hw_date):
         q(c, "SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
     return c.fetchall()
 
+# 📌 [추가된 부분] 전체 학생 숙제 매트릭스용 헬퍼 함수
+@st.cache_data(ttl=30)
+def get_all_students_homework_map(hw_date):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
+        else:
+            q(c, "SELECT id, student_name, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (hw_date,))
+        rows = c.fetchall()
+        hw_map = {}
+        for h_id, s_name, title in rows:
+            hw_map.setdefault(s_name, []).append((h_id, title))
+        return hw_map
+    except Exception:
+        return {}
+
 @st.cache_data(ttl=30)
 def get_all_student_homework(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     return c.fetchall()
+
 
 def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
     conn, _ = get_db_connection()
