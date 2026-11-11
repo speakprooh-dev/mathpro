@@ -1237,7 +1237,13 @@ if not st.session_state["teacher_authenticated"]:
             daily_routines_list = get_student_daily_routines(selected_student)
             current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
             
+            total_routines_cnt = len(daily_routines_list)
+            completed_routines_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
+
             st.markdown("### 🔥 매일 반복 루틴 체크")
+            st.markdown(f"💡 **루틴 진행 상황**: 총 **{total_routines_cnt}개** 중 **{completed_routines_cnt}개** 완료")
+            st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
+            
             if daily_routines_list:
                 with st.container(border=True):
                     daily_routine_checked_dict = {}
@@ -1252,6 +1258,14 @@ if not st.session_state["teacher_authenticated"]:
                 st.markdown("### 📚 날짜별 개별 숙제")
                 selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
                 hws = get_student_homework_by_date(selected_student, selected_date)
+                
+                actual_sel_hws = [h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")]
+                total_sel_h = len(actual_sel_hws)
+                completed_sel_h = sum(1 for h_id, _ in actual_sel_hws if h_progress.get(h_id, False))
+
+                st.markdown(f"💡 **선택 날짜 숙제 현황**: 총 **{total_sel_h}개** 중 **{completed_sel_h}개** 완료")
+                st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
+
                 with st.container(border=True):
                     for h_idx, (h_id, title) in enumerate(hws):
                         if title.startswith("💬 [선생님 메시지]:"):
