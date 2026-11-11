@@ -263,6 +263,14 @@ def get_weekday_kr(date_str):
     except Exception:
         return "날짜 확인"
 
+def get_weekday_short_kr(date_str):
+    try:
+        d = date.fromisoformat(date_str)
+        weekdays = ['월', '화', '수', '목', '금', '토', '일']
+        return weekdays[d.weekday()]
+    except Exception:
+        return ""
+
 def init_db():
     try:
         conn, db_type = get_db_connection()
@@ -274,7 +282,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id SERIAL PRIMARY KEY, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);')
-            c.execute('CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL);')
+            c.execute('CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, due_date TEXT DEFAULT \'\');')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id SERIAL PRIMARY KEY, title TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));')
@@ -297,6 +305,10 @@ def init_db():
                 );
             ''')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date);')
+            try:
+                c.execute('ALTER TABLE student_homework ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT \'\';')
+            except Exception:
+                pass
             conn.commit()
         else:
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
@@ -305,7 +317,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS chapter_types (id INTEGER PRIMARY KEY AUTOINCREMENT, chapter_id INTEGER NOT NULL, name TEXT NOT NULL, video_url TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS milestones (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS homework (id INTEGER PRIMARY KEY AUTOINCREMENT, hw_date TEXT NOT NULL, title TEXT NOT NULL)')
-            c.execute('CREATE TABLE IF NOT EXISTS student_homework (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+            c.execute('CREATE TABLE IF NOT EXISTS student_homework (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, due_date TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
@@ -319,6 +331,10 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
+            try:
+                c.execute('ALTER TABLE student_homework ADD COLUMN due_date TEXT DEFAULT \'\'')
+            except Exception:
+                pass
             conn.commit()
     except Exception as e:
         print(f"DB 초기화 예외: {e}")
@@ -638,20 +654,15 @@ def get_routine_completion_rate(student_name, days_limit=7):
     start_date_str = str(today_obj - timedelta(days=days_limit - 1))
     today_str = str(today_obj)
     
-    # 1. 현재 등록된 총 루틴 개수 가져오기
     q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
     total_routines_count = c.fetchone()[0]
     if total_routines_count == 0:
         return 0, 0, 0
         
-    # 2. 최근 7일 동안 기대되는 총 완료 개수 (현재 루틴 개수 × 7일)
     total_expected = total_routines_count * days_limit
-    
-    # 3. 최근 7일 동안 실제로 체크된 총 개수 가져오기
     q(c, "SELECT COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
     completed_count = c.fetchone()[0]
     
-    # 4. 퍼센트 계산 (최대 100%를 넘지 않도록 안전하게 처리)
     raw_rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     rate = min(100, max(0, raw_rate))
     
@@ -756,26 +767,34 @@ def get_student_homework_dates(student_name):
 def get_student_homework_by_date(student_name, hw_date):
     conn, db_type = get_db_connection()
     c = conn.cursor()
-    if db_type == "postgres":
-        q(c, "SELECT id, title FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
-    else:
-        q(c, "SELECT id, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
-    return c.fetchall()
+    try:
+        if db_type == "postgres":
+            q(c, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
+        else:
+            q(c, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
+        return c.fetchall()
+    except Exception:
+        if db_type == "postgres":
+            q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
+        else:
+            q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
+        return c.fetchall()
 
-# 📌 [추가된 부분] 전체 학생 숙제 매트릭스용 헬퍼 함수
 @st.cache_data(ttl=30)
 def get_all_students_homework_map(hw_date):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
         if db_type == "postgres":
-            q(c, "SELECT id, student_name, title FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
         else:
-            q(c, "SELECT id, student_name, title FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (hw_date,))
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (hw_date,))
         rows = c.fetchall()
         hw_map = {}
-        for h_id, s_name, title in rows:
-            hw_map.setdefault(s_name, []).append((h_id, title))
+        for row in rows:
+            h_id, s_name, title = row[0], row[1], row[2]
+            d_date = row[3] if len(row) > 3 else ""
+            hw_map.setdefault(s_name, []).append((h_id, title, d_date))
         return hw_map
     except Exception:
         return {}
@@ -787,26 +806,31 @@ def get_all_student_homework(student_name):
     q(c, "SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     return c.fetchall()
 
-
-def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
-    conn, _ = get_db_connection()
+def bulk_insert_student_homework(student_name, hw_date, text_data, message_text="", due_date=""):
+    conn, db_type = get_db_connection()
     c = conn.cursor()
     if message_text.strip():
-        q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}"))
+        if db_type == "sqlite":
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", due_date))
+        else:
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", due_date))
     lines = text_data.strip().split('\n')
     for line in lines:
         if line.strip():
-            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id) VALUES (?, ?, ?, NULL)", (student_name, hw_date, line.strip()))
+            if db_type == "sqlite":
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, line.strip(), due_date))
+            else:
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, line.strip(), due_date))
     conn.commit()
     st.cache_data.clear()
 
-def update_student_homework_by_date(student_name, hw_date, text_data):
+def update_student_homework_by_date(student_name, hw_date, text_data, due_date=""):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     q(c, "DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
     conn.commit()
-    bulk_insert_student_homework(student_name, hw_date, text_data)
+    bulk_insert_student_homework(student_name, hw_date, text_data, due_date=due_date)
     st.cache_data.clear()
 
 def delete_student_homework_date(student_name, hw_date):
@@ -836,7 +860,6 @@ def get_student_homework_progress(student_name):
     q(c, "SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     return {r[0]: bool(r[1]) for r in c.fetchall()}
 
-# ⚡ [초고속 자동 저장] 콜백 함수로 가볍게 즉시 반영
 def save_single_milestone_progress(student_name, milestone_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -1112,7 +1135,8 @@ if not st.session_state["teacher_authenticated"]:
         recent_3_hws = []
         for d_str in recent_3_dates:
             day_hws = get_student_homework_by_date(selected_student, d_str)
-            for h_id, title in day_hws:
+            for hw_item in day_hws:
+                h_id, title = hw_item[0], hw_item[1]
                 if not title.startswith("💬 [선생님 메시지]:"):
                     recent_3_hws.append((h_id, title))
         
@@ -1162,7 +1186,6 @@ if not st.session_state["teacher_authenticated"]:
         with st.container(border=True):
             st.markdown(f"🎯 **개념 진도 완료 현황** ({completed_m} / {total_m}개 완료)")
             cols_m = st.columns([4, 1])
-            # 📌 개념 진도 안전 장치 추가
             safe_m_progress = max(0.0, min(1.0, (m_percent / 100) if total_m > 0 else 0.0))
             with cols_m[0]: st.progress(safe_m_progress)
             with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
@@ -1170,7 +1193,6 @@ if not st.session_state["teacher_authenticated"]:
             recent_3_label = " (최근 3일)" if recent_3_dates else ""
             st.markdown(f"📚 **숙제 진도 완료 현황{recent_3_label}** ({completed_h} / {total_h}개 완료)")
             cols_h = st.columns([4, 1])
-            # 📌 숙제 진도 안전 장치 추가
             safe_h_progress = max(0.0, min(1.0, (h_percent / 100) if total_h > 0 else 0.0))
             with cols_h[0]: st.progress(safe_h_progress)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
@@ -1182,7 +1204,6 @@ if not st.session_state["teacher_authenticated"]:
                 st.markdown(f"<div style='text-align:right; font-size:13px; color:#F59E0B; font-weight:bold; margin-top:4px;'>⭐ Streak: {current_streak}일 연속!</div>", unsafe_allow_html=True)
 
             cols_r = st.columns([4, 1])
-            # 📌 루틴 과제 안전 장치 (이미 반영된 부분)
             safe_routine_progress = max(0.0, min(1.0, (routine_rate / 100) if routine_rate > 0 else 0.0))
             with cols_r[0]: st.progress(safe_routine_progress)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
@@ -1269,30 +1290,40 @@ if not st.session_state["teacher_authenticated"]:
                 
                 actual_sel_hws = [h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")]
                 total_sel_h = len(actual_sel_hws)
-                completed_sel_h = sum(1 for h_id, _ in actual_sel_hws if h_progress.get(h_id, False))
+                completed_sel_h = sum(1 for h_item in actual_sel_hws if h_progress.get(h_item[0], False))
 
                 st.markdown(f"💡 **선택 날짜 숙제 현황**: 총 **{total_sel_h}개** 중 **{completed_sel_h}개** 완료")
                 st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
 
                 with st.container(border=True):
-                    for h_idx, (h_id, title) in enumerate(hws):
+                    for h_idx, hw_tuple in enumerate(hws):
+                        h_id = hw_tuple[0]
+                        title = hw_tuple[1]
+                        due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
+
                         if title.startswith("💬 [선생님 메시지]:"):
                             st.info(f"📌 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                         else:
                             default_val = h_progress.get(h_id, False)
                             chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
                             
-                            # ⚡ [콜백 기반 자동 저장] 눌러지는 순간 백그라운드 저장되어 렉 단축
                             def on_hw_change(h_id=h_id, key=chk_key):
                                 new_val = st.session_state[key]
                                 save_single_homework_progress(selected_student, h_id, new_val)
 
-                            st.checkbox(
-                                f"{title}", 
-                                value=default_val, 
-                                key=chk_key, 
-                                on_change=on_hw_change
-                            )
+                            cols_hw = st.columns([4, 1])
+                            with cols_hw[0]:
+                                st.checkbox(
+                                    f"{title}", 
+                                    value=default_val, 
+                                    key=chk_key, 
+                                    on_change=on_hw_change
+                                )
+                            with cols_hw[1]:
+                                if due_date and due_date.strip():
+                                    short_wday = get_weekday_short_kr(due_date)
+                                    wday_str = f" ({short_wday})" if short_wday else ""
+                                    st.markdown(f"<div style='text-align:right; margin-top:4px;'><span style='background-color:#FEF3C7; color:#D97706; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>마감: {due_date}{wday_str}</span></div>", unsafe_allow_html=True)
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
@@ -1595,14 +1626,21 @@ else:
                 st.selectbox("📌 템플릿 불러오기", ["-- 템플릿 선택 --"] + [t[1] for t in templates], key="select_hw_template_box", on_change=on_template_change)
 
             with st.form("add_student_hw_form"):
-                hw_date_input = st.date_input("과제 제출일", value=get_korean_today())
+                hw_date_input = st.date_input("과제 등록일(날짜)", value=get_korean_today())
+                
+                use_deadline_date = st.checkbox("⏰ 개별 마감 기한 설정하기")
+                due_date_val = ""
+                if use_deadline_date:
+                    selected_due_date = st.date_input("마감 날짜 선택", value=get_korean_today() + timedelta(days=1))
+                    due_date_val = str(selected_due_date)
+
                 teacher_msg_input = st.text_input("💬 선생님 한마디 (선택)")
                 hw_text_area = st.text_area("과제 내용", key="hw_text_area_input", height=150)
                 col_sub1, col_sub2 = st.columns(2)
                 with col_sub1:
                     if st.form_submit_button("과제 등록", type="primary"):
                         if hw_text_area.strip():
-                            bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input)
+                            bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input, due_date=due_date_val)
                             st.success("등록되었습니다!")
                             st.rerun()
                 with col_sub2:
@@ -1851,14 +1889,25 @@ else:
                 for s_idx_main, s_name in enumerate(active_hw_students):
                     hws = all_students_hw_map.get(s_name, [])
                     with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
-                        initial_mat_text = "\n".join([title for _, title in hws])
-                        for h_idx, (h_id, title) in enumerate(hws):
+                        initial_mat_text = "\n".join([hw[1] for hw in hws])
+                        for h_idx, hw_tuple in enumerate(hws):
+                            h_id = hw_tuple[0]
+                            title = hw_tuple[1]
+                            due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
+
                             if title.startswith("💬 [선생님 메시지]:"):
                                 st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
+                                
+                                date_suffix = ""
+                                if due_date and due_date.strip():
+                                    short_wday = get_weekday_short_kr(due_date)
+                                    wday_str = f" ({short_wday})" if short_wday else ""
+                                    date_suffix = f" (마감: {due_date}{wday_str})"
+
+                                if st.checkbox(f"📌 {title}{date_suffix}", value=is_done, key=chk_key) != is_done:
                                     save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
                                     st.rerun()
                         with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
