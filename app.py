@@ -1191,7 +1191,6 @@ if not st.session_state["teacher_authenticated"]:
         completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
         h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
-        r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
         saved_wrong_entries = get_all_student_wrong_entries(selected_student)
         solved_map_alert = get_student_wrong_solved_status(selected_student)
         
@@ -1296,7 +1295,10 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
+            
+            # 1번 기능: 오답 등록/수정
             with st.container(border=True):
+                st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
                 target_code = entered_unit_code if entered_unit_code else "B1353"
                 col_add, col_del = st.columns(2)
@@ -1312,6 +1314,115 @@ if not st.session_state["teacher_authenticated"]:
                         st.rerun()
                     else:
                         st.warning("단원코드를 먼저 입력해 주세요.")
+
+            st.markdown("")
+            
+            # 2번 기능: 나의 오답노트 및 해설 바로가기 (복습 완료 체크 및 해설 링크)
+            with st.container(border=True):
+                st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
+                saved_units_list = [u_code for u_code, _ in saved_wrong_entries]
+                solved_map_chk = get_student_wrong_solved_status(selected_student)
+                now_datetime_chk = datetime.now()
+                
+                unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
+                unit_map_dict = {}
+
+                for u_code in saved_units_list:
+                    p_nums = parsed_entry_dict.get(u_code, set())
+                    has_new_unsolved = False
+                    for n in p_nums:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
+                        is_solved = solved_map_chk.get(f_code, False)
+                        if v_url and not is_solved:
+                            try:
+                                up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
+                                if (now_datetime_chk - up_dt).total_seconds() <= 30 * 86400:
+                                    has_new_unsolved = True
+                                    break
+                            except Exception:
+                                pass
+                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
+                    unit_map_dict[display_name] = u_code
+                    unit_display_options.append(display_name)
+
+                selected_display_unit = st.selectbox("확인할 단원 선택", unit_display_options, key="saved_unit_select_box")
+                view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
+
+                if view_target_code:
+                    parsed_nums = parsed_entry_dict.get(view_target_code, set())
+                    if parsed_nums:
+                        st.markdown("---")
+                        st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
+                        solved_map = get_student_wrong_solved_status(selected_student)
+                        now_datetime = datetime.now()
+                        
+                        query_params = st.query_params
+                        for n in sorted(list(parsed_nums)):
+                            full_code = f"{view_target_code}{n:03d}".upper()
+                            v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
+                            is_solved = solved_map.get(full_code, False)
+                            
+                            is_new_alert = False
+                            if v_url and v_updated_at and not is_solved:
+                                try:
+                                    up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
+                                    if (now_datetime - up_dt).total_seconds() <= 30 * 86400:
+                                        is_new_alert = True
+                                except Exception:
+                                    pass
+
+                            action_key = f"toggle_solved_{selected_student}_{full_code}"
+                            if query_params.get(action_key) == "true":
+                                new_state = not is_solved
+                                save_single_wrong_solved_status(selected_student, full_code, new_state)
+                                query_params.pop(action_key, None)
+                                st.rerun()
+
+                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
+                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
+                            checkbox_checked_attr = "checked" if is_solved else ""
+                            
+                            html_row_content = f'''
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                    <input type="checkbox" {checkbox_checked_attr} 
+                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
+                                        style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
+                                    <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
+                                </div>
+                                <div style="flex-shrink: 0; margin-left: 10px;">
+                                    {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
+                                </div>
+                            </div>
+                            '''
+                            st.markdown(html_row_content, unsafe_allow_html=True)
+                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                    else:
+                        st.info("현재 등록된 오답이 없습니다.")
+
+            st.markdown("")
+            
+            # 3번 기능: 해설 영상 즉시 검색하기
+            with st.container(border=True):
+                st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
+                search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
+                if search_prob_input:
+                    if len(search_prob_input) >= 7:
+                        matched_url, _ = get_problem_link_info(search_prob_input)
+                        if matched_url:
+                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                        else:
+                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+                    else:
+                        unit_results = get_problem_links_by_unit(search_prob_input)
+                        if unit_results:
+                            st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
+                            for f_code, v_url in unit_results:
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                        else:
+                            st.info("단원코드 형식으로 올바르게 입력해 주세요.")
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
 
@@ -1347,32 +1458,6 @@ else:
 
     st.divider()
     st.markdown("### ⚙️ 통합 관리 대시보드")
-    
-    # 🚀 [비상 복구 버튼 추가]: 기존 오답 데이터들을 날짜별 로그로 일괄 생성해 주는 버튼!
-    with st.container(border=True):
-        st.markdown("🔧 **[긴급 데이터 마이그레이션]** 날짜별/주간별 모아보기에 데이터가 안 뜨시나요? 아래 버튼을 누르면 기존 오답 데이터가 로그로 즉시 변환됩니다!")
-        if st.button("🔄 기존 오답 데이터 날짜별 로그로 일괄 생성하기", type="primary"):
-            conn, db_t = get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''")
-            all_entries = cur.fetchall()
-            migrated_count = 0
-            for s_name, u_code, nums_txt, u_date in all_entries:
-                if not u_date:
-                    u_date = str(get_korean_today())
-                nums = parse_numbers(nums_txt)
-                for num in nums:
-                    try:
-                        if db_t == "postgres":
-                            cur.execute("INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING", (s_name, u_code, int(num), u_date, get_korean_now_str()))
-                        else:
-                            cur.execute("INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (?, ?, ?, ?, ?)", (s_name, u_code, int(num), u_date, get_korean_now_str()))
-                        migrated_count += 1
-                    except Exception:
-                        pass
-            conn.commit()
-            st.success(f"🎉 성공적으로 총 {migrated_count}개의 오답 기록이 날짜별 로그로 생성되었습니다! 이제 '5. 오답노트 모아보기'를 확인해 보세요.")
-            st.rerun()
 
     t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats = st.tabs([
         "👤 1. [개별] 학생 진도 관리", 
@@ -1631,10 +1716,12 @@ else:
                         
                         grouped_map = {}
                         for s_name, u_code, p_num, reg_date in filtered_logs:
-                            grouped_map.setdefault((s_name, u_code, reg_date), []).append(p_num)
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
                         
                         for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                            target_rows.append((s_name, u_code, ", ".join(map(str, sorted(num_list))), reg_date))
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
                     else:
                         def get_week_range_str(date_str):
                             try:
@@ -1651,14 +1738,16 @@ else:
                         
                         sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                         selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
-                        filtered_logs = weeks_dict.get(selected_week, [])
+                        filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
 
                         grouped_map = {}
                         for s_name, u_code, p_num, reg_date in filtered_logs:
-                            grouped_map.setdefault((s_name, u_code, reg_date), []).append(p_num)
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
                         
                         for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                            target_rows.append((s_name, u_code, ", ".join(map(str, sorted(num_list))), reg_date))
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
             else:
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
@@ -1674,13 +1763,19 @@ else:
                 
                 for s_name, u_code, nums_txt, u_date in all_raw_rows:
                     parsed_s = parse_numbers(nums_txt)
-                    missing_nums = [n for n in parsed_s if not batch_link_map.get(f"{u_code}{n:03d}".upper(), ("", ""))[0]]
+                    missing_nums = []
+                    for n in parsed_s:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, _ = batch_link_map.get(f_code, ("", ""))
+                        if not v_url or not v_url.strip():
+                            missing_nums.append(n)
                     if missing_nums:
                         target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
 
             if target_rows:
                 summary_student_counts = {}
                 all_target_full_codes = []
+                
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
@@ -1694,8 +1789,18 @@ else:
 
                 with st.container(border=True):
                     total_sum_all = sum(summary_student_counts.values())
-                    st.markdown(f"**📈 통계 요약** | 해설 누락: <b style='color:#EF4444;'>{search_missing_total}개</b> | 전체 오답: <b style='color:#0284C7;'>{total_sum_all}개</b>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
+                        <div style="font-size: 13px; margin-bottom: 8px;">
+                            🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
+                            📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
                     if summary_student_counts:
+                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
                         st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
                 st.markdown("---")
 
@@ -1704,6 +1809,7 @@ else:
                     if parsed_s:
                         with st.container(border=True):
                             st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
+                            
                             colored_num_tags = []
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}".upper()
@@ -1712,6 +1818,7 @@ else:
                                     colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                 else:
                                     colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+
                             st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("조건에 일치하는 오답노트 기록이 없습니다.")
@@ -1758,6 +1865,7 @@ else:
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
         col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 단원별 드롭다운 및 검색 관리"])
+        
         with col_link_tab1:
             with st.form("add_problem_link_form"):
                 col_pl1, col_pl2 = st.columns([1, 2])
@@ -1766,40 +1874,54 @@ else:
                 if st.form_submit_button("➕ 개별 등록", type="primary"):
                     if f_code_in.strip() and v_url_in.strip():
                         if save_problem_link(f_code_in.strip(), v_url_in.strip()):
+                            st.toast("🎥 해설 링크가 안전하게 등록되었습니다!", icon="✅")
                             st.success("저장되었습니다!")
                             st.rerun()
+                        else:
+                            st.error("등록 실패: 문제 번호가 4자리 이상인지 확인해 주세요.")
+                    else:
+                        st.warning("모두 입력해 주세요.")
+            
             with st.form("bulk_problem_link_form"):
-                bulk_txt = st.text_area("일괄 등록", placeholder="B1353015 https://...")
-                if st.form_submit_button("📥 일괄 등록", type="primary"):
+                bulk_txt = st.text_area("일괄 등록 (줄바꿈 입력)", placeholder="B1353015 https://cafe.naver.com/.../123")
+                if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
                     if bulk_txt.strip():
                         s_cnt, f_cnt = bulk_save_problem_links(bulk_txt)
-                        st.success(f"성공 {s_cnt}개 등록됨!")
+                        st.toast(f"🎥 성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)", icon="✅")
+                        st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
 
         with col_link_tab2:
+            st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
             unit_summaries = get_unit_code_summary_list()
-            dropdown_options = ["-- 단원 선택 --"] + [f"{u_code} (총 {cnt}개)" for u_code, cnt in unit_summaries]
-            unit_count_map = {f"{u_code} (총 {cnt}개)": u_code for u_code, cnt in unit_summaries}
+            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
+            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
             
             col_dd, col_sc = st.columns(2)
-            with col_dd: selected_dropdown_item = st.selectbox("📌 단원 선택", dropdown_options)
-            with col_sc: search_link_input = st.text_input("🔍 직접 검색", placeholder="예: B1353").strip()
+            with col_dd:
+                selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
+            with col_sc:
+                search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
             
-            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원 선택 --" else "")
+            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
 
             if target_filter:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
-                st.markdown(f"**📂 검색 결과: 총 {search_cnt}개**")
+                st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
+                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                    
                     if "select_all_links_flag" not in st.session_state:
                         st.session_state["select_all_links_flag"] = False
 
-                    if st.button("☑️ 전체 선택 / 해제 반전", use_container_width=True):
-                        st.session_state["select_all_links_flag"] = not st.session_state["select_all_links_flag"]
-                        for l_id, _, _, _ in searched_links:
-                            st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
-                        st.rerun()
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("☑️ 전체 선택 / 해제 반전", use_container_width=True):
+                            st.session_state["select_all_links_flag"] = not st.session_state["select_all_links_flag"]
+                            for l_id, _, _, _ in searched_links:
+                                st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
+                            st.rerun()
                     
                     st.markdown("---")
 
@@ -1808,7 +1930,9 @@ else:
                         if f"chk_link_del_{l_id}" not in st.session_state:
                             st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
                         
-                        if st.checkbox(f"📌 [{f_code}] ({v_url})", key=f"chk_link_del_{l_id}"):
+                        chk_label = f"📌 [{f_code}] ({v_url})"
+                        is_checked = st.checkbox(chk_label, key=f"chk_link_del_{l_id}")
+                        if is_checked:
                             links_to_delete.append(l_id)
                     
                     st.markdown("")
@@ -1823,13 +1947,18 @@ else:
                             
                             st.session_state["select_all_links_flag"] = False
                             for l_id in links_to_delete:
-                                if f"chk_link_del_{l_id}" in st.session_state:
-                                    del st.session_state[f"chk_link_del_{l_id}"]
+                                session_key = f"chk_link_del_{l_id}"
+                                if session_key in st.session_state:
+                                    del st.session_state[session_key]
                                     
-                            st.success(f"🎉 총 {len(links_to_delete)}개의 링크가 삭제되었습니다!")
+                            st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
                             st.rerun()
                         else:
-                            st.warning("삭제할 링크를 체크해 주세요.")
+                            st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
+                else:
+                    st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
+            else:
+                st.info("💡 단원을 선택하시거나 검색어를 입력해 주세요.")
 
     with t_cfg_stats:
         st.markdown("#### 📈 실시간 학습 참여 현황")
