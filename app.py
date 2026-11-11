@@ -2149,11 +2149,30 @@ else:
                             nums_txt = ", ".join(map(str, sorted(num_list)))
                             target_rows.append((s_name, u_code, nums_txt, reg_date))
             else:
+                # 해설 링크 없는 문제 모아보기
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
                 else:
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
-                target_rows = c.fetchall()
+                all_raw_rows = c.fetchall()
+                
+                # 해설 링크가 없는 문제만 필터링
+                all_check_codes = []
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    for n in parse_numbers(nums_txt):
+                        all_check_codes.append(f"{u_code}{n:03d}".upper())
+                batch_link_map = get_batch_problem_link_info(all_check_codes)
+                
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    missing_nums = []
+                    for n in parsed_s:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, _ = batch_link_map.get(f_code, ("", ""))
+                        if not v_url or not v_url.strip():
+                            missing_nums.append(n)
+                    if missing_nums:
+                        target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
 
             if target_rows:
                 summary_student_counts = {}
@@ -2204,8 +2223,7 @@ else:
 
                             st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
-                if wrong_view_mode not in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                    st.info("저장된 오답이 없습니다.")
+                st.info("조건에 일치하는 오답노트 기록이 없습니다.")
         else:
             st.warning("등록된 학생이 없습니다.")
 
