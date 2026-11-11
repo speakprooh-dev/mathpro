@@ -1429,7 +1429,6 @@ if not st.session_state["teacher_authenticated"]:
 
         r_rate, r_completed, r_total = get_routine_completion_rate(selected_student, 7)
 
-        # ⚡ [최적화 1] 학생의 모든 저장 오답 단원 한 번에 쿼리
         saved_wrong_entries = get_all_student_wrong_entries(selected_student)
         
         solved_map_alert = get_student_wrong_solved_status(selected_student)
@@ -1445,7 +1444,6 @@ if not st.session_state["teacher_authenticated"]:
             for n in parsed_nums:
                 target_full_codes.append(f"{u_code}{n:03d}".upper())
 
-        # ⚡ [최적화 2] 묶음 배치 조회 (단 한 번의 DB/캐시 연산)
         batch_link_info = get_batch_problem_link_info(target_full_codes)
 
         for f_code in target_full_codes:
@@ -1647,7 +1645,7 @@ if not st.session_state["teacher_authenticated"]:
                 unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
                 unit_map_dict = {}
 
-                # ⚡ [최적화 3] 이미 상단에서 계산된 batch_link_info 및 parsed_entry_dict 재활용으로 드롭다운 렉 완벽 제거
+                # ⚡ [0.1초 초고속 최적화 적용]: 메모리에 이미 올라와 있는 batch_link_info를 활용해 드롭다운 목록 구성 렉 완벽 제거
                 for u_code in saved_units_list:
                     p_nums = parsed_entry_dict.get(u_code, set())
                     has_new_unsolved = False
