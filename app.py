@@ -39,7 +39,6 @@ def get_persistent_postgres_connection(conn_url):
     return conn
 
 def get_db_connection():
-    # 🎯 접속 주체에 따라 바라보는 모드를 다르게 분기합니다.
     is_teacher = st.session_state.get("teacher_authenticated", False)
     
     if is_teacher:
@@ -536,8 +535,8 @@ def init_db():
             for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
                 reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
                 for num in parse_numbers(nums_txt):
-                    if db_type_check == "sqlite":
-                        pass # handled internally
+                    if db_type == "sqlite":
+                        pass
                     else:
                         pass
             conn.commit()
@@ -1441,11 +1440,12 @@ if not st.session_state["teacher_authenticated"]:
         for f_code in target_full_codes:
             v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
             is_solved = solved_map_alert.get(f_code, False)
+            # 🟢 [수정] 복습 완료되지 않고, 30일(2592000초) 이내 등록된 해설인 경우 새 해설 카운트
             if v_url and not is_solved:
                 unsolved_total_count += 1
                 try:
                     up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                    if (now_datetime_alert - up_dt).total_seconds() <= 86400:
+                    if (now_datetime_alert - up_dt).total_seconds() <= 30 * 86400:
                         new_video_count += 1
                 except Exception:
                     pass
@@ -1656,10 +1656,11 @@ if not st.session_state["teacher_authenticated"]:
                         f_code = f"{u_code}{n:03d}".upper()
                         v_url, v_up_at = batch_saved_link_info.get(f_code, ("", ""))
                         is_solved = solved_map_chk.get(f_code, False)
+                        # 🟢 [수정] 복습 완료되지 않았고, 30일 이내 등록된 해설인 경우 단원 드롭다운에 [새해설 대기] 표시
                         if v_url and not is_solved:
                             try:
                                 up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
-                                if (now_datetime_chk - up_dt).total_seconds() <= 86400:
+                                if (now_datetime_chk - up_dt).total_seconds() <= 30 * 86400:
                                     has_new_unsolved = True
                                     break
                             except Exception:
@@ -1688,10 +1689,11 @@ if not st.session_state["teacher_authenticated"]:
                                 is_solved = solved_map.get(full_code, False)
                                 
                                 is_new_alert = False
-                                if v_url and v_updated_at:
+                                # 🟢 [수정] 복습 완료되지 않았고, 30일 이내 등록된 경우에만 🔥 새해설 배지 표시 (복습 완료 시 즉시 소멸)
+                                if v_url and v_updated_at and not is_solved:
                                     try:
                                         up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                        if (now_datetime - up_dt).total_seconds() <= 86400:
+                                        if (now_datetime - up_dt).total_seconds() <= 30 * 86400:
                                             is_new_alert = True
                                     except Exception:
                                         pass
