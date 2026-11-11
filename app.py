@@ -1110,6 +1110,8 @@ if not st.session_state["teacher_authenticated"]:
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
         unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
         current_streak = get_student_routine_streak(selected_student)
+        
+        # 📌 루틴 과제 달성률은 다시 최근 7일 기준으로 원복
         routine_rate, _, _ = get_routine_completion_rate(selected_student, days_limit=7)
 
         if unchecked_count > 0:
@@ -1138,15 +1140,22 @@ if not st.session_state["teacher_authenticated"]:
         hw_dates = get_student_homework_dates(selected_student)
         m_progress = get_milestone_progress(selected_student)
         h_progress = get_student_homework_progress(selected_student)
-        all_hws_flat = get_all_student_homework(selected_student)
 
         total_m = len(milestones)
         completed_m = sum(1 for m in milestones if m_progress.get(m[0], False))
         m_percent = int((completed_m / total_m) * 100) if total_m > 0 else 0
 
-        actual_hws_flat = [h for h in all_hws_flat if not h[2].startswith("💬 [선생님 메시지]:")]
-        total_h = len(actual_hws_flat)
-        completed_h = sum(1 for h in actual_hws_flat if h_progress.get(h[0], False))
+        # 📌 숙제 진도 완료 현황: 가장 최근 3일치 날짜의 숙제들을 대상으로 계산
+        recent_3_dates = hw_dates[:3] if hw_dates else []
+        recent_3_hws = []
+        for d_str in recent_3_dates:
+            day_hws = get_student_homework_by_date(selected_student, d_str)
+            for h_id, title in day_hws:
+                if not title.startswith("💬 [선생님 메시지]:"):
+                    recent_3_hws.append((h_id, title))
+        
+        total_h = len(recent_3_hws)
+        completed_h = sum(1 for h_id, _ in recent_3_hws if h_progress.get(h_id, False))
         h_percent = int((completed_h / total_h) * 100) if total_h > 0 else 0
 
         saved_wrong_entries = get_all_student_wrong_entries(selected_student)
@@ -1194,27 +1203,30 @@ if not st.session_state["teacher_authenticated"]:
             with cols_m[0]: st.progress(m_percent / 100 if total_m > 0 else 0)
             with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
             
-            st.markdown(f"📚 **숙제 진도 완료 현황** ({completed_h} / {total_h}개 완료)")
+            recent_3_label = " (최근 3일)" if recent_3_dates else ""
+            st.markdown(f"📚 **숙제 진도 완료 현황{recent_3_label}** ({completed_h} / {total_h}개 완료)")
             cols_h = st.columns([4, 1])
             with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
 
-            st.markdown("🔥 **루틴 과제 달성률 (최근 7일)**")
+            # 📌 루틴 타이틀 오른쪽에 Streak 문구 배치 & 루틴은 최근 7일 유지
+            cols_rt_title, cols_rt_streak = st.columns([2.2, 1.8])
+            with cols_rt_title:
+                st.markdown("🔥 **루틴 과제 달성률 (최근 7일)**")
+            with cols_rt_streak:
+                st.markdown(f"<div style='text-align:right; font-size:13px; color:#F59E0B; font-weight:bold; margin-top:4px;'>⭐ Streak: {current_streak}일 연속!</div>", unsafe_allow_html=True)
+
             cols_r = st.columns([4, 1])
             with cols_r[0]: st.progress(routine_rate / 100 if routine_rate > 0 else 0)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
-            
-            # 📌 루틴 과제 진행 바 바로 아래에 자연스럽게 이어지도록 마진을 줄여서 배치
-            st.markdown(f"<div style='font-size: 13.5px; color: #D97706; font-weight: bold; margin-top: -4px;'>⭐ 매일 루틴 연속 달성 (Streak): {current_streak}일 연속 달성 중!</div>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
         with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
             if milestones:
-                # 📌 유형 이름 속 숫자(예: '유형 01', '유형 26')를 기준으로 정확히 오름차순 정렬
                 def parse_type_sort_key(item):
-                    t_name = item[3] # type_name
+                    t_name = item[3]
                     match = re.search(r'(\d+)', t_name)
                     num = int(match.group(1)) if match else 999
                     return (item[1], item[2], num, t_name)
@@ -1467,11 +1479,8 @@ else:
             selected_student = st.selectbox("조회할 학생 선택", student_list, key="tab1_stu_sel")
             s_milestones = get_student_milestones(selected_student)
             s_m_progress = get_milestone_progress(selected_student)
-            
-            # (중략 - 드라이브 링크 저장 코드)
 
             if s_milestones:
-                # 📌 동일하게 숫자 오름차순 정렬 적용
                 def parse_type_sort_key_teacher(item):
                     t_name = item[3]
                     match = re.search(r'(\d+)', t_name)
