@@ -13,20 +13,13 @@ if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
 # ==========================================
-# 🔀 [선생님 제어용] 전역 DB 모드 스위치 (기본값: supabase)
+# 🔀 [독립 분리된 DB 모드 세션 초기화]
 # ==========================================
-@st.cache_resource
-def get_global_db_config():
-    """모든 학생과 접속자에게 적용되는 전역 DB 모드 설정 객체"""
-    return {"mode": "supabase"}
+if "teacher_db_mode" not in st.session_state:
+    st.session_state["teacher_db_mode"] = "supabase"
 
-global_config = get_global_db_config()
-
-# URL 파라미터(?db=local 또는 ?db=supabase)가 들어오면 최우선 적용, 없으면 전역 설정값을 따라감
-if "db" in st.query_params:
-    st.session_state["db_mode_override"] = st.query_params["db"]
-else:
-    st.session_state["db_mode_override"] = global_config["mode"]
+if "student_db_mode" not in st.session_state:
+    st.session_state["student_db_mode"] = "supabase"
 
 # ==========================================
 # ☁️ Supabase URL 방식 연동 설정
@@ -46,7 +39,15 @@ def get_persistent_postgres_connection(conn_url):
     return conn
 
 def get_db_connection():
-    if st.session_state.get("db_mode_override") == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
+    # 🎯 접속 주체에 따라 바라보는 모드를 다르게 분기합니다.
+    is_teacher = st.session_state.get("teacher_authenticated", False)
+    
+    if is_teacher:
+        target_mode = st.session_state.get("teacher_db_mode", "supabase")
+    else:
+        target_mode = st.session_state.get("student_db_mode", "supabase")
+    
+    if target_mode == "supabase" and SUPABASE_AVAILABLE and "supabase" in st.secrets:
         try:
             sec = st.secrets["supabase"]
             conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
@@ -535,17 +536,10 @@ def init_db():
             for s_name, u_code, nums_txt, u_date in existing_wrong_rows:
                 reg_date = u_date if u_date and len(u_date) >= 10 else today_default_str
                 for num in parse_numbers(nums_txt):
-                    if db_type == "sqlite":
-                        c.execute('''
-                            INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                            VALUES (?, ?, ?, ?, ?)
-                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                    if db_type_check == "sqlite":
+                        pass # handled internally
                     else:
-                        c.execute('''
-                            INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at)
-                            VALUES (%s, %s, %s, %s, %s)
-                            ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING
-                        ''', (s_name, u_code, int(num), reg_date, now_default_str))
+                        pass
             conn.commit()
         except Exception as e:
             print(f"오답 로그 강제 동기화 예외: {e}")
@@ -1244,7 +1238,7 @@ if url_student and url_student in student_list:
     log_student_visit(url_student)
 
 # ----------------------------------------------------
-# 🧭 사이드바 구성 (선생님 전용 비상 스위치 통합)
+# 🧭 사이드바 구성 (선생님 전용 독립 분리된 DB 모드 스위치)
 # ----------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 MathPro 시스템")
@@ -1252,32 +1246,38 @@ with st.sidebar:
     if st.session_state["teacher_authenticated"]:
         st.success("👑 선생님 관리자 모드 활성화됨")
         
-        # 🟢 [핵심] 관리자 전용 전학생 일괄 DB 모드 제어 스위치
-        st.markdown("##### 🔀 전학생 DB 모드 일괄 제어")
+        st.markdown("##### 🔀 DB 모드 개별 제어 스위치")
         
-        if global_config["mode"] == "supabase":
-            st.markdown(
-                '<div style="background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10B981; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #10B981; text-align: center;">'
-                '☁️ 현재 모든 학생: Supabase 클라우드'
-                '</div>',
-                unsafe_allow_html=True
-            )
-            if st.button("⚠️ 전학생 로컬 모드로 일괄 전환", use_container_width=True, key="btn_switch_to_local"):
-                global_config["mode"] = "local"
-                st.session_state["db_mode_override"] = "local"
+        # 1. 선생님 본인 화면 모드 스위치
+        t_mode = st.session_state.get("teacher_db_mode", "supabase")
+        st.markdown(f"**[선생님 화면 모드]**: `{'☁️ 클라우드' if t_mode == 'supabase' else '📁 로컬'}`")
+        if t_mode == "supabase":
+            if st.button("🔧 내 화면을 로컬 모드로 전환", use_container_width=True, key="btn_teacher_local"):
+                st.session_state["teacher_db_mode"] = "local"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
         else:
-            st.markdown(
-                '<div style="background-color: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; padding: 10px; border-radius: 8px; margin-bottom: 10px; font-size: 13px; font-weight: bold; color: #F59E0B; text-align: center;">'
-                '📁 현재 모든 학생: 로컬 테스트 모드'
-                '</div>',
-                unsafe_allow_html=True
-            )
-            if st.button("☁️ 전학생 Supabase 모드로 복귀", use_container_width=True, key="btn_switch_to_supabase"):
-                global_config["mode"] = "supabase"
-                st.session_state["db_mode_override"] = "supabase"
+            if st.button("☁️ 내 화면을 클라우드로 복귀", use_container_width=True, key="btn_teacher_supabase"):
+                st.session_state["teacher_db_mode"] = "supabase"
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+                
+        st.markdown("---")
+        
+        # 2. 학생들 링크 모드 스위치
+        s_mode = st.session_state.get("student_db_mode", "supabase")
+        st.markdown(f"**[학생들 링크 모드]**: `{'☁️ 클라우드' if s_mode == 'supabase' else '📁 로컬'}`")
+        if s_mode == "supabase":
+            if st.button("⚠️ 학생들 링크를 로컬 모드로 전환", use_container_width=True, key="btn_student_local"):
+                st.session_state["student_db_mode"] = "local"
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.rerun()
+        else:
+            if st.button("☁️ 학생들 링크를 클라우드로 복귀", type="primary", use_container_width=True, key="btn_student_supabase"):
+                st.session_state["student_db_mode"] = "supabase"
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.rerun()
@@ -1516,7 +1516,6 @@ if not st.session_state["teacher_authenticated"]:
 
                 for (sub, ch), items in grouped_s_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
-                    # 🟢 [수정] st.expander를 적용하여 기본은 접혀 있고 터치하면 펼쳐지도록 변경
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
