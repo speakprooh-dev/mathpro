@@ -788,7 +788,7 @@ def get_all_students_homework_map(hw_date):
         if db_type == "postgres":
             q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
         else:
-            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (hw_date,))
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (student_name, hw_date))
         rows = c.fetchall()
         hw_map = {}
         for row in rows:
@@ -806,31 +806,50 @@ def get_all_student_homework(student_name):
     q(c, "SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
     return c.fetchall()
 
-def bulk_insert_student_homework(student_name, hw_date, text_data, message_text="", due_date=""):
+def parse_inline_due_date(line_text):
+    # 문장 끝에 YY/MM/DD 형식 (예: 26/11/15)이 있는지 정규식으로 탐색
+    match = re.search(r'\b(\d{2})/(\d{2})/(\d{2})\b$', line_text.strip())
+    if match:
+        yy, mm, dd = match.groups()
+        full_year = f"20{yy}"
+        try:
+            parsed_d = date(int(full_year), int(mm), int(dd))
+            clean_title = line_text[:match.start()].strip()
+            return clean_title, str(parsed_d)
+        except Exception:
+            pass
+    return line_text.strip(), ""
+
+def bulk_insert_student_homework(student_name, hw_date, text_data, message_text="", default_due_date=""):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     if message_text.strip():
         if db_type == "sqlite":
-            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", due_date))
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", default_due_date))
         else:
-            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", due_date))
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}", default_due_date))
+    
     lines = text_data.strip().split('\n')
     for line in lines:
-        if line.strip():
+        line_str = line.strip()
+        if line_str:
+            clean_title, inline_due = parse_inline_due_date(line_str)
+            final_due = inline_due if inline_due else default_due_date
+            
             if db_type == "sqlite":
-                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, line.strip(), due_date))
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, clean_title, final_due))
             else:
-                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, line.strip(), due_date))
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, clean_title, final_due))
     conn.commit()
     st.cache_data.clear()
 
-def update_student_homework_by_date(student_name, hw_date, text_data, due_date=""):
+def update_student_homework_by_date(student_name, hw_date, text_data, default_due_date=""):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
     q(c, "DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
     conn.commit()
-    bulk_insert_student_homework(student_name, hw_date, text_data, due_date=due_date)
+    bulk_insert_student_homework(student_name, hw_date, text_data, default_due_date=default_due_date)
     st.cache_data.clear()
 
 def delete_student_homework_date(student_name, hw_date):
@@ -1628,19 +1647,19 @@ else:
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 등록일(날짜)", value=get_korean_today())
                 
-                use_deadline_date = st.checkbox("⏰ 개별 마감 기한 설정하기")
-                due_date_val = ""
+                use_deadline_date = st.checkbox("⏰ 공통 마감 기한 설정하기 (선택)")
+                default_due_date_val = ""
                 if use_deadline_date:
-                    selected_due_date = st.date_input("마감 날짜 선택", value=get_korean_today() + timedelta(days=1))
-                    due_date_val = str(selected_due_date)
+                    selected_due_date = st.date_input("공통 마감 날짜 선택", value=get_korean_today() + timedelta(days=1))
+                    default_due_date_val = str(selected_due_date)
 
                 teacher_msg_input = st.text_input("💬 선생님 한마디 (선택)")
-                hw_text_area = st.text_area("과제 내용", key="hw_text_area_input", height=150)
+                hw_text_area = st.text_area("과제 내용 (문장 끝에 26/11/15 적으면 개별 마감일 자동 지정)", key="hw_text_area_input", height=150, placeholder="예시:\n교과서 10쪽 풀기\n단원 평가 오답노트 작성 26/11/15")
                 col_sub1, col_sub2 = st.columns(2)
                 with col_sub1:
                     if st.form_submit_button("과제 등록", type="primary"):
                         if hw_text_area.strip():
-                            bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input, due_date=due_date_val)
+                            bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input, default_due_date=default_due_date_val)
                             st.success("등록되었습니다!")
                             st.rerun()
                 with col_sub2:
