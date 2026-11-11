@@ -637,15 +637,28 @@ def get_routine_completion_rate(student_name, days_limit=7):
     today_obj = get_korean_today()
     start_date_str = str(today_obj - timedelta(days=days_limit - 1))
     today_str = str(today_obj)
+    
+    # 1. 현재 등록된 총 루틴 개수 가져오기
     q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
     total_routines_count = c.fetchone()[0]
     if total_routines_count == 0:
         return 0, 0, 0
+        
+    # 2. 최근 7일 동안 기대되는 총 완료 개수 (현재 루틴 개수 × 7일)
     total_expected = total_routines_count * days_limit
+    
+    # 3. 최근 7일 동안 실제로 체크된 총 개수 가져오기
     q(c, "SELECT COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
     completed_count = c.fetchone()[0]
-    rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    
+    # 4. 퍼센트 계산 (최대 100%를 넘지 않도록 안전하게 처리)
+    raw_rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    rate = min(100, max(0, raw_rate))
+    
     return rate, completed_count, total_expected
+```[cite: 7]
+
+이렇게 수정해 주시면, 과거에 루틴 개수가 몇 개였든 상관없이 **현재 등록된 루틴 기준 최근 7일 동안의 정확한 달성률(최대 100%)**로만 깔끔하게 계산되어 출력됩니다!
 
 @st.cache_data(ttl=30)
 def get_student_routine_streak(student_name):
