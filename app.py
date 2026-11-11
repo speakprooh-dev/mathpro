@@ -2297,6 +2297,7 @@ else:
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
         col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 단원별 드롭다운 및 검색 관리"])
+        
         with col_link_tab1:
             with st.form("add_problem_link_form"):
                 col_pl1, col_pl2 = st.columns([1, 2])
@@ -2321,6 +2322,7 @@ else:
                         st.toast(f"🎥 성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)", icon="✅")
                         st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
                         st.rerun()
+
         with col_link_tab2:
             st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
             unit_summaries = get_unit_code_summary_list()
@@ -2338,19 +2340,33 @@ else:
             if target_filter:
                 searched_links, search_cnt = get_all_problem_links_searched(target_filter)
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
+                
                 if searched_links:
-                    cols = st.columns(2)
-                    for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
-                        target_col = cols[item_idx % 2]
-                        with target_col:
-                            c_code, c_btn = st.columns([5, 1])
-                            with c_code:
-                                st.markdown(f"📌 **[{f_code}]({v_url})** <span style='font-size:11px; color:gray;'>🔗 해설연결</span>", unsafe_allow_html=True)
-                            with c_btn:
-                                if st.button("🗑️", key=f"del_link_item_{l_id}_{item_idx}", help="삭제"):
-                                    delete_problem_link(l_id)
-                                    st.rerun()
-                            st.markdown("<hr style='margin: 4px 0px 8px 0px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);'>", unsafe_allow_html=True)
+                    # 🚀 [개선 포인트]: form을 사용하여 여러 개를 체크한 뒤 한 번에 삭제하도록 변경
+                    with st.form("batch_delete_links_form"):
+                        st.markdown("💡 *삭제할 링크들을 체크박스로 선택한 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                        
+                        links_to_delete = []
+                        for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
+                            chk_label = f"📌 [{f_code}] ({v_url})"
+                            if st.checkbox(chk_label, key=f"batch_chk_link_{l_id}_{item_idx}"):
+                                links_to_delete.append(l_id)
+                        
+                        st.markdown("")
+                        submitted_batch_del = st.form_submit_button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True)
+                        
+                        if submitted_batch_del:
+                            if links_to_delete:
+                                conn, _ = get_db_connection()
+                                c = conn.cursor()
+                                for l_id in links_to_delete:
+                                    q(c, "DELETE FROM problem_links WHERE id = ?", (l_id,))
+                                conn.commit()
+                                st.cache_data.clear()
+                                st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
+                                st.rerun()
+                            else:
+                                st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
                 else:
                     st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
             else:
