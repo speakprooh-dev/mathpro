@@ -311,49 +311,6 @@ def restore_from_excel(uploaded_file):
     except Exception as e:
         return False, f"복구 중 오류 발생: {str(e)}"
 
-def migrate_local_to_supabase():
-    try:
-        import sqlite3
-        DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mathpro_roadmap.db")
-        local_conn = sqlite3.connect(DB_PATH)
-        local_cursor = local_conn.cursor()
-        
-        sec = st.secrets["supabase"]
-        conn_url = sec.get("url", "postgresql://postgres.qfpclacalaaxbhhheosw:MathPro2026@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres")
-        cloud_conn = psycopg2.connect(conn_url, connect_timeout=5)
-        cloud_conn.autocommit = True
-        cloud_cursor = cloud_conn.cursor()
-        
-        local_cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [row[0] for row in local_cursor.fetchall()]
-        migrated_tables = []
-        for table in tables:
-            if table in ["sqlite_sequence", "backup_info"]:
-                continue
-            local_cursor.execute(f"SELECT * FROM {table}")
-            rows = local_cursor.fetchall()
-            if not rows:
-                continue
-            col_names = [description[0] for description in local_cursor.description]
-            col_str = ", ".join(col_names)
-            placeholders = ", ".join(["%s"] * len(col_names))
-            try:
-                cloud_cursor.execute(f"DELETE FROM {table}")
-            except Exception:
-                cloud_conn.rollback()
-            insert_query = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders})"
-            try:
-                cloud_cursor.executemany(insert_query, rows)
-                cloud_conn.commit()
-                migrated_tables.append(f"{table}({len(rows)}건)")
-            except Exception:
-                cloud_conn.rollback()
-        local_conn.close()
-        cloud_conn.close()
-        return True, f"클라우드 전송 완료된 테이블: {', '.join(migrated_tables)}"
-    except Exception as e:
-        return False, f"동기화 중 오류 발생: {str(e)}"
-
 def get_base_url():
     try:
         base_url = st.context.headers.get("Host", "")
@@ -771,7 +728,7 @@ def get_student_routine_streak(student_name):
     if db_type == "postgres":
         q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
     else:
-        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
+        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= %s AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
     rows = c.fetchall()
     completed_days = {r[0]: r[1] for r in rows}
     streak = 0
@@ -1235,6 +1192,13 @@ if not st.session_state["teacher_authenticated"]:
             cols_m = st.columns([4, 1])
             with cols_m[0]: st.progress(m_percent / 100 if total_m > 0 else 0)
             with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
+            
+            st.markdown("📚 **숙제 진도**")
+            cols_h = st.columns([4, 1])
+            with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
+            with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
+
+            st.markdown(f"🔥 **매일 루틴 연속 달성 (Streak)**: <span style='color:#F59E0B; font-weight:bold;'>{current_streak}일 연속 달성 중!</span>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
@@ -1487,7 +1451,6 @@ else:
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
                 
-                # 🚀 [개선]: 선생님 화면에서도 학생 진도 관리가 단원별 접기/펼치기(expander)로 깔끔하게 정돈되도록 변경
                 for (sub, ch), items in grouped_t_milestones.items():
                     done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
@@ -1845,7 +1808,7 @@ else:
                         initial_mat_text = "\n".join([title for _, title in hws])
                         for h_idx, (h_id, title) in enumerate(hws):
                             if title.startswith("💬 [선생님 메시지]:"):
-                                st.info(f"💬 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
+                                st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
