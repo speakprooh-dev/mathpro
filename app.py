@@ -1203,8 +1203,9 @@ if not st.session_state["teacher_authenticated"]:
             cols_r = st.columns([4, 1])
             with cols_r[0]: st.progress(routine_rate / 100 if routine_rate > 0 else 0)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
-
-            st.markdown(f"⭐ **매일 루틴 연속 달성 (Streak)**: <span style='color:#F59E0B; font-weight:bold;'>{current_streak}일 연속 달성 중!</span>", unsafe_allow_html=True)
+            
+            # 📌 루틴 과제 진행 바 바로 아래에 자연스럽게 이어지도록 마진을 줄여서 배치
+            st.markdown(f"<div style='font-size: 13.5px; color: #D97706; font-weight: bold; margin-top: -4px;'>⭐ 매일 루틴 연속 달성 (Streak): {current_streak}일 연속 달성 중!</div>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
