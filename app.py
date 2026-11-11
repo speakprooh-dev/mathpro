@@ -800,13 +800,14 @@ def get_milestone_progress(student_name):
     except Exception:
         return {}
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=15)
 def get_student_homework_progress(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT student_hw_id, is_checked FROM student_homework_progress WHERE student_name = ?", (student_name,))
     return {r[0]: bool(r[1]) for r in c.fetchall()}
 
+# ⚡ [초고속 자동 저장] 콜백 함수로 가볍게 즉시 반영
 def save_single_milestone_progress(student_name, milestone_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -821,7 +822,6 @@ def save_single_milestone_progress(student_name, milestone_id, val):
     except Exception:
         pass
 
-# ⚡ [최적화 핵심] st.rerun()을 제거하여 로딩 대기 시간 제거
 def save_single_homework_progress(student_name, student_hw_id, val):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -1184,10 +1184,18 @@ if not st.session_state["teacher_authenticated"]:
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
                             cols = st.columns([4, 1])
+                            
+                            def on_milestone_change(m_id=m_id, key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"):
+                                new_val = st.session_state[key]
+                                save_single_milestone_progress(selected_student, m_id, new_val)
+
                             with cols[0]:
-                                val = st.checkbox(f"{t_name}", value=default_val, key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}")
-                                if val != default_val:
-                                    save_single_milestone_progress(selected_student, m_id, val)
+                                st.checkbox(
+                                    f"{t_name}", 
+                                    value=default_val, 
+                                    key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}",
+                                    on_change=on_milestone_change
+                                )
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
                                     st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
@@ -1209,13 +1217,15 @@ if not st.session_state["teacher_authenticated"]:
             
             if daily_routines_list:
                 with st.container(border=True):
-                    daily_routine_checked_dict = {}
                     for r_id, r_title in daily_routines_list:
                         default_val = current_day_logs.get((str(r_id), today_str), False)
-                        daily_routine_checked_dict[str(r_id)] = st.checkbox(f"{r_title}", value=default_val, key=f"s_daily_{selected_student}_{r_id}")
+                        chk_key = f"s_daily_{selected_student}_{r_id}"
+                        
+                        def on_routine_change(r_id=r_id, key=chk_key):
+                            save_single_routine_log(selected_student, str(r_id), today_str, st.session_state[key])
+
+                        st.checkbox(f"{r_title}", value=default_val, key=chk_key, on_change=on_routine_change)
                         st.divider()
-                if daily_routine_checked_dict:
-                    save_daily_routine_logs(selected_student, today_str, daily_routine_checked_dict)
 
             if hw_dates:
                 st.markdown("### 📚 날짜별 개별 숙제")
@@ -1237,10 +1247,17 @@ if not st.session_state["teacher_authenticated"]:
                             default_val = h_progress.get(h_id, False)
                             chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
                             
-                            # ⚡ [최적화 핵심] 체크박스 상태 변경 시 st.rerun()을 제거하여 즉시 저장되도록 함
-                            current_val = st.checkbox(f"{title}", value=default_val, key=chk_key)
-                            if current_val != default_val:
-                                save_single_homework_progress(selected_student, h_id, current_val)
+                            # ⚡ [콜백 기반 자동 저장] 눌러지는 순간 백그라운드 저장되어 렉 단축
+                            def on_hw_change(h_id=h_id, key=chk_key):
+                                new_val = st.session_state[key]
+                                save_single_homework_progress(selected_student, h_id, new_val)
+
+                            st.checkbox(
+                                f"{title}", 
+                                value=default_val, 
+                                key=chk_key, 
+                                on_change=on_hw_change
+                            )
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
