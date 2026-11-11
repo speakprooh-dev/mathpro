@@ -1110,6 +1110,7 @@ if not st.session_state["teacher_authenticated"]:
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
         unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
         current_streak = get_student_routine_streak(selected_student)
+        routine_rate, _, _ = get_routine_completion_rate(selected_student, days_limit=7)
 
         if unchecked_count > 0:
             st.markdown(
@@ -1198,7 +1199,12 @@ if not st.session_state["teacher_authenticated"]:
             with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
 
-            st.markdown(f"🔥 **매일 루틴 연속 달성 (Streak)**: <span style='color:#F59E0B; font-weight:bold;'>{current_streak}일 연속 달성 중!</span>", unsafe_allow_html=True)
+            st.markdown("🔥 **루틴 과제 달성률 (최근 7일)**")
+            cols_r = st.columns([4, 1])
+            with cols_r[0]: st.progress(routine_rate / 100 if routine_rate > 0 else 0)
+            with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
+
+            st.markdown(f"⭐ **매일 루틴 연속 달성 (Streak)**: <span style='color:#F59E0B; font-weight:bold;'>{current_streak}일 연속 달성 중!</span>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
 
