@@ -2342,52 +2342,52 @@ else:
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
-                    # 🚀 [해결 포인트]: 세션 상태 콜백을 이용하여 전체선택 상태를 즉시 동기화합니다.
-                    if "select_all_links_state" not in st.session_state:
-                        st.session_state["select_all_links_state"] = False
+                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                    
+                    # 🚀 [해결책]: 세션 상태를 활용한 확실한 전체선택/해제 토글 버튼
+                    if "select_all_links_flag" not in st.session_state:
+                        st.session_state["select_all_links_flag"] = False
 
-                    def toggle_select_all():
-                        st.session_state["select_all_links_state"] = not st.session_state["select_all_links_state"]
-                        # 개별 체크박스 상태도 일괄적으로 변경해 줍니다.
-                        for item_idx, (l_id, _, _, _) in enumerate(searched_links):
-                            st.session_state[f"batch_chk_link_{l_id}_{item_idx}"] = st.session_state["select_all_links_state"]
-
-                    st.button(
-                        "☑️ 전체 선택 / 해제 토글하기", 
-                        on_click=toggle_select_all, 
-                        use_container_width=True
-                    )
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("☑️ 전체 선택 / 해제 반전", use_container_width=True):
+                            st.session_state["select_all_links_flag"] = not st.session_state["select_all_links_flag"]
+                            for l_id, _, _, _ in searched_links:
+                                st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
+                            st.rerun()
+                    
                     st.markdown("---")
 
-                    with st.form("batch_delete_links_form"):
-                        st.markdown("💡 *삭제할 링크들을 확인하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                    # 개별 체크박스들을 담을 목록
+                    links_to_delete = []
+                    for l_id, f_code, v_url, u_code in searched_links:
+                        if f"chk_link_del_{l_id}" not in st.session_state:
+                            st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
                         
-                        links_to_delete = []
-                        for item_idx, (l_id, f_code, v_url, u_code) in enumerate(searched_links):
-                            chk_label = f"📌 [{f_code}] ({v_url})"
-                            # 세션 상태에 저장된 값을 기본값으로 사용
-                            if l_id not in st.session_state:
-                                st.session_state[f"batch_chk_link_{l_id}_{item_idx}"] = st.session_state["select_all_links_state"]
+                        chk_label = f"📌 [{f_code}] ({v_url})"
+                        is_checked = st.checkbox(chk_label, key=f"chk_link_del_{l_id}")
+                        if is_checked:
+                            links_to_delete.append(l_id)
+                    
+                    st.markdown("")
+                    if st.button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True):
+                        if links_to_delete:
+                            conn, _ = get_db_connection()
+                            c = conn.cursor()
+                            for l_id in links_to_delete:
+                                q(c, "DELETE FROM problem_links WHERE id = ?", (l_id,))
+                            conn.commit()
+                            st.cache_data.clear()
+                            
+                            # 삭제 후 세션 플래그 초기화
+                            st.session_state["select_all_links_flag"] = False
+                            for l_id, _, _, _ in searched_links:
+                                st.session_state[f"chk_link_del_{l_id}"] = False
                                 
-                            is_checked = st.checkbox(chk_label, key=f"batch_chk_link_{l_id}_{item_idx}")
-                            if is_checked:
-                                links_to_delete.append(l_id)
-                        
-                        st.markdown("")
-                        submitted_batch_del = st.form_submit_button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True)
-                        
-                        if submitted_batch_del:
-                            if links_to_delete:
-                                conn, _ = get_db_connection()
-                                c = conn.cursor()
-                                for l_id in links_to_delete:
-                                    q(c, "DELETE FROM problem_links WHERE id = ?", (l_id,))
-                                conn.commit()
-                                st.cache_data.clear()
-                                st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
-                                st.rerun()
-                            else:
-                                st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
+                            st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
+                            st.rerun()
+                        else:
+                            st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
                 else:
                     st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
             else:
