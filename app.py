@@ -656,9 +656,6 @@ def get_routine_completion_rate(student_name, days_limit=7):
     rate = min(100, max(0, raw_rate))
     
     return rate, completed_count, total_expected
-```[cite: 7]
-
-이렇게 수정해 주시면, 과거에 루틴 개수가 몇 개였든 상관없이 **현재 등록된 루틴 기준 최근 7일 동안의 정확한 달성률(최대 100%)**로만 깔끔하게 계산되어 출력됩니다!
 
 @st.cache_data(ttl=30)
 def get_student_routine_streak(student_name):
