@@ -1133,13 +1133,17 @@ if not st.session_state["teacher_authenticated"]:
         with st.container(border=True):
             st.markdown(f"🎯 **개념 진도 완료 현황** ({completed_m} / {total_m}개 완료)")
             cols_m = st.columns([4, 1])
-            with cols_m[0]: st.progress(m_percent / 100 if total_m > 0 else 0)
+            # 📌 개념 진도 안전 장치 추가
+            safe_m_progress = max(0.0, min(1.0, (m_percent / 100) if total_m > 0 else 0.0))
+            with cols_m[0]: st.progress(safe_m_progress)
             with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
             
             recent_3_label = " (최근 3일)" if recent_3_dates else ""
             st.markdown(f"📚 **숙제 진도 완료 현황{recent_3_label}** ({completed_h} / {total_h}개 완료)")
             cols_h = st.columns([4, 1])
-            with cols_h[0]: st.progress(h_percent / 100 if total_h > 0 else 0)
+            # 📌 숙제 진도 안전 장치 추가
+            safe_h_progress = max(0.0, min(1.0, (h_percent / 100) if total_h > 0 else 0.0))
+            with cols_h[0]: st.progress(safe_h_progress)
             with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
 
             cols_rt_title, cols_rt_streak = st.columns([2.2, 1.8])
@@ -1149,7 +1153,9 @@ if not st.session_state["teacher_authenticated"]:
                 st.markdown(f"<div style='text-align:right; font-size:13px; color:#F59E0B; font-weight:bold; margin-top:4px;'>⭐ Streak: {current_streak}일 연속!</div>", unsafe_allow_html=True)
 
             cols_r = st.columns([4, 1])
-            with cols_r[0]: st.progress(routine_rate / 100 if routine_rate > 0 else 0)
+            # 📌 루틴 과제 안전 장치 (이미 반영된 부분)
+            safe_routine_progress = max(0.0, min(1.0, (routine_rate / 100) if routine_rate > 0 else 0.0))
+            with cols_r[0]: st.progress(safe_routine_progress)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
 
         tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
