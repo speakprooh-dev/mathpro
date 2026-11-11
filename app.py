@@ -920,7 +920,6 @@ def get_student_routine_streak(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     
-    # 1. 등록된 총 루틴 개수 확인
     if db_type == "postgres":
         q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = %s", (student_name,))
     else:
@@ -929,7 +928,6 @@ def get_student_routine_streak(student_name):
     if total_routines == 0:
         return 0
     
-    # 2. 최근 60일간의 완료된 루틴 로그를 단 1회의 쿼리로 일괄 조회
     today_obj = get_korean_today()
     start_date_obj = today_obj - timedelta(days=60)
     
@@ -951,11 +949,9 @@ def get_student_routine_streak(student_name):
     rows = c.fetchall()
     completed_days = {r[0]: r[1] for r in rows}
     
-    # 3. 메모리에서 날짜별 스트릭을 0.01초 만에 즉시 계산
     streak = 0
     check_date = today_obj
     
-    # 오늘 아직 안 끝났다면 어제부터 역추적
     if completed_days.get(str(check_date), 0) < total_routines:
         check_date -= timedelta(days=1)
         
@@ -1277,7 +1273,6 @@ with st.sidebar:
         
         st.markdown("##### 🔀 DB 모드 개별 제어 스위치")
         
-        # 1. 선생님 본인 화면 모드 스위치
         t_mode = st.session_state.get("teacher_db_mode", "supabase")
         st.markdown(f"**[선생님 화면 모드]**: `{'☁️ 클라우드' if t_mode == 'supabase' else '📁 로컬'}`")
         if t_mode == "supabase":
@@ -1295,7 +1290,6 @@ with st.sidebar:
                 
         st.markdown("---")
         
-        # 2. 학생들 링크 모드 스위치
         s_mode = st.session_state.get("student_db_mode", "supabase")
         st.markdown(f"**[학생들 링크 모드]**: `{'☁️ 클라우드' if s_mode == 'supabase' else '📁 로컬'}`")
         if s_mode == "supabase":
@@ -1535,7 +1529,6 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
-            st.caption("체크박스를 연속으로 눌러도 렉 없이 빠르게 반영됩니다! 🔥")
             if milestones:
                 grouped_s_milestones = {}
                 for m_id, sub, ch, t_name, v_url in milestones:
@@ -1625,15 +1618,14 @@ if not st.session_state["teacher_authenticated"]:
                         else:
                             default_val = h_progress.get(h_id, False)
                             chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                            if st.checkbox(f"{title}", value=default_val, key=chk_key) != default_val:
-                                save_single_homework_progress(selected_student, h_id, st.session_state[chk_key])
-                                st.rerun()
+                            current_chk_val = st.checkbox(f"{title}", value=default_val, key=chk_key)
+                            if current_chk_val != default_val:
+                                save_single_homework_progress(selected_student, h_id, current_chk_val)
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
             with st.container(border=True):
                 st.markdown("##### 📝 1. 나의 오답 및 질문 번호 저장/수정")
-                st.caption("틀린 문제의 단원코드와 번호를 입력하여 나만의 오답 노트를 관리하세요.")
                 entered_unit_code = st.text_input("단원코드 입력 (예: B1353)", placeholder="예: B1353").strip().upper()
                 target_code = entered_unit_code if entered_unit_code else "B1353"
 
@@ -1646,7 +1638,6 @@ if not st.session_state["teacher_authenticated"]:
                         saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
                         final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
                         save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
-                        st.toast("🎉 오답 노트가 안전하게 저장되었습니다!", icon="✅")
                         st.success("저장되었습니다!")
                         st.rerun()
                     else:
@@ -1655,17 +1646,13 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("")
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
-                st.caption("저장된 단원을 선택하여 틀린 문제들의 복습 상태를 체크하고 해설 영상 바로 시청하세요.")
-
                 saved_units_list = [u_code for u_code, _ in saved_wrong_entries]
-                
                 solved_map_chk = get_student_wrong_solved_status(selected_student)
                 now_datetime_chk = datetime.now()
                 
                 unit_display_options = ["-- 저장된 단원을 선택하세요 --"]
                 unit_map_dict = {}
 
-                # ⚡ [0.1초 초고속 최적화 적용]: 메모리에 이미 올라와 있는 batch_link_info를 활용해 드롭다운 목록 구성 렉 완벽 제거
                 for u_code in saved_units_list:
                     p_nums = parsed_entry_dict.get(u_code, set())
                     has_new_unsolved = False
@@ -1743,7 +1730,6 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("")
             with st.container(border=True):
                 st.markdown("##### 🔍 3. 해설 영상 즉시 검색하기")
-                st.caption("궁금한 문제 번호 전체 또는 단원코드만 입력하면 즉시 해설 영상으로 이동합니다.")
                 search_prob_input = st.text_input("문제 번호 또는 단원코드 입력", placeholder="예: B1353015 또는 B1353").strip().upper()
                 if search_prob_input:
                     if len(search_prob_input) >= 7:
@@ -1827,16 +1813,17 @@ else:
                 grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
+                
+                # 🛠️ [수정됨]: 선생님 모드에서도 단원별로 expander를 적용하여 깔끔하게 접고 펼치도록 개선
                 for (sub, ch), items in grouped_t_milestones.items():
-                    with st.container(border=True):
-                        st.markdown(f"**[{sub}] {ch}**", unsafe_allow_html=True)
-                        st.markdown("---")
+                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                    with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             is_done = s_m_progress.get(m_id, False)
                             chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
-                            if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
-                                save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
-                                st.rerun()
+                            current_chk_val = st.checkbox(f"{t_name}", value=is_done, key=chk_key)
+                            if current_chk_val != is_done:
+                                save_single_milestone_progress(selected_student, m_id, current_chk_val)
 
     with t_cfg_notice:
         st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
@@ -1904,9 +1891,7 @@ else:
                             st.warning("삭제할 루틴 과제를 체크박스에서 먼저 선택해 주세요.")
 
                     st.markdown("---")
-                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크 (일괄 캐시 적용)")
-                    st.caption("체크박스를 누르는 즉시 해당 날짜의 기록이 자동으로 저장됩니다.")
-                    
+                    st.markdown("##### 📊 최근 7일 루틴 수행 한눈에 소급 체크")
                     today_obj = get_korean_today()
                     date_columns = [str(today_obj - timedelta(days=i)) for i in range(6, -1, -1)]
                     batch_routine_logs = get_all_routine_logs_map(selected_hw_student)
@@ -1924,7 +1909,6 @@ else:
                                 new_val = st.checkbox("체크", value=def_val, key=chk_key, label_visibility="collapsed")
                                 if new_val != def_val:
                                     save_single_routine_log(selected_hw_student, r_id, d_str, new_val)
-                                    st.rerun()
                         st.markdown("")
 
             st.markdown("---")
@@ -2346,9 +2330,9 @@ else:
                             else:
                                 is_done = entire_hw_prog.get((s_name, h_id), False)
                                 chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                if st.checkbox(f"📌 {title}", value=is_done, key=chk_key) != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                    st.rerun()
+                                current_chk_val = st.checkbox(f"📌 {title}", value=is_done, key=chk_key)
+                                if current_chk_val != is_done:
+                                    save_single_homework_progress(s_name, h_id, current_chk_val)
 
                         with st.popover("✏️ 이 날짜 숙제 전체 수정 / 편집하기"):
                             with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
