@@ -1418,6 +1418,7 @@ if not st.session_state["teacher_authenticated"]:
                         </style>
                         """, unsafe_allow_html=True)
 
+                        # 💡 빽빽하고 슬림한 한 줄 정렬을 위한 CSS 및 HTML 구조 적용
                         for n in sorted(list(parsed_nums)):
                             full_code = f"{view_target_code}{n:03d}".upper()
                             v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
@@ -1432,35 +1433,36 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            cols_w = st.columns([4.2, 1.8, 1])
-                            
-                            with cols_w[0]:
-                                def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
-                                    new_val = st.session_state[key]
-                                    save_single_wrong_solved_status(selected_student, f_code, new_val)
+                            action_key = f"toggle_solved_{selected_student}_{full_code}"
+                            if query_params.get(action_key) == "true":
+                                new_state = not is_solved
+                                save_single_wrong_solved_status(selected_student, full_code, new_state)
+                                query_params.pop(action_key, None)
+                                st.rerun()
 
-                                st.checkbox(
-                                    f"복습 완료 ({full_code})", 
-                                    value=is_solved, 
-                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
-                                    on_change=on_wrong_solved_change
-                                )
-                                
-                            with cols_w[1]:
-                                if is_new_alert:
-                                    st.markdown('<div style="margin-top: 2px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span></div>', unsafe_allow_html=True)
-                                elif not v_url:
-                                    st.markdown('<div style="margin-top: 2px;"><span style="color:#DC2626; font-size:11px; font-weight:bold;">(링크 누락)</span></div>', unsafe_allow_html=True)
-                                else:
-                                    st.markdown("")
-                                    
-                            with cols_w[2]:
-                                if v_url and v_url.strip():
-                                    st.markdown(f"<div style='text-align: right; margin-top: 2px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
-                                else:
-                                    st.markdown("<div style='text-align: right; margin-top: 2px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
-                                    
-                            st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                            badge_html = '<span style="background-color:#EF4444; color:white; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold; margin-left:6px;">🔥 새해설</span>' if is_new_alert else ('<span style="color:#DC2626; font-size:11px; margin-left:6px;">(링크 누락)</span>' if not v_url else '')
+                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: 500;"
+                            checkbox_checked_attr = "checked" if is_solved else ""
+                            
+                            link_html = f"<a href='{v_url}' target='_blank' style='padding:2px 6px; border-radius:3px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a>" if (v_url and v_url.strip()) else "<span style='font-size:11px; color:gray;'>준비중</span>"
+
+                            compact_row_html = f'''
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 4px 2px; margin: 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; flex-grow: 1;">
+                                    <input type="checkbox" {checkbox_checked_attr} 
+                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
+                                        style="width: 15px; height: 15px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0; margin: 0;">
+                                    <div style="{text_style} font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center;">
+                                        복습 완료 ({full_code}){badge_html}
+                                    </div>
+                                </div>
+                                <div style="flex-shrink: 0; margin-left: 8px; display: flex; align-items: center;">
+                                    {link_html}
+                                </div>
+                            </div>
+                            <hr style="margin: 1px 0 3px 0; border: none; border-top: 1px solid rgba(128,128,128,0.12);">
+                            '''
+                            st.markdown(compact_row_html, unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
 
