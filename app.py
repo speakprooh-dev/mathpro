@@ -1577,12 +1577,14 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.input_mode == "tablet":
                     st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 고성능 화이트보드] 펜, 지우개, 색상 및 두께를 조절하여 편하게 풀이하세요.</p>", unsafe_allow_html=True)
                     
-                    # 툴바와 캔버스가 포함된 고급 HTML5 화이트보드
                     canvas_html = f"""
                 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
                 <div style="background: #ffffff; padding: 12px; border-radius: 10px; border: 2px solid #0284C7; max-width: 700px;">
                     <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <label style="font-size: 12px; font-weight: bold;">색상:</label>
+                        <button onclick="setTool_{prob_id}('pen')" id="btnPen_{prob_id}" style="background-color:#0284C7; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">✍️ 펜</button>
+                        <button onclick="setTool_{prob_id}('eraser')" id="btnEraser_{prob_id}" style="background-color:#64748b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🧹 지우개</button>
+                        
+                        <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">색상:</label>
                         <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
                         
                         <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
@@ -1592,19 +1594,18 @@ if not st.session_state["teacher_authenticated"]:
                             <option value="5">두껍게</option>
                         </select>
 
-                        <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: 10px;">↩️ 되돌리기</button>
-                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
+                        <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: auto;">↩️ 되돌리기</button>
+                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
                     </div>
                     
                     <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="touch-action: none; width: 100%; height: 400px; display: block;"></canvas>
+                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="touch-action: none; width: 100%; height: 400px; display: block; cursor: crosshair;"></canvas>
                     </div>
                 </div>
 
                 <script>
                     const canvas = document.getElementById('drawCanvas_{prob_id}');
                     
-                    // 고해상도 지원을 위한 캔버스 스케일링
                     function resizeCanvas() {{
                         const ratio = Math.max(window.devicePixelRatio || 1, 1);
                         canvas.width = canvas.offsetWidth * ratio;
@@ -1617,13 +1618,31 @@ if not st.session_state["teacher_authenticated"]:
                     const signaturePad = new SignaturePad(canvas, {{
                         backgroundColor: 'rgba(255, 255, 255, 1)',
                         penColor: '#000000',
-                        minWidth: 2,
-                        maxWidth: 4
+                        minWidth: 2.5,
+                        maxWidth: 4.5
                     }});
 
-                    // 색상 및 두께 실시간 반영 리스너
+                    const defaultColor = '#000000';
+
+                    window.setTool_{prob_id} = function(tool) {{
+                        if (tool === 'pen') {{
+                            signaturePad.compositeOperation = 'source-over';
+                            signaturePad.penColor = document.getElementById('penColor_{prob_id}').value;
+                            document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#0284C7';
+                            document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#64748b';
+                        }} else if (tool === 'eraser') {{
+                            // 지우개 모드: 배경색(흰색)으로 덧칠하는 방식 적용
+                            signaturePad.compositeOperation = 'source-over';
+                            signaturePad.penColor = 'rgba(255, 255, 255, 1)';
+                            document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#0284C7';
+                            document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#64748b';
+                        }}
+                    }}
+
                     document.getElementById('penColor_{prob_id}').addEventListener('change', (e) => {{
-                        signaturePad.penColor = e.target.value;
+                        if (signaturePad.penColor !== 'rgba(255, 255, 255, 1)') {{
+                            signaturePad.penColor = e.target.value;
+                        }}
                     }});
 
                     window.updatePenWidth = function() {{
@@ -1638,8 +1657,8 @@ if not st.session_state["teacher_authenticated"]:
 
                     window.undo_{prob_id} = function() {{
                         const data = signaturePad.toData();
-                        if (data) {{
-                            data.pop(); // 가장 마지막 스트로크 제거
+                        if (data && data.length > 0) {{
+                            data.pop();
                             signaturePad.fromData(data);
                             saveCanvasState();
                         }}
@@ -1652,7 +1671,7 @@ if not st.session_state["teacher_authenticated"]:
 
                     function saveCanvasState() {{
                         if (!signaturePad.isEmpty()) {{
-                            const dataURL = signaturePad.toDataURL('image/png');
+                            const dataURL = canvas.toDataURL('image/png');
                             window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
                         }} else {{
                             window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: '' }}, '*');
