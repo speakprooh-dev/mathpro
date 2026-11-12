@@ -617,21 +617,6 @@ def delete_daily_routine(r_id):
     conn.commit()
     st.cache_data.clear()
 
-def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
-    conn.commit()
-    st.cache_data.clear()
-
-def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    for routine_id_str, val in routine_checked_dict.items():
-        q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date, int(val), int(val)))
-    conn.commit()
-    st.cache_data.clear()
-
 @st.cache_data(ttl=30)
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, db_type = get_db_connection()
@@ -700,6 +685,25 @@ def get_student_routine_streak(student_name):
         else:
             break
     return streak
+
+def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
+    conn.commit()
+    get_student_daily_logs_by_date.clear()
+    get_routine_completion_rate.clear()
+    get_student_routine_streak.clear()
+
+def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    for routine_id_str, val in routine_checked_dict.items():
+        q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date, int(val), int(val)))
+    conn.commit()
+    get_student_daily_logs_by_date.clear()
+    get_routine_completion_rate.clear()
+    get_student_routine_streak.clear()
 
 @st.cache_data(ttl=60)
 def get_homework_templates():
@@ -887,7 +891,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
         else:
             q(c, "INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?", (student_name, milestone_id, int(val), int(val)))
         conn.commit()
-        st.cache_data.clear()
+        get_milestone_progress.clear()
     except Exception:
         pass
 
@@ -901,7 +905,8 @@ def save_single_homework_progress(student_name, student_hw_id, val):
         else:
             q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
-        st.cache_data.clear()
+        get_student_homework_progress.clear()
+        get_entire_homework_progress_map.clear()
     except Exception:
         pass
 
@@ -940,7 +945,8 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 c.execute("INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING", (student_name, unit_code, int(num), today_str, now_str))
 
         conn.commit()
-        st.cache_data.clear()
+        get_student_wrong_entry.clear()
+        get_all_student_wrong_entries.clear()
     except Exception as e:
         print(f"오답 저장 중 예외: {e}")
 
@@ -961,7 +967,7 @@ def save_single_wrong_solved_status(student_name, full_code, is_solved_val):
         else:
             q(c, "INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (?, ?, ?) ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?", (student_name, full_code, int(is_solved_val), int(is_solved_val)))
         conn.commit()
-        st.cache_data.clear()
+        get_student_wrong_solved_status.clear()
     except Exception:
         pass
 
@@ -1404,21 +1410,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
-                        # 💡 컴팩트 한줄 정렬을 위한 CSS 스타일 주입
-                        st.markdown("""
-                        <style>
-                        div[data-testid="stHorizontalBlock"] {
-                            align-items: center !important;
-                            gap: 4px !important;
-                        }
-                        .stCheckbox {
-                            min-height: unset !important;
-                            margin-bottom: 0px !important;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-
-                        # 💡 Streamlit 체크박스 여백을 바짝 줄여 콤팩트한 한 줄로 만드는 CSS
                         st.markdown("""
                         <style>
                         div[data-testid="stHorizontalBlock"] {
