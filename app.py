@@ -1437,12 +1437,12 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            # 💡 체크박스와 해설 버튼을 단 하나의 flex 컨테이너로 묶어서 무조건 한 줄로 정렬
                             def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
                                 new_val = st.session_state[key]
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                            col_c1, col_c2 = st.columns([3.2, 1.2])
+                            # 💡 컬럼 비율을 [2.5, 1.5]로 조정하여 오른쪽에 충분한 공간 확보
+                            col_c1, col_c2 = st.columns([2.5, 1.5])
                             with col_c1:
                                 st.checkbox(
                                     f"복습 완료 ({full_code})", 
@@ -1453,9 +1453,9 @@ if not st.session_state["teacher_authenticated"]:
                             with col_c2:
                                 if v_url and v_url.strip():
                                     if is_new_alert:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:2px 6px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:2px 6px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                 else:
                                     st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
