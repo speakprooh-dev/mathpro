@@ -1519,7 +1519,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("한 문제씩 슬라이드로 풀고, 태블릿 화면 필기 또는 사진 업로드로 풀이 과정을 제출하세요!")
+            st.markdown("태블릿 노트 앱(굿노트·삼성노트 등)에 풀이하고, 캡처한 **풀이 사진 업로드**와 **정답 입력**으로 간편하게 제출하세요!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1539,8 +1539,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_answers = {}
                 if "quiz_images" not in st.session_state:
                     st.session_state.quiz_images = {}
-                if "input_mode" not in st.session_state:
-                    st.session_state.input_mode = "tablet"
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1556,166 +1554,18 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.divider()
 
-                # 모드 선택 버튼 (태블릿 직접 필기 vs 휴대폰 사진 업로드)
-                st.markdown("**✍️ 풀이 과정 제출 방식 선택**")
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    if st.button("✏️ 태블릿 직접 필기 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "tablet" else "secondary"):
-                        st.session_state.input_mode = "tablet"
-                        st.rerun()
-                with col_m2:
-                    if st.button("📱 휴대폰 사진 업로드 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "mobile" else "secondary"):
-                        st.session_state.input_mode = "mobile"
-                        st.rerun()
-
-                st.markdown("")
-
-                if st.session_state.input_mode == "tablet":
-                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 고성능 화이트보드] 모눈종이 배경에 펜, 지우개, 색상 및 두께를 조절하여 편하게 풀이하세요.</p>", unsafe_allow_html=True)
-                    
-                    canvas_html = f"""
-                    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-                    <div style="background: #ffffff; padding: 12px; border-radius: 10px; border: 2px solid #0284C7; max-width: 700px;">
-                        <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                            <button onclick="setTool_{prob_id}('pen')" id="btnPen_{prob_id}" style="background-color:#0284C7; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">✍️ 펜</button>
-                            <button onclick="setTool_{prob_id}('eraser')" id="btnEraser_{prob_id}" style="background-color:#64748b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🧹 지우개</button>
-                            
-                            <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">색상:</label>
-                            <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
-                            
-                            <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
-                            <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;" onchange="updatePenWidth()">
-                                <option value="1.5">얇게</option>
-                                <option value="3" selected>보통</option>
-                                <option value="6">두껍게</option>
-                            </select>
-
-                            <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: auto;">↩️ 되돌리기</button>
-                            <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
-                        </div>
-                        
-                        <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-                            <canvas id="drawCanvas_{prob_id}" width="700" height="450" style="touch-action: none; width: 100%; height: 450px; display: block; cursor: crosshair;"></canvas>
-                        </div>
-                    </div>
-
-                    <script>
-                        const canvas = document.getElementById('drawCanvas_{prob_id}');
-                        const ctx = canvas.getContext('2d');
-                        
-                        function resizeCanvas() {{
-                            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                            canvas.width = canvas.offsetWidth * ratio;
-                            canvas.height = canvas.offsetHeight * ratio;
-                            ctx.scale(ratio, ratio);
-                            drawGrid();
-                        }}
-
-                        function drawGrid() {{
-                            ctx.fillStyle = '#ffffff';
-                            ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
-                            
-                            ctx.strokeStyle = '#f1f5f9';
-                            ctx.lineWidth = 1;
-                            const gridSize = 25;
-                            
-                            for (let x = 0; x < canvas.offsetWidth; x += gridSize) {{
-                                ctx.beginPath();
-                                ctx.moveTo(x, 0);
-                                ctx.lineTo(x, canvas.offsetHeight);
-                                ctx.stroke();
-                            }}
-                            for (let y = 0; y < canvas.offsetHeight; y += gridSize) {{
-                                ctx.beginPath();
-                                ctx.moveTo(0, y);
-                                ctx.lineTo(canvas.offsetWidth, y);
-                                ctx.stroke();
-                            }}
-                        }}
-
-                        window.addEventListener("resize", resizeCanvas);
-                        resizeCanvas();
-
-                        const signaturePad = new SignaturePad(canvas, {{
-                            backgroundColor: 'rgba(0,0,0,0)',
-                            penColor: '#000000',
-                            minWidth: 2.5,
-                            maxWidth: 5
-                        }});
-
-                        window.setTool_{prob_id} = function(tool) {{
-                            if (tool === 'pen') {{
-                                signaturePad.compositeOperation = 'source-over';
-                                signaturePad.penColor = document.getElementById('penColor_{prob_id}').value;
-                                signaturePad.minWidth = parseFloat(document.getElementById('penWidth_{prob_id}').value);
-                                signaturePad.maxWidth = signaturePad.minWidth * 1.8;
-                                document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#0284C7';
-                                document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#64748b';
-                            }} else if (tool === 'eraser') {{
-                                signaturePad.compositeOperation = 'source-over';
-                                signaturePad.penColor = '#ffffff';
-                                signaturePad.minWidth = 20;
-                                signaturePad.maxWidth = 30;
-                                document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#0284C7';
-                                document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#64748b';
-                            }}
-                        }}
-
-                        document.getElementById('penColor_{prob_id}').addEventListener('change', (e) => {{
-                            if (signaturePad.penColor !== '#ffffff') {{
-                                signaturePad.penColor = e.target.value;
-                            }}
-                        }});
-
-                        window.updatePenWidth = function() {{
-                            const val = parseFloat(document.getElementById('penWidth_{prob_id}').value);
-                            signaturePad.minWidth = val;
-                            signaturePad.maxWidth = val * 1.8;
-                        }};
-
-                        signaturePad.onEnd = function() {{
-                            saveCanvasState();
-                        }};
-
-                        window.undo_{prob_id} = function() {{
-                            const data = signaturePad.toData();
-                            if (data && data.length > 0) {{
-                                data.pop();
-                                signaturePad.fromData(data);
-                                saveCanvasState();
-                            }}
-                        }};
-
-                        window.clearCanvas_{prob_id} = function() {{
-                            signaturePad.clear();
-                            drawGrid();
-                            saveCanvasState();
-                        }}
-
-                        function saveCanvasState() {{
-                            if (!signaturePad.isEmpty()) {{
-                                const dataURL = canvas.toDataURL('image/png');
-                                window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
-                            }} else {{
-                                window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: '' }}, '*');
-                            }}
-                        }}
-                    </script>
-                    """
-                    import streamlit.components.v1 as components
-                    components.html(canvas_html, height=520)
-
-                else:
-                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>📱 [휴대폰 사진 업로드 모드 활성화됨] 연습장에 푼 풀이 사진을 업로드하세요.</p>", unsafe_allow_html=True)
-                    uploaded_file = st.file_uploader(
-                        "📸 연습장 풀이 사진 업로드",
-                        type=["png", "jpg", "jpeg"],
-                        key=f"upload_{prob_id}"
-                    )
-                    if uploaded_file is not None:
-                        img = Image.open(uploaded_file).convert("RGB")
-                        st.session_state.quiz_images[prob_id] = img
-                        st.image(img, caption="업로드된 풀이 미리보기", width=250)
+                st.markdown("**📸 태블릿 노트 앱 풀이 사진 업로드**")
+                st.caption("💡 굿노트나 삼성노트 등 태블릿 앱에 문제를 풀고, 이미지로 저장(또는 캡처)한 뒤 아래에 업로드해주세요.")
+                
+                uploaded_file = st.file_uploader(
+                    "풀이 이미지 파일 선택 (JPG, PNG)",
+                    type=["png", "jpg", "jpeg"],
+                    key=f"upload_{prob_id}"
+                )
+                if uploaded_file is not None:
+                    img = Image.open(uploaded_file).convert("RGB")
+                    st.session_state.quiz_images[prob_id] = img
+                    st.image(img, caption="업로드된 풀이 미리보기", width=300)
 
                 st.divider()
 
