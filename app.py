@@ -1540,8 +1540,8 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_idx = 0
                 if "quiz_answers" not in st.session_state:
                     st.session_state.quiz_answers = {}
-                if "quiz_canvas_data" not in st.session_state:
-                    st.session_state.quiz_canvas_data = {}
+                if "quiz_images" not in st.session_state:
+                    st.session_state.quiz_images = {}
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1557,72 +1557,98 @@ if not st.session_state["teacher_authenticated"]:
                     st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없습니다. 실제 문제 이미지를 준비해 주세요!")
 
                 st.divider()
-                st.markdown("**✍️ 태블릿 펜 / 손가락 풀이 필기 공간**")
 
-                # HTML 기반 가상 화이트보드 캔버스 컴포넌트 (SyntaxError 해결 완료)
-                canvas_html = f"""
-                <div>
+                # 📱💻 접속 기기(태블릿 vs 스마트폰) 맞춤형 안내 및 입력 UI 분기
+                st.markdown("**✍️ 풀이 과정 제출 (기기 맞춤 모드)**")
+                
+                # 자바스크립트로 화면 너비를 감지하여 태블릿/PC와 모바일 버전을 다르게 렌더링
+                device_selector_html = f"""
+                <div id="deviceModeContainer_{prob_id}" style="padding: 10px; background-color: var(--secondary-background-color); border-radius: 8px; margin-bottom: 10px;">
+                    <span id="modeText_{prob_id}" style="font-weight: bold; font-size: 13px; color: #0284C7;">🔍 접속 기기 환경을 분석 중입니다...</span>
+                </div>
+                
+                <div id="canvasSection_{prob_id}" style="display:none;">
+                    <p style="font-size:13px; color:#555;">🎨 태블릿/PC 환경 감지됨: 아래 화이트보드에 펜이나 손가락으로 직접 필기하세요.</p>
                     <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
                     <div style="margin-top:8px;">
-                        <button onclick="clearCanvas()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
+                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
                     </div>
                 </div>
+
+                <div id="mobileSection_{prob_id}" style="display:none;">
+                    <p style="font-size:13px; color:#555;">📱 스마트폰 환경 감지됨: 연습장에 푼 풀이 사진을 아래에서 간편하게 업로드하세요.</p>
+                </div>
+
                 <script>
+                    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                    
+                    if (isMobile) {{
+                        document.getElementById('modeText_{prob_id}').innerText = "📱 [휴대폰/모바일 버전] 간편 사진 업로드 모드가 활성화되었습니다.";
+                        document.getElementById('mobileSection_{prob_id}').style.display = 'block';
+                        document.getElementById('canvasSection_{prob_id}').style.display = 'none';
+                    }} else {{
+                        document.getElementById('modeText_{prob_id}').innerText = "💻 [태블릿/PC 버전] 직접 필기 캔버스 모드가 활성화되었습니다.";
+                        document.getElementById('canvasSection_{prob_id}').style.display = 'block';
+                        document.getElementById('mobileSection_{prob_id}').style.display = 'none';
+                    }}
+
+                    // 캔버스 스크립트
                     const canvas = document.getElementById('drawCanvas_{prob_id}');
-                    const ctx = canvas.getContext('2d');
-                    let painting = false;
+                    if (canvas) {{
+                        const ctx = canvas.getContext('2d');
+                        let painting = false;
 
-                    function startPosition(e) {{
-                        painting = true;
-                        draw(e);
-                    }}
-                    function finishedPosition() {{
-                        painting = false;
-                        ctx.beginPath();
-                        saveCanvasState();
-                    }}
-                    function draw(e) {{
-                        if (!painting) return;
-                        ctx.lineWidth = 3;
-                        ctx.lineCap = 'round';
-                        ctx.strokeStyle = '#000000';
+                        function startPosition(e) {{ painting = true; draw(e); }}
+                        function finishedPosition() {{ painting = false; ctx.beginPath(); saveCanvasState(); }}
+                        function draw(e) {{
+                            if (!painting) return;
+                            ctx.lineWidth = 3;
+                            ctx.lineCap = 'round';
+                            ctx.strokeStyle = '#000000';
+                            let rect = canvas.getBoundingClientRect();
+                            let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                            let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                            let x = clientX - rect.left;
+                            let y = clientY - rect.top;
+                            ctx.lineTo(x, y);
+                            ctx.stroke();
+                            ctx.beginPath();
+                            ctx.moveTo(x, y);
+                        }}
 
-                        let rect = canvas.getBoundingClientRect();
-                        let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-                        let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-                        
-                        let x = clientX - rect.left;
-                        let y = clientY - rect.top;
+                        canvas.addEventListener('mousedown', startPosition);
+                        canvas.addEventListener('mouseup', finishedPosition);
+                        canvas.addEventListener('mousemove', draw);
+                        canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
+                        canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
+                        canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
 
-                        ctx.lineTo(x, y);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(x, y);
-                    }}
+                        window.clearCanvas_{prob_id} = function() {{
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                            saveCanvasState();
+                        }}
 
-                    canvas.addEventListener('mousedown', startPosition);
-                    canvas.addEventListener('mouseup', finishedPosition);
-                    canvas.addEventListener('mousemove', draw);
-
-                    canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
-                    canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
-                    canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
-
-                    function clearCanvas() {{
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        saveCanvasState();
-                    }}
-
-                    function saveCanvasState() {{
-                        const dataURL = canvas.toDataURL('image/png');
-                        window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
+                        function saveCanvasState() {{
+                            const dataURL = canvas.toDataURL('image/png');
+                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
+                        }}
                     }}
                 </script>
                 """
                 
-                # Streamlit 내에 커스텀 HTML 캔버스 렌더링
                 import streamlit.components.v1 as components
-                canvas_result = components.html(canvas_html, height=420)
+                components.html(device_selector_html, height=450)
+
+                # 휴대폰 접속 학생들을 위한 추가 파일 업로드 위젯 보조 제공
+                uploaded_file = st.file_uploader(
+                    "📸 [휴대폰 전용] 연습장 풀이 사진 업로드 (모바일 접속 시 활용)",
+                    type=["png", "jpg", "jpeg"],
+                    key=f"upload_{prob_id}"
+                )
+                if uploaded_file is not None:
+                    img = Image.open(uploaded_file).convert("RGB")
+                    st.session_state.quiz_images[prob_id] = img
+                    st.image(img, caption="업로드된 풀이 미리보기", width=250)
 
                 st.divider()
 
