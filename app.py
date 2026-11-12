@@ -1417,7 +1417,8 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            badge_label = " [새해설]" if is_new_alert else (" [링크 누락]" if not v_url else "")
+                            # 요구하신 대로 [링크 누락] 문구를 빨간색으로 강조
+                            badge_label = ' <span style="color: #EF4444; font-size: 12px; font-weight: bold;">[링크 누락]</span>' if not v_url else (" [새해설]" if is_new_alert else "")
                             chk_key = f"student_solved_chk_{selected_student}_{full_code}"
                             
                             def make_on_change(s_name=selected_student, f_code=full_code, key=chk_key):
@@ -1426,19 +1427,22 @@ if not st.session_state["teacher_authenticated"]:
                                     save_single_wrong_solved_status(s_name, f_code, new_val)
                                 return callback
 
-                            cols_w = st.columns([2.8, 1.2], vertical_alignment="center")
+                            # 컬럼 비율 조정 및 수직 중앙 정렬로 첫 번째 사진처럼 완벽한 한 줄 구현
+                            cols_w = st.columns([3.2, 1.8], vertical_alignment="center")
                             with cols_w[0]:
                                 st.checkbox(
-                                    f"복습 완료 ({full_code}){badge_label}", 
+                                    f"복습 완료 ({full_code})", 
                                     value=is_solved, 
                                     key=chk_key,
                                     on_change=make_on_change()
                                 )
+                                if badge_label:
+                                    st.markdown(f'<div style="margin-top: -24px; margin-left: 120px;">{badge_label}</div>', unsafe_allow_html=True)
                             with cols_w[1]:
                                 if v_url:
                                     st.markdown(f'<div style="text-align: right;"><a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a></div>', unsafe_allow_html=True)
                                 else:
-                                    st.markdown('<div style="text-align: right; font-size:11px; color:gray;">준비중</div>', unsafe_allow_html=True)
+                                    st.markdown('<div style="text-align: right; font-size:11px; color:#EF4444; font-weight:bold;">준비중</div>', unsafe_allow_html=True)
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
