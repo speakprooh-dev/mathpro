@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import sqlite3
 from datetime import datetime, date, timedelta, timezone
 import calendar
@@ -6,6 +6,8 @@ import re
 import pandas as pd
 import io
 import os
+from PIL import Image
+from streamlit_drawable_canvas import st_canvas
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -152,7 +154,8 @@ def create_excel_backup():
             "milestones", "homework", "student_homework", "milestone_progress", 
             "homework_progress", "student_homework_progress", "student_wrong_entries", 
             "student_wrong_solved", "problem_links", "homework_templates",
-            "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs"
+            "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs",
+            "student_test_submissions"
         ]
         success_count = 0
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -186,7 +189,8 @@ def restore_from_excel(uploaded_file):
             "milestones", "homework", "student_homework", "milestone_progress", 
             "homework_progress", "student_homework_progress", "student_wrong_entries", 
             "student_wrong_solved", "problem_links", "homework_templates",
-            "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs"
+            "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs",
+            "student_test_submissions"
         ]
         existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
         sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
@@ -273,6 +277,7 @@ def get_weekday_short_kr(date_str):
 
 def init_db():
     try:
+        os.makedirs("submissions", exist_ok=True)
         conn, db_type = get_db_connection()
         c = conn.cursor()
         if db_type == "postgres":
@@ -305,6 +310,20 @@ def init_db():
                 );
             ''')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date);')
+            
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS student_test_submissions (
+                    id SERIAL PRIMARY KEY,
+                    student_name TEXT NOT NULL,
+                    test_title TEXT NOT NULL,
+                    problem_id TEXT NOT NULL,
+                    student_answer TEXT,
+                    is_checked INTEGER DEFAULT 0,
+                    solution_img_path TEXT,
+                    submitted_at TEXT NOT NULL
+                );
+            ''')
+
             try:
                 c.execute('ALTER TABLE student_homework ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT \'\';')
             except Exception:
@@ -331,6 +350,20 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS problem_links (id INTEGER PRIMARY KEY AUTOINCREMENT, full_code TEXT UNIQUE NOT NULL, unit_code TEXT NOT NULL, prob_num TEXT NOT NULL, video_url TEXT NOT NULL, updated_at TEXT DEFAULT \'\')')
             c.execute('CREATE TABLE IF NOT EXISTS notices (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT DEFAULT \'\', title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS visitor_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, visit_date TEXT NOT NULL, visit_time TEXT NOT NULL)')
+            
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS student_test_submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_name TEXT NOT NULL,
+                    test_title TEXT NOT NULL,
+                    problem_id TEXT NOT NULL,
+                    student_answer TEXT,
+                    is_checked INTEGER DEFAULT 0,
+                    solution_img_path TEXT,
+                    submitted_at TEXT NOT NULL
+                );
+            ''')
+
             try:
                 c.execute('ALTER TABLE student_homework ADD COLUMN due_date TEXT DEFAULT \'\'')
             except Exception:
@@ -411,6 +444,7 @@ def delete_student(name):
     q(c, "DELETE FROM daily_routine_logs WHERE student_name = ?", (name,))
     q(c, "DELETE FROM notices WHERE student_name = ?", (name,))
     q(c, "DELETE FROM visitor_logs WHERE student_name = ?", (name,))
+    q(c, "DELETE FROM student_test_submissions WHERE student_name = ?", (name,))
     conn.commit()
     st.cache_data.clear()
 
@@ -1231,7 +1265,7 @@ if not st.session_state["teacher_authenticated"]:
             with cols_r[0]: st.progress(safe_routine_progress)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
 
-        tab1, tab2, tab3 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리", "📝 온라인 테스트"])
 
         with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
@@ -1441,7 +1475,6 @@ if not st.session_state["teacher_authenticated"]:
                                 new_val = st.session_state[key]
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                            # 💡 컬럼 비율을 [2.3, 1.7]로 주어 버튼 쪽에 충분한 공간 확보
                             col_c1, col_c2 = st.columns([2.3, 1.7])
                             with col_c1:
                                 st.checkbox(
@@ -1453,7 +1486,6 @@ if not st.session_state["teacher_authenticated"]:
                             with col_c2:
                                 if v_url and v_url.strip():
                                     if is_new_alert:
-                                        # 🔴 패딩과 폰트 사이즈를 일반 해설 버튼과 완전히 동일하게 맞춘 아주 콤팩트한 새해설 버튼
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
@@ -1485,8 +1517,155 @@ if not st.session_state["teacher_authenticated"]:
                                 st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
                         else:
                             st.info("단원코드 형식으로 올바르게 입력해 주세요.")
+
+        with tab4:
+            st.markdown("### 📝 온라인 진단 및 과제 테스트")
+            st.markdown("한 문제씩 슬라이드로 풀고, 태블릿 화면 필기 또는 사진 업로드로 풀이 과정을 제출하세요!")
+            
+            sample_online_problems = [
+                {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
+                {"id": "PROB_02", "img_path": "problems/sample2.png", "answer": "15", "unit": "수1"},
+            ]
+            
+            conn_test, _ = get_db_connection()
+            
+            def render_online_test_slide(student_name, test_title, problem_list, conn):
+                if not problem_list:
+                    st.info("현재 출제된 온라인 테스트가 없습니다.")
+                    return
+
+                if "quiz_idx" not in st.session_state:
+                    st.session_state.quiz_idx = 0
+                if "quiz_answers" not in st.session_state:
+                    st.session_state.quiz_answers = {}
+                if "quiz_images" not in st.session_state:
+                    st.session_state.quiz_images = {}
+
+                total_q = len(problem_list)
+                idx = st.session_state.quiz_idx
+                curr_prob = problem_list[idx]
+                prob_id = curr_prob["id"]
+
+                st.progress((idx + 1) / total_q, text=f"📝 {test_title} ({idx + 1} / {total_q} 문제)")
+
+                if os.path.exists(curr_prob["img_path"]):
+                    st.image(curr_prob["img_path"], use_container_width=True)
+                else:
+                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없어 가상 공간으로 표시됩니다. 실제 이미지 파일 경로를 연결해 주세요!")
+
+                st.divider()
+
+                st.markdown("**✍️ 풀이 과정 제출 (필수)**")
+                solve_mode = st.radio(
+                    "풀이 방식을 선택하세요:",
+                    ["태블릿 화면에 직접 필기", "연습장에 풀고 사진 찍어 올리기"],
+                    horizontal=True,
+                    key=f"mode_{prob_id}"
+                )
+
+                if solve_mode == "태블릿 화면에 직접 필기":
+                    col_tool1, col_tool2 = st.columns([1, 2])
+                    with col_tool1:
+                        stroke_color = st.color_picker("펜 색상", "#000000", key=f"color_{prob_id}")
+                    with col_tool2:
+                        stroke_width = st.slider("펜 굵기", 1, 10, 2, key=f"width_{prob_id}")
+
+                    canvas_result = st_canvas(
+                        fill_color="rgba(255, 255, 255, 0)",
+                        stroke_width=stroke_width,
+                        stroke_color=stroke_color,
+                        background_color="#FFFFFF",
+                        height=320,
+                        drawing_mode="freedraw",
+                        key=f"canvas_{prob_id}",
+                    )
+                    if canvas_result.image_data is not None:
+                        img = Image.fromarray(canvas_result.image_data.astype("uint8"), "RGBA").convert("RGB")
+                        st.session_state.quiz_images[prob_id] = img
+
+                else:
+                    uploaded_file = st.file_uploader(
+                        "📸 풀이 사진 업로드 (카메라 촬영 가능)",
+                        type=["png", "jpg", "jpeg"],
+                        key=f"upload_{prob_id}"
+                    )
+                    if uploaded_file is not None:
+                        img = Image.open(uploaded_file).convert("RGB")
+                        st.session_state.quiz_images[prob_id] = img
+                        st.image(img, caption="업로드된 풀이 미리보기", width=250)
+
+                st.divider()
+
+                saved_ans = st.session_state.quiz_answers.get(prob_id, "")
+                user_ans = st.text_input(
+                    "🎯 정답 입력 (숫자 또는 단답형 입력)",
+                    value=saved_ans,
+                    key=f"ans_input_{prob_id}"
+                )
+                st.session_state.quiz_answers[prob_id] = user_ans.strip()
+
+                col_prev, col_next = st.columns(2)
+                with col_prev:
+                    if idx > 0:
+                        if st.button("⬅️ 이전 문제", use_container_width=True):
+                            st.session_state.quiz_idx -= 1
+                            st.rerun()
+
+                with col_next:
+                    if idx < total_q - 1:
+                        if st.button("다음 문제 ➡️", type="primary", use_container_width=True):
+                            st.session_state.quiz_idx += 1
+                            st.rerun()
+                    else:
+                        if st.button("🎉 최종 제출 및 자동 채점", type="primary", use_container_width=True):
+                            process_test_submission(student_name, test_title, problem_list, conn)
+
+            def process_test_submission(student_name, test_title, problem_list, conn):
+                c = conn.cursor()
+                now_str = get_korean_now_str()
+                correct_count = 0
+                db_type = "postgres" if "psycopg2" in str(type(conn)) else "sqlite"
+
+                for prob in problem_list:
+                    p_id = prob["id"]
+                    real_ans = str(prob["answer"]).strip()
+                    user_ans = str(st.session_state.quiz_answers.get(p_id, "")).strip()
+                    is_correct = 1 if (user_ans == real_ans and user_ans != "") else 0
+                    if is_correct:
+                        correct_count += 1
+
+                    img_save_path = ""
+                    if p_id in st.session_state.quiz_images:
+                        pil_img = st.session_state.quiz_images[p_id]
+                        pil_img.thumbnail((1200, 1200))
+                        filename = f"{student_name}_{p_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+                        img_save_path = os.path.join("submissions", filename)
+                        pil_img.save(img_save_path, format="JPEG", quality=80)
+
+                    if db_type == "postgres":
+                        q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
+                    else:
+                        q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
+
+                    if is_correct == 0:
+                        today_str_wrong = str(get_korean_today())
+                        if db_type == "postgres":
+                            c.execute("INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = student_wrong_entries.numbers_text || ', ' || %s, updated_at = %s", (student_name, prob.get("unit", "TEST"), p_id[-3:], today_str_wrong, p_id[-3:], today_str_wrong))
+                        else:
+                            q(c, "INSERT OR IGNORE INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, prob.get("unit", "TEST"), p_id[-3:], today_str_wrong))
+
+                conn.commit()
+                st.balloons()
+                st.success(f"제출 완료! 총 {len(problem_list)}문제 중 **{correct_count}문제** 맞혔습니다. 오답은 오답노트에 자동 등록되었습니다!")
+                
+                st.session_state.quiz_idx = 0
+                st.session_state.quiz_answers = {}
+                st.session_state.quiz_images = {}
+
+            render_online_test_slide(selected_student, "실력 점검 주간 테스트", sample_online_problems, conn_test)
+
     else:
-        st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지환되지 않았습니다.")
+        st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
 
 # ====================================================
 # 2. [선생님 전용 관리 모드]
