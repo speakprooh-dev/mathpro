@@ -1399,6 +1399,7 @@ if not st.session_state["teacher_authenticated"]:
                     unit_map_dict[display_name] = u_code
                     unit_display_options.append(display_name)
 
+                # 💡 셀렉트 박스 속도 최적화를 위해 캐싱된 딕셔너리 정보 활용
                 selected_display_unit = st.selectbox("확인할 단원 선택", unit_display_options, key="saved_unit_select_box")
                 view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
 
