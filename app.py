@@ -7,9 +7,7 @@ import pandas as pd
 import io
 import os
 from PIL import Image
-import base64
-
-# (기존 상단 설정, DB 연결, 함수들은 그대로 유지되며, tab4의 온라인 테스트 부분만 아래와 같이 변경됩니다.)
+from streamlit_drawable_canvas import st_canvas
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -1522,7 +1520,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("슬라이드 문제 화면 아래의 캔버스에 태블릿 펜이나 손가락으로 직접 풀이 과정을 적고 제출하세요!")
+            st.markdown("한 문제씩 슬라이드로 풀고, 태블릿 화면 필기 또는 사진 업로드로 풀이 과정을 제출하세요!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1542,8 +1540,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_answers = {}
                 if "quiz_images" not in st.session_state:
                     st.session_state.quiz_images = {}
-                if "input_mode" not in st.session_state:
-                    st.session_state.input_mode = "tablet"
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1552,169 +1548,44 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.progress((idx + 1) / total_q, text=f"📝 {test_title} ({idx + 1} / {total_q} 문제)")
 
-                # 문제 이미지 출력
                 if os.path.exists(curr_prob["img_path"]):
                     st.image(curr_prob["img_path"], use_container_width=True)
                 else:
-                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없습니다. 실제 문제 이미지를 준비해 주세요!")
+                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없어 가상 공간으로 표시됩니다. 실제 이미지 파일 경로를 연결해 주세요!")
 
                 st.divider()
 
-                # 모드 선택 버튼
-                st.markdown("**✍️ 풀이 과정 제출 방식 선택**")
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    if st.button("✏️ 태블릿 직접 필기 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "tablet" else "secondary"):
-                        st.session_state.input_mode = "tablet"
-                        st.rerun()
-                with col_m2:
-                    if st.button("📱 휴대폰 사진 업로드 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "mobile" else "secondary"):
-                        st.session_state.input_mode = "mobile"
-                        st.rerun()
+                st.markdown("**✍️ 풀이 과정 제출 (필수)**")
+                solve_mode = st.radio(
+                    "풀이 방식을 선택하세요:",
+                    ["태블릿 화면에 직접 필기", "연습장에 풀고 사진 찍어 올리기"],
+                    horizontal=True,
+                    key=f"mode_{prob_id}"
+                )
 
-                st.markdown("")
+                if solve_mode == "태블릿 화면에 직접 필기":
+                    col_tool1, col_tool2 = st.columns([1, 2])
+                    with col_tool1:
+                        stroke_color = st.color_picker("펜 색상", "#000000", key=f"color_{prob_id}")
+                    with col_tool2:
+                        stroke_width = st.slider("펜 굵기", 1, 10, 2, key=f"width_{prob_id}")
 
-                if st.session_state.input_mode == "tablet":
-                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 고성능 화이트보드] 펜, 지우개, 색상 및 두께를 조절하여 편하게 풀이하세요.</p>", unsafe_allow_html=True)
-                    
-                    canvas_html = f"""
-                <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-                <div style="background: #ffffff; padding: 12px; border-radius: 10px; border: 2px solid #0284C7; max-width: 700px;">
-                    <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <button onclick="setTool_{prob_id}('pen')" id="btnPen_{prob_id}" style="background-color:#0284C7; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">✍️ 펜</button>
-                        <button onclick="setTool_{prob_id}('eraser')" id="btnEraser_{prob_id}" style="background-color:#64748b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🧹 지우개</button>
-                        
-                        <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">색상:</label>
-                        <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
-                        
-                        <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
-                        <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;" onchange="updatePenWidth()">
-                            <option value="1.5">얇게</option>
-                            <option value="3" selected>보통</option>
-                            <option value="6">두껍게</option>
-                        </select>
-
-                        <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: auto;">↩️ 되돌리기</button>
-                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
-                    </div>
-                    
-                    <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-                        <canvas id="drawCanvas_{prob_id}" width="700" height="450" style="touch-action: none; width: 100%; height: 450px; display: block; cursor: crosshair;"></canvas>
-                    </div>
-                </div>
-
-                <script>
-                    const canvas = document.getElementById('drawCanvas_{prob_id}');
-                    const ctx = canvas.getContext('2d');
-                    
-                    function resizeCanvas() {{
-                        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                        canvas.width = canvas.offsetWidth * ratio;
-                        canvas.height = canvas.offsetHeight * ratio;
-                        ctx.scale(ratio, ratio);
-                        drawGrid();
-                    }}
-
-                    // 수학 풀이에 최적화된 연한 모눈종이(Grid) 배경 그려넣기
-                    function drawGrid() {{
-                        ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
-                        
-                        ctx.strokeStyle = '#f1f5f9'; // 아주 연한 회색 모눈선
-                        ctx.lineWidth = 1;
-                        const gridSize = 25;
-                        
-                        for (let x = 0; x < canvas.offsetWidth; x += gridSize) {{
-                            ctx.beginPath();
-                            ctx.moveTo(x, 0);
-                            ctx.lineTo(x, canvas.offsetHeight);
-                            ctx.stroke();
-                        }}
-                        for (let y = 0; y < canvas.offsetHeight; y += gridSize) {{
-                            ctx.beginPath();
-                            ctx.moveTo(0, y);
-                            ctx.lineTo(canvas.offsetWidth, y);
-                            ctx.stroke();
-                        }}
-                    }}
-
-                    window.addEventListener("resize", resizeCanvas);
-                    resizeCanvas();
-
-                    const signaturePad = new SignaturePad(canvas, {{
-                        backgroundColor: 'rgba(0,0,0,0)', // 투명 배경으로 모눈종이선 살림
-                        penColor: '#000000',
-                        minWidth: 2.5,
-                        maxWidth: 5
-                    }});
-
-                    window.setTool_{prob_id} = function(tool) {{
-                        if (tool === 'pen') {{
-                            signaturePad.compositeOperation = 'source-over';
-                            signaturePad.penColor = document.getElementById('penColor_{prob_id}').value;
-                            signaturePad.minWidth = parseFloat(document.getElementById('penWidth_{prob_id}').value);
-                            signaturePad.maxWidth = signaturePad.minWidth * 1.8;
-                            document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#0284C7';
-                            document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#64748b';
-                        }} else if (tool === 'eraser') {{
-                            // 지우개: 흰색 펜으로 덮어쓰되, 굵기를 시원하게 키워서 슥슥 지워지도록 설정
-                            signaturePad.compositeOperation = 'source-over';
-                            signaturePad.penColor = '#ffffff';
-                            signaturePad.minWidth = 20;
-                            signaturePad.maxWidth = 30;
-                            document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#0284C7';
-                            document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#64748b';
-                        }}
-                    }}
-
-                    document.getElementById('penColor_{prob_id}').addEventListener('change', (e) => {{
-                        if (signaturePad.penColor !== '#ffffff') {{
-                            signaturePad.penColor = e.target.value;
-                        }}
-                    }});
-
-                    window.updatePenWidth = function() {{
-                        const val = parseFloat(document.getElementById('penWidth_{prob_id}').value);
-                        signaturePad.minWidth = val;
-                        signaturePad.maxWidth = val * 1.8;
-                    }};
-
-                    signaturePad.onEnd = function() {{
-                        saveCanvasState();
-                    }};
-
-                    window.undo_{prob_id} = function() {{
-                        const data = signaturePad.toData();
-                        if (data && data.length > 0) {{
-                            data.pop();
-                            signaturePad.fromData(data);
-                            saveCanvasState();
-                        }}
-                    }};
-
-                    window.clearCanvas_{prob_id} = function() {{
-                        signaturePad.clear();
-                        drawGrid(); // 전체 삭제 시 모눈종이 배경 복원
-                        saveCanvasState();
-                    }}
-
-                    function saveCanvasState() {{
-                        if (!signaturePad.isEmpty()) {{
-                            const dataURL = canvas.toDataURL('image/png');
-                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
-                        }} else {{
-                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: '' }}, '*');
-                        }}
-                    }}
-                </script>
-                """
-                    import streamlit.components.v1 as components
-                    components.html(canvas_html, height=480)
+                    canvas_result = st_canvas(
+                        fill_color="rgba(255, 255, 255, 0)",
+                        stroke_width=stroke_width,
+                        stroke_color=stroke_color,
+                        background_color="#FFFFFF",
+                        height=320,
+                        drawing_mode="freedraw",
+                        key=f"canvas_{prob_id}",
+                    )
+                    if canvas_result.image_data is not None:
+                        img = Image.fromarray(canvas_result.image_data.astype("uint8"), "RGBA").convert("RGB")
+                        st.session_state.quiz_images[prob_id] = img
 
                 else:
-                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>📱 [휴대폰 사진 업로드 모드 활성화됨] 연습장에 푼 풀이 사진을 업로드하세요.</p>", unsafe_allow_html=True)
                     uploaded_file = st.file_uploader(
-                        "📸 연습장 풀이 사진 업로드",
+                        "📸 풀이 사진 업로드 (카메라 촬영 가능)",
                         type=["png", "jpg", "jpeg"],
                         key=f"upload_{prob_id}"
                     )
@@ -1763,9 +1634,13 @@ if not st.session_state["teacher_authenticated"]:
                     if is_correct:
                         correct_count += 1
 
-                    # 캔버스에 그려진 필기 이미지 저장 처리 (임시 빈 파일 처리 혹은 세션 데이터 연동)
                     img_save_path = ""
-                    # 캔버스 데이터가 세션에 넘어온 경우 처리 가능
+                    if p_id in st.session_state.quiz_images:
+                        pil_img = st.session_state.quiz_images[p_id]
+                        pil_img.thumbnail((1200, 1200))
+                        filename = f"{student_name}_{p_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+                        img_save_path = os.path.join("submissions", filename)
+                        pil_img.save(img_save_path, format="JPEG", quality=80)
 
                     if db_type == "postgres":
                         q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
@@ -1785,6 +1660,7 @@ if not st.session_state["teacher_authenticated"]:
                 
                 st.session_state.quiz_idx = 0
                 st.session_state.quiz_answers = {}
+                st.session_state.quiz_images = {}
 
             render_online_test_slide(selected_student, "실력 점검 주간 테스트", sample_online_problems, conn_test)
 
