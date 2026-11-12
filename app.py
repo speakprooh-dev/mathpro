@@ -1417,8 +1417,7 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                            
+                            badge_label = " [새해설]" if is_new_alert else (" [링크 누락]" if not v_url else "")
                             chk_key = f"student_solved_chk_{selected_student}_{full_code}"
                             
                             def make_on_change(s_name=selected_student, f_code=full_code, key=chk_key):
@@ -1430,7 +1429,7 @@ if not st.session_state["teacher_authenticated"]:
                             cols_w = st.columns([3.5, 1.5])
                             with cols_w[0]:
                                 st.checkbox(
-                                    f"복습 완료 ({full_code}){badge_html}", 
+                                    f"복습 완료 ({full_code}){badge_label}", 
                                     value=is_solved, 
                                     key=chk_key,
                                     on_change=make_on_change()
