@@ -1439,27 +1439,28 @@ if not st.session_state["teacher_authenticated"]:
 
                             cols_w = st.columns([3.5, 1.5, 1])
                             
+                            # 기존 cols_w[0] 내부의 컬럼 레이아웃을 제거하고 인라인 HTML로 통합
                             with cols_w[0]:
                                 def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
                                     new_val = st.session_state[key]
                                     save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                                # 💡 체크박스와 새해설/링크누락 배지를 동일한 줄(가로)에 배치
-                                sub_cols = st.columns([2.6, 1.4])
-                                with sub_cols[0]:
-                                    st.checkbox(
-                                        f"복습 완료 ({full_code})", 
-                                        value=is_solved, 
-                                        key=f"s_wrong_chk_{selected_student}_{full_code}",
-                                        on_change=on_wrong_solved_change
-                                    )
-                                with sub_cols[1]:
-                                    if is_new_alert:
-                                        st.markdown('<div style="margin-top: 6px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
-                                    elif not v_url:
-                                        st.markdown('<div style="margin-top: 6px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
-                                    else:
-                                        st.markdown("")
+                                # 체크박스 렌더링
+                                st.checkbox(
+                                    f"복습 완료 ({full_code})", 
+                                    value=is_solved, 
+                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                    on_change=on_wrong_solved_change
+                                )
+
+                            with cols_w[1]:
+                                # 체크박스 바로 우측에 나란히 붙는 배지 영역
+                                if is_new_alert:
+                                    st.markdown('<div style="margin-top: -30px; margin-left: 145px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
+                                elif not v_url:
+                                    st.markdown('<div style="margin-top: -30px; margin-left: 145px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown("")
                                         
                             # 기존 cols_w[1] 영역(이전의 독립된 배지 공간)은 비워두고, [2]번 열이었던 해설 버튼을 [1]번 열로 병합하여 정렬 최적화
                             with cols_w[1]:
