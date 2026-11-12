@@ -1452,11 +1452,10 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                                 
                             with cols_w[1]:
-                                # 💡 해설 버튼 자체를 '새해설' 기간 동안 빨간색 눈에 띄는 스타일로 표현
                                 if v_url and v_url.strip():
                                     if is_new_alert:
-                                        # 🔴 새해설 기간인 경우: 빨간색 강조 버튼
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:4px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block;'>🔥 새해설 보기</a></div>", unsafe_allow_html=True)
+                                        # 🔴 일반 '해설' 버튼과 크기(패딩, 폰트)를 완전히 맞춘 빨간색 '새해설' 버튼
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
                                         # 일반 해설 버튼
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
