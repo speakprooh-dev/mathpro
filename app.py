@@ -1410,7 +1410,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
-                        # 💡 모바일 화면 배지 겹침 현상 방지를 위한 CSS 세밀 조정
                         st.markdown("""
                         <style>
                         div[data-testid="stHorizontalBlock"] {
@@ -1445,22 +1444,27 @@ if not st.session_state["teacher_authenticated"]:
                                     new_val = st.session_state[key]
                                     save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                                st.checkbox(
-                                    f"복습 완료 ({full_code})", 
-                                    value=is_solved, 
-                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
-                                    on_change=on_wrong_solved_change
-                                )
-                                
+                                # 💡 체크박스와 새해설/링크누락 배지를 동일한 줄(가로)에 배치
+                                sub_cols = st.columns([2.6, 1.4])
+                                with sub_cols[0]:
+                                    st.checkbox(
+                                        f"복습 완료 ({full_code})", 
+                                        value=is_solved, 
+                                        key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                        on_change=on_wrong_solved_change
+                                    )
+                                with sub_cols[1]:
+                                    if is_new_alert:
+                                        st.markdown('<div style="margin-top: 6px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
+                                    elif not v_url:
+                                        st.markdown('<div style="margin-top: 6px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
+                                    else:
+                                        st.markdown("")
+                                        
+                            # 기존 cols_w[1] 영역(이전의 독립된 배지 공간)은 비워두고, [2]번 열이었던 해설 버튼을 [1]번 열로 병합하여 정렬 최적화
                             with cols_w[1]:
-                                if is_new_alert:
-                                    # 💡 모바일 줄바꿈/겹침 방지를 위해 상단 여백(margin-top)을 확보한 블록 구조 적용
-                                    st.markdown('<div style="margin-top: 4px; margin-bottom: 4px;"><span style="background-color:#EF4444; color:white; padding:3px 7px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
-                                elif not v_url:
-                                    st.markdown('<div style="margin-top: 4px; margin-bottom: 4px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
-                                else:
-                                    st.markdown("")
-                                    
+                                st.markdown("")
+
                             with cols_w[2]:
                                 if v_url and v_url.strip():
                                     st.markdown(f"<div style='text-align: right; margin-top: -4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
