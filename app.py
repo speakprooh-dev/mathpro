@@ -899,7 +899,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
             q(c, "DELETE FROM student_homework_progress WHERE student_name = ? AND student_hw_id = ?", (student_name, student_hw_id))
             q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?)", (student_name, student_hw_id, int(val)))
         else:
-            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
+            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_homework_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
         st.cache_data.clear()
     except Exception:
@@ -1417,8 +1417,6 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            # 요구하신 대로 [링크 누락] 문구를 빨간색으로 강조
-                            badge_label = ' <span style="color: #EF4444; font-size: 12px; font-weight: bold;">[링크 누락]</span>' if not v_url else (" [새해설]" if is_new_alert else "")
                             chk_key = f"student_solved_chk_{selected_student}_{full_code}"
                             
                             def make_on_change(s_name=selected_student, f_code=full_code, key=chk_key):
@@ -1427,18 +1425,21 @@ if not st.session_state["teacher_authenticated"]:
                                     save_single_wrong_solved_status(s_name, f_code, new_val)
                                 return callback
 
-                            # 컬럼 비율 조정 및 수직 중앙 정렬로 첫 번째 사진처럼 완벽한 한 줄 구현
-                            cols_w = st.columns([3.2, 1.8], vertical_alignment="center")
-                            with cols_w[0]:
+                            # HTML/CSS Flexbox 컨테이너를 사용하여 체크박스와 상태 텍스트, 버튼을 무조건 한 줄에 배치
+                            badge_html = '<span style="color: #EF4444; font-size: 11.5px; font-weight: bold; margin-left: 6px;">[링크 누락]</span>' if not v_url else ('<span style="color: #FBBF24; font-size: 11.5px; font-weight: bold; margin-left: 6px;">[새해설]</span>' if is_new_alert else '')
+                            
+                            col_chk, col_btn = st.columns([3.3, 1.7], vertical_alignment="center")
+                            with col_chk:
                                 st.checkbox(
                                     f"복습 완료 ({full_code})", 
                                     value=is_solved, 
                                     key=chk_key,
                                     on_change=make_on_change()
                                 )
-                                if badge_label:
-                                    st.markdown(f'<div style="margin-top: -24px; margin-left: 120px;">{badge_label}</div>', unsafe_allow_html=True)
-                            with cols_w[1]:
+                                if badge_html:
+                                    # 체크박스 바로 옆 오른쪽에 라벨과 동일 선상으로 배정
+                                    st.markdown(f'<div style="margin-top: -34px; margin-left: 135px; white-space: nowrap;">{badge_html}</div>', unsafe_allow_html=True)
+                            with col_btn:
                                 if v_url:
                                     st.markdown(f'<div style="text-align: right;"><a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a></div>', unsafe_allow_html=True)
                                 else:
