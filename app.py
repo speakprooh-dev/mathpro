@@ -1441,8 +1441,8 @@ if not st.session_state["teacher_authenticated"]:
                                 new_val = st.session_state[key]
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                            # 💡 컬럼 비율을 [2.5, 1.5]로 조정하여 오른쪽에 충분한 공간 확보
-                            col_c1, col_c2 = st.columns([2.5, 1.5])
+                            # 💡 컬럼 비율을 [2.3, 1.7]로 주어 버튼 쪽에 충분한 공간 확보
+                            col_c1, col_c2 = st.columns([2.3, 1.7])
                             with col_c1:
                                 st.checkbox(
                                     f"복습 완료 ({full_code})", 
@@ -1453,6 +1453,7 @@ if not st.session_state["teacher_authenticated"]:
                             with col_c2:
                                 if v_url and v_url.strip():
                                     if is_new_alert:
+                                        # 🔴 패딩과 폰트 사이즈를 일반 해설 버튼과 완전히 동일하게 맞춘 아주 콤팩트한 새해설 버튼
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
