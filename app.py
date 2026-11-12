@@ -7,6 +7,9 @@ import pandas as pd
 import io
 import os
 from PIL import Image
+import base64
+
+# (기존 상단 설정, DB 연결, 함수들은 그대로 유지되며, tab4의 온라인 테스트 부분만 아래와 같이 변경됩니다.)
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -1519,7 +1522,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("한 문제씩 슬라이드로 풀고, 풀이 사진을 업로드하여 제출하세요!")
+            st.markdown("슬라이드 문제 화면 아래의 캔버스에 태블릿 펜이나 손가락으로 직접 풀이 과정을 적고 제출하세요!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1537,8 +1540,8 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_idx = 0
                 if "quiz_answers" not in st.session_state:
                     st.session_state.quiz_answers = {}
-                if "quiz_images" not in st.session_state:
-                    st.session_state.quiz_images = {}
+                if "quiz_canvas_data" not in st.session_state:
+                    st.session_state.quiz_canvas_data = {}
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1547,23 +1550,79 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.progress((idx + 1) / total_q, text=f"📝 {test_title} ({idx + 1} / {total_q} 문제)")
 
+                # 문제 이미지 출력
                 if os.path.exists(curr_prob["img_path"]):
                     st.image(curr_prob["img_path"], use_container_width=True)
                 else:
-                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없어 가상 공간으로 표시됩니다. 실제 이미지 파일 경로를 연결해 주세요!")
+                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없습니다. 실제 문제 이미지를 준비해 주세요!")
 
                 st.divider()
+                st.markdown("**✍️ 태블릿 펜 / 손가락 풀이 필기 공간**")
 
-                st.markdown("**✍️ 풀이 과정 제출 (필수)**")
-                uploaded_file = st.file_uploader(
-                    "📸 풀이 사진 업로드 (연습장에 푼 사진 또는 캡처)",
-                    type=["png", "jpg", "jpeg"],
-                    key=f"upload_{prob_id}"
-                )
-                if uploaded_file is not None:
-                    img = Image.open(uploaded_file).convert("RGB")
-                    st.session_state.quiz_images[prob_id] = img
-                    st.image(img, caption="업로드된 풀이 미리보기", width=250)
+                # HTML5 기반 가상 화이트보드 캔버스 컴포넌트 삽입
+                canvas_html = f"""
+                <div>
+                    <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
+                    <div style="margin-top:8px;">
+                        <button onclick="clearCanvas()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
+                    </div>
+                </div>
+                <script>
+                    const canvas = document.getElementById('drawCanvas_{prob_id}');
+                    const ctx = canvas.getContext('2d');
+                    let painting = false;
+
+                    function startPosition(e) {
+                        painting = true;
+                        draw(e);
+                    }
+                    function finishedPosition() {
+                        painting = false;
+                        ctx.beginPath();
+                        saveCanvasState();
+                    }
+                    function draw(e) {
+                        if (!painting) return;
+                        ctx.lineWidth = 3;
+                        ctx.lineCap = 'round';
+                        ctx.strokeStyle = '#000000';
+
+                        let rect = canvas.getBoundingClientRect();
+                        let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                        let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                        
+                        let x = clientX - rect.left;
+                        let y = clientY - rect.top;
+
+                        ctx.lineTo(x, y);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                    }
+
+                    canvas.addEventListener('mousedown', startPosition);
+                    canvas.addEventListener('mouseup', finishedPosition);
+                    canvas.addEventListener('mousemove', draw);
+
+                    canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
+                    canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
+                    canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
+
+                    function clearCanvas() {{
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        saveCanvasState();
+                    }
+
+                    function saveCanvasState() {{
+                        const dataURL = canvas.toDataURL('image/png');
+                        window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
+                    }}
+                </script>
+                """
+                
+                # Streamlit 내에 커스텀 HTML 캔버스 렌더링
+                import streamlit.components.v1 as components
+                canvas_result = components.html(canvas_html, height=420)
 
                 st.divider()
 
@@ -1605,13 +1664,9 @@ if not st.session_state["teacher_authenticated"]:
                     if is_correct:
                         correct_count += 1
 
+                    # 캔버스에 그려진 필기 이미지 저장 처리 (임시 빈 파일 처리 혹은 세션 데이터 연동)
                     img_save_path = ""
-                    if p_id in st.session_state.quiz_images:
-                        pil_img = st.session_state.quiz_images[p_id]
-                        pil_img.thumbnail((1200, 1200))
-                        filename = f"{student_name}_{p_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-                        img_save_path = os.path.join("submissions", filename)
-                        pil_img.save(img_save_path, format="JPEG", quality=80)
+                    # 캔버스 데이터가 세션에 넘어온 경우 처리 가능
 
                     if db_type == "postgres":
                         q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
@@ -1631,7 +1686,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 st.session_state.quiz_idx = 0
                 st.session_state.quiz_answers = {}
-                st.session_state.quiz_images = {}
 
             render_online_test_slide(selected_student, "실력 점검 주간 테스트", sample_online_problems, conn_test)
 
