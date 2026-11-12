@@ -1420,23 +1420,28 @@ if not st.session_state["teacher_authenticated"]:
 
                             badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
                             
-                            cols_w = st.columns([4, 1])
+                            cols_w = st.columns([2.5, 1.5, 1])
                             with cols_w[0]:
                                 def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
                                     new_val = st.session_state[key]
                                     save_single_wrong_solved_status(selected_student, f_code, new_val)
 
                                 st.checkbox(
-                                    f"복습 완료 ({full_code}){badge_html}", 
+                                    f"복습 완료 ({full_code})", 
                                     value=is_solved, 
                                     key=f"s_wrong_chk_{selected_student}_{full_code}",
                                     on_change=on_wrong_solved_change
                                 )
                             with cols_w[1]:
+                                if is_new_alert:
+                                    st.markdown('<span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span>', unsafe_allow_html=True)
+                                elif not v_url:
+                                    st.markdown('<span style="color:#DC2626; font-size:11px;">(링크 누락)</span>', unsafe_allow_html=True)
+                            with cols_w[2]:
                                 if v_url and v_url.strip():
-                                    st.markdown(f"<div style='text-align:right; margin-top:4px;'><a href='{v_url}' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='text-align:right; margin-top:2px;'><a href='{v_url}' target='_blank' style='padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown("<div style='text-align:right; font-size:11px; color:gray; margin-top:6px;'>준비중</div>", unsafe_allow_html=True)
+                                    st.markdown("<div style='text-align:right; font-size:11px; color:gray; margin-top:4px;'>준비중</div>", unsafe_allow_html=True)
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
