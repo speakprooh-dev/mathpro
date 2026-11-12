@@ -1426,7 +1426,7 @@ if not st.session_state["teacher_authenticated"]:
                                     save_single_wrong_solved_status(s_name, f_code, new_val)
                                 return callback
 
-                            cols_w = st.columns([3.5, 1.5])
+                            cols_w = st.columns([3, 1])
                             with cols_w[0]:
                                 st.checkbox(
                                     f"복습 완료 ({full_code}){badge_label}", 
@@ -1436,9 +1436,9 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with cols_w[1]:
                                 if v_url:
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<div style="text-align: right;"><a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a></div>', unsafe_allow_html=True)
                                 else:
-                                    st.markdown('<span style="font-size:11px; color:gray;">준비중</span>', unsafe_allow_html=True)
+                                    st.markdown('<div style="text-align: right; font-size:11px; color:gray; padding-top:4px;">준비중</div>', unsafe_allow_html=True)
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
