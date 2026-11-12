@@ -1542,6 +1542,8 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_answers = {}
                 if "quiz_images" not in st.session_state:
                     st.session_state.quiz_images = {}
+                if "input_mode" not in st.session_state:
+                    st.session_state.input_mode = "tablet"  # 기본값을 태블릿 캔버스 모드로 설정
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1558,97 +1560,88 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.divider()
 
-                # 📱💻 접속 기기(태블릿 vs 스마트폰) 맞춤형 안내 및 입력 UI 분기
-                st.markdown("**✍️ 풀이 과정 제출 (기기 맞춤 모드)**")
-                
-                # 자바스크립트로 화면 너비를 감지하여 태블릿/PC와 모바일 버전을 다르게 렌더링
-                device_selector_html = f"""
-                <div id="deviceModeContainer_{prob_id}" style="padding: 10px; background-color: var(--secondary-background-color); border-radius: 8px; margin-bottom: 10px;">
-                    <span id="modeText_{prob_id}" style="font-weight: bold; font-size: 13px; color: #0284C7;">🔍 접속 기기 환경을 분석 중입니다...</span>
-                </div>
-                
-                <div id="canvasSection_{prob_id}" style="display:none;">
-                    <p style="font-size:13px; color:#555;">🎨 태블릿/PC 환경 감지됨: 아래 화이트보드에 펜이나 손가락으로 직접 필기하세요.</p>
-                    <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
-                    <div style="margin-top:8px;">
-                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
-                    </div>
-                </div>
+                # 🎛️ 모드 직접 전환 버튼 (태블릿 캔버스 vs 휴대폰 사진 업로드)
+                st.markdown("**✍️ 풀이 과정 제출 방식 선택**")
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    if st.button("✏️ 태블릿 직접 필기 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "tablet" else "secondary"):
+                        st.session_state.input_mode = "tablet"
+                        st.rerun()
+                with col_m2:
+                    if st.button("📱 휴대폰 사진 업로드 모드", use_container_width=True, type="primary" if st.session_state.input_mode == "mobile" else "secondary"):
+                        st.session_state.input_mode = "mobile"
+                        st.rerun()
 
-                <div id="mobileSection_{prob_id}" style="display:none;">
-                    <p style="font-size:13px; color:#555;">📱 스마트폰 환경 감지됨: 연습장에 푼 풀이 사진을 아래에서 간편하게 업로드하세요.</p>
-                </div>
+                st.markdown("")
 
-                <script>
-                    const isMobile = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                # 선택된 모드에 따라 UI 분기 렌더링
+                if st.session_state.input_mode == "tablet":
+                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 직접 필기 모드 활성화됨] 아래 화이트보드에 펜이나 손가락으로 바로 필기하세요.</p>", unsafe_allow_html=True)
                     
-                    if (isMobile) {{
-                        document.getElementById('modeText_{prob_id}').innerText = "📱 [휴대폰/모바일 버전] 간편 사진 업로드 모드가 활성화되었습니다.";
-                        document.getElementById('mobileSection_{prob_id}').style.display = 'block';
-                        document.getElementById('canvasSection_{prob_id}').style.display = 'none';
-                    }} else {{
-                        document.getElementById('modeText_{prob_id}').innerText = "💻 [태블릿/PC 버전] 직접 필기 캔버스 모드가 활성화되었습니다.";
-                        document.getElementById('canvasSection_{prob_id}').style.display = 'block';
-                        document.getElementById('mobileSection_{prob_id}').style.display = 'none';
-                    }}
+                    canvas_html = f"""
+                    <div>
+                        <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
+                        <div style="margin-top:8px;">
+                            <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
+                        </div>
+                    </div>
+                    <script>
+                        const canvas = document.getElementById('drawCanvas_{prob_id}');
+                        if (canvas) {{
+                            const ctx = canvas.getContext('2d');
+                            let painting = false;
 
-                    // 캔버스 스크립트
-                    const canvas = document.getElementById('drawCanvas_{prob_id}');
-                    if (canvas) {{
-                        const ctx = canvas.getContext('2d');
-                        let painting = false;
+                            function startPosition(e) {{ painting = true; draw(e); }}
+                            function finishedPosition() {{ painting = false; ctx.beginPath(); saveCanvasState(); }}
+                            function draw(e) {{
+                                if (!painting) return;
+                                ctx.lineWidth = 3;
+                                ctx.lineCap = 'round';
+                                ctx.strokeStyle = '#000000';
+                                let rect = canvas.getBoundingClientRect();
+                                let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
+                                let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
+                                let x = clientX - rect.left;
+                                let y = clientY - rect.top;
+                                ctx.lineTo(x, y);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x, y);
+                            }}
 
-                        function startPosition(e) {{ painting = true; draw(e); }}
-                        function finishedPosition() {{ painting = false; ctx.beginPath(); saveCanvasState(); }}
-                        function draw(e) {{
-                            if (!painting) return;
-                            ctx.lineWidth = 3;
-                            ctx.lineCap = 'round';
-                            ctx.strokeStyle = '#000000';
-                            let rect = canvas.getBoundingClientRect();
-                            let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-                            let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-                            let x = clientX - rect.left;
-                            let y = clientY - rect.top;
-                            ctx.lineTo(x, y);
-                            ctx.stroke();
-                            ctx.beginPath();
-                            ctx.moveTo(x, y);
+                            canvas.addEventListener('mousedown', startPosition);
+                            canvas.addEventListener('mouseup', finishedPosition);
+                            canvas.addEventListener('mousemove', draw);
+                            canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
+                            canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
+                            canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
+
+                            window.clearCanvas_{prob_id} = function() {{
+                                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                saveCanvasState();
+                            }}
+
+                            function saveCanvasState() {{
+                                const dataURL = canvas.toDataURL('image/png');
+                                window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
+                            }}
                         }}
+                    </script>
+                    """
+                    import streamlit.components.v1 as components
+                    components.html(canvas_html, height=420)
 
-                        canvas.addEventListener('mousedown', startPosition);
-                        canvas.addEventListener('mouseup', finishedPosition);
-                        canvas.addEventListener('mousemove', draw);
-                        canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
-                        canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
-                        canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
-
-                        window.clearCanvas_{prob_id} = function() {{
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
-                            saveCanvasState();
-                        }}
-
-                        function saveCanvasState() {{
-                            const dataURL = canvas.toDataURL('image/png');
-                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
-                        }}
-                    }}
-                </script>
-                """
-                
-                import streamlit.components.v1 as components
-                components.html(device_selector_html, height=450)
-
-                # 휴대폰 접속 학생들을 위한 추가 파일 업로드 위젯 보조 제공
-                uploaded_file = st.file_uploader(
-                    "📸 [휴대폰 전용] 연습장 풀이 사진 업로드 (모바일 접속 시 활용)",
-                    type=["png", "jpg", "jpeg"],
-                    key=f"upload_{prob_id}"
-                )
-                if uploaded_file is not None:
-                    img = Image.open(uploaded_file).convert("RGB")
-                    st.session_state.quiz_images[prob_id] = img
-                    st.image(img, caption="업로드된 풀이 미리보기", width=250)
+                else:
+                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>📱 [휴대폰 사진 업로드 모드 활성화됨] 연습장에 푼 풀이 사진을 업로드하세요.</p>", unsafe_allow_html=True)
+                    uploaded_file = st.file_uploader(
+                        "📸 연습장 풀이 사진 업로드",
+                        type=["png", "jpg", "jpeg"],
+                        key=f"upload_{prob_id}"
+                    )
+                    if uploaded_file is not None:
+                        img = Image.open(uploaded_file).convert("RGB")
+                        st.session_state.quiz_images[prob_id] = img
+                        st.image(img, caption="업로드된 풀이 미리보기", width=250)
 
                 st.divider()
 
@@ -1675,6 +1668,9 @@ if not st.session_state["teacher_authenticated"]:
                     else:
                         if st.button("🎉 최종 제출 및 자동 채점", type="primary", use_container_width=True):
                             process_test_submission(student_name, test_title, problem_list, conn)
+```[cite: 1]
+
+이렇게 수정하시면 PC나 태블릿 화면 상단에 **[✏️ 태블릿 직접 필기 모드] / [📱 휴대폰 사진 업로드 모드]** 버튼이 나란히 표시되어, 원하시는 모드로 언제든 전환해서 화면을 확인하실 수 있습니다[cite: 1]!
 
             def process_test_submission(student_name, test_title, problem_list, conn):
                 c = conn.cursor()
