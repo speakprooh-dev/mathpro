@@ -1543,7 +1543,7 @@ if not st.session_state["teacher_authenticated"]:
                 if "quiz_images" not in st.session_state:
                     st.session_state.quiz_images = {}
                 if "input_mode" not in st.session_state:
-                    st.session_state.input_mode = "tablet"  # 기본값을 태블릿 캔버스 모드로 설정
+                    st.session_state.input_mode = "tablet"
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1560,7 +1560,7 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.divider()
 
-                # 🎛️ 모드 직접 전환 버튼 (태블릿 캔버스 vs 휴대폰 사진 업로드)
+                # 모드 선택 버튼
                 st.markdown("**✍️ 풀이 과정 제출 방식 선택**")
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
@@ -1574,35 +1574,98 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.markdown("")
 
-                # 선택된 모드에 따라 UI 분기 렌더링
                 if st.session_state.input_mode == "tablet":
-                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 직접 필기 모드 활성화됨] 아래 화이트보드에 펜이나 손가락으로 바로 필기하세요.</p>", unsafe_allow_html=True)
+                    st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>🎨 [태블릿 고성능 화이트보드] 펜, 지우개, 색상 및 두께를 조절하여 편하게 풀이하세요.</p>", unsafe_allow_html=True)
                     
+                    # 툴바와 캔버스가 포함된 고급 HTML5 화이트보드
                     canvas_html = f"""
-                    <div>
-                        <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
-                        <div style="margin-top:8px;">
-                            <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:bold;">지우기 (초기화)</button>
+                    <div style="background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; max-width: 700px;">
+                        <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <label style="font-size: 12px; font-weight: bold;">색상:</label>
+                            <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
+                            
+                            <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
+                            <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;">
+                                <option value="2">얇게</option>
+                                <option value="4" selected>보통</option>
+                                <option value="8">두껍게</option>
+                            </select>
+
+                            <button onclick="setMode_{prob_id}('pen')" id="btnPen_{prob_id}" style="background-color:#0284C7; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: 10px;">✍️ 펜</button>
+                            <button onclick="setMode_{prob_id}('eraser')" id="btnEraser_{prob_id}" style="background-color:#64748b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🧹 지우개</button>
+                            <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">↩️ 되돌리기</button>
+                            <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
                         </div>
+                        
+                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px; display:block;"></canvas>
                     </div>
+
                     <script>
                         const canvas = document.getElementById('drawCanvas_{prob_id}');
                         if (canvas) {{
                             const ctx = canvas.getContext('2d');
                             let painting = false;
+                            let currentMode = 'pen';
+                            let history = [];
+
+                            // 초기 흰 배경 설정
+                            ctx.fillStyle = "#ffffff";
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            saveState();
+
+                            function saveState() {{
+                                history.push(canvas.toDataURL());
+                                if (history.length > 20) history.shift();
+                            }}
+
+                            window.setMode_{prob_id} = function(mode) {{
+                                currentMode = mode;
+                                document.getElementById('btnPen_{prob_id}').style.background = (mode === 'pen') ? '#0284C7' : '#64748b';
+                                document.getElementById('btnEraser_{prob_id}').style.background = (mode === 'eraser') ? '#0284C7' : '#64748b';
+                            }}
+
+                            window.undo_{prob_id} = function() {{
+                                if (history.length > 1) {{
+                                    history.pop();
+                                    let img = new Image();
+                                    img.src = history[history.length - 1];
+                                    img.onload = function() {{
+                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                        ctx.drawImage(img, 0, 0);
+                                        saveCanvasState();
+                                    }}
+                                }}
+                            }}
 
                             function startPosition(e) {{ painting = true; draw(e); }}
-                            function finishedPosition() {{ painting = false; ctx.beginPath(); saveCanvasState(); }}
+                            function finishedPosition() {{ 
+                                if (!painting) return;
+                                painting = false; 
+                                ctx.beginPath(); 
+                                saveState();
+                                saveCanvasState(); 
+                            }}
+
                             function draw(e) {{
                                 if (!painting) return;
-                                ctx.lineWidth = 3;
-                                ctx.lineCap = 'round';
-                                ctx.strokeStyle = '#000000';
+                                
                                 let rect = canvas.getBoundingClientRect();
                                 let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
                                 let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
                                 let x = clientX - rect.left;
                                 let y = clientY - rect.top;
+
+                                ctx.lineWidth = document.getElementById('penWidth_{prob_id}').value;
+                                ctx.lineCap = 'round';
+                                ctx.lineJoin = 'round';
+
+                                if (currentMode === 'eraser') {{
+                                    ctx.strokeStyle = '#ffffff';
+                                    ctx.lineWidth = 20; // 지우개는 굵게
+                                }} else {{
+                                    ctx.strokeStyle = document.getElementById('penColor_{prob_id}').value;
+                                }}
+
                                 ctx.lineTo(x, y);
                                 ctx.stroke();
                                 ctx.beginPath();
@@ -1617,7 +1680,9 @@ if not st.session_state["teacher_authenticated"]:
                             canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
 
                             window.clearCanvas_{prob_id} = function() {{
-                                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                ctx.fillStyle = "#ffffff";
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                saveState();
                                 saveCanvasState();
                             }}
 
@@ -1629,7 +1694,7 @@ if not st.session_state["teacher_authenticated"]:
                     </script>
                     """
                     import streamlit.components.v1 as components
-                    components.html(canvas_html, height=420)
+                    components.html(canvas_html, height=480)
 
                 else:
                     st.markdown("<p style='font-size:13px; color:#0284C7; font-weight:bold;'>📱 [휴대폰 사진 업로드 모드 활성화됨] 연습장에 푼 풀이 사진을 업로드하세요.</p>", unsafe_allow_html=True)
