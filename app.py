@@ -1519,7 +1519,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("태블릿 노트 앱(굿노트·삼성노트 등)에 풀이하고, 캡처한 **풀이 사진 업로드**와 **정답 입력**으로 간편하게 제출하세요!")
+            st.markdown("태블릿 노트 앱(굿노트·삼성노트 등)에 풀이한 후 캡처하거나, 연습장에 풀고 카메라로 촬영하여 **풀이 사진을 업로드**하고 **정답을 입력**하여 제출하세요!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1554,11 +1554,11 @@ if not st.session_state["teacher_authenticated"]:
 
                 st.divider()
 
-                st.markdown("**📸 태블릿 노트 앱 풀이 사진 업로드**")
-                st.caption("💡 굿노트나 삼성노트 등 태블릿 앱에 문제를 풀고, 이미지로 저장(또는 캡처)한 뒤 아래에 업로드해주세요.")
+                st.markdown("**📸 풀이 사진 업로드 (태블릿 노트 캡처 / 휴대폰 카메라 촬영)**")
+                st.caption("💡 태블릿파는 노트 앱 캡처본을 선택하고, 연습장파는 [카메라]를 선택해 바로 촬영하여 업로드하세요!")
                 
                 uploaded_file = st.file_uploader(
-                    "풀이 이미지 파일 선택 (JPG, PNG)",
+                    "풀이 이미지 파일 선택 또는 카메라 촬영",
                     type=["png", "jpg", "jpeg"],
                     key=f"upload_{prob_id}"
                 )
