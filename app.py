@@ -1404,6 +1404,20 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
+                        # 💡 컴팩트 한줄 정렬을 위한 CSS 스타일 주입
+                        st.markdown("""
+                        <style>
+                        div[data-testid="stHorizontalBlock"] {
+                            align-items: center !important;
+                            gap: 4px !important;
+                        }
+                        .stCheckbox {
+                            min-height: unset !important;
+                            margin-bottom: 0px !important;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+
                         for n in sorted(list(parsed_nums)):
                             full_code = f"{view_target_code}{n:03d}".upper()
                             v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
@@ -1418,7 +1432,7 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            cols_w = st.columns([3.2, 1.2, 1.1])
+                            cols_w = st.columns([4.2, 1.8, 1])
                             
                             with cols_w[0]:
                                 def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
@@ -1433,21 +1447,19 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                                 
                             with cols_w[1]:
-                                st.markdown("<div style='padding-top: 6px;'>", unsafe_allow_html=True)
                                 if is_new_alert:
-                                    st.markdown('<span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span>', unsafe_allow_html=True)
+                                    st.markdown('<div style="margin-top: 2px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span></div>', unsafe_allow_html=True)
                                 elif not v_url:
-                                    st.markdown('<span style="color:#DC2626; font-size:11px;">(링크 누락)</span>', unsafe_allow_html=True)
-                                st.markdown("</div>", unsafe_allow_html=True)
-                                
-                            with cols_w[2]:
-                                st.markdown("<div style='padding-top: 4px; text-align: right;'>", unsafe_allow_html=True)
-                                if v_url and v_url.strip():
-                                    st.markdown(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a>", unsafe_allow_html=True)
+                                    st.markdown('<div style="margin-top: 2px;"><span style="color:#DC2626; font-size:11px; font-weight:bold;">(링크 누락)</span></div>', unsafe_allow_html=True)
                                 else:
-                                    st.markdown("<span style='font-size:11px; color:gray;'>준비중</span>", unsafe_allow_html=True)
-                                st.markdown("</div>", unsafe_allow_html=True)
-                                
+                                    st.markdown("")
+                                    
+                            with cols_w[2]:
+                                if v_url and v_url.strip():
+                                    st.markdown(f"<div style='text-align: right; margin-top: 2px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown("<div style='text-align: right; margin-top: 2px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                                    
                             st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
