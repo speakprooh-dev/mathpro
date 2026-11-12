@@ -1668,9 +1668,6 @@ if not st.session_state["teacher_authenticated"]:
                     else:
                         if st.button("🎉 최종 제출 및 자동 채점", type="primary", use_container_width=True):
                             process_test_submission(student_name, test_title, problem_list, conn)
-```[cite: 1]
-
-이렇게 수정하시면 PC나 태블릿 화면 상단에 **[✏️ 태블릿 직접 필기 모드] / [📱 휴대폰 사진 업로드 모드]** 버튼이 나란히 표시되어, 원하시는 모드로 언제든 전환해서 화면을 확인하실 수 있습니다[cite: 1]!
 
             def process_test_submission(student_name, test_title, problem_list, conn):
                 c = conn.cursor()
