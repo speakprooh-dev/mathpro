@@ -1418,32 +1418,37 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            action_key = f"toggle_solved_{selected_student}_{full_code}"
-                            if query_params.get(action_key) == "true":
-                                new_state = not is_solved
-                                save_single_wrong_solved_status(selected_student, full_code, new_state)
-                                query_params.pop(action_key, None)
-                                st.rerun()
-
-                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
-                            checkbox_checked_attr = "checked" if is_solved else ""
+                            cols_w = st.columns([3.2, 1.2, 1.1])
                             
-                            html_row_content = f'''
-                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 4px; padding: 2px 0;">
-                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; flex-grow: 1;">
-                                    <input type="checkbox" {checkbox_checked_attr} 
-                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
-                                        style="width: 16px; height: 16px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
-                                    <div style="{text_style} font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">복습 완료 ({full_code}){badge_html}</div>
-                                </div>
-                                <div style="flex-shrink: 0; margin-left: 8px;">
-                                    {"<a href='" + v_url + "' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
-                                </div>
-                            </div>
-                            '''
-                            st.markdown(html_row_content, unsafe_allow_html=True)
-                            st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid rgba(128,128,128,0.1);'>", unsafe_allow_html=True)
+                            with cols_w[0]:
+                                def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
+                                    new_val = st.session_state[key]
+                                    save_single_wrong_solved_status(selected_student, f_code, new_val)
+
+                                st.checkbox(
+                                    f"복습 완료 ({full_code})", 
+                                    value=is_solved, 
+                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                    on_change=on_wrong_solved_change
+                                )
+                                
+                            with cols_w[1]:
+                                st.markdown("<div style='padding-top: 6px;'>", unsafe_allow_html=True)
+                                if is_new_alert:
+                                    st.markdown('<span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span>', unsafe_allow_html=True)
+                                elif not v_url:
+                                    st.markdown('<span style="color:#DC2626; font-size:11px;">(링크 누락)</span>', unsafe_allow_html=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
+                                
+                            with cols_w[2]:
+                                st.markdown("<div style='padding-top: 4px; text-align: right;'>", unsafe_allow_html=True)
+                                if v_url and v_url.strip():
+                                    st.markdown(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown("<span style='font-size:11px; color:gray;'>준비중</span>", unsafe_allow_html=True)
+                                st.markdown("</div>", unsafe_allow_html=True)
+                                
+                            st.markdown("<hr style='margin: 2px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
 
