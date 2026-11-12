@@ -1399,7 +1399,6 @@ if not st.session_state["teacher_authenticated"]:
                     unit_map_dict[display_name] = u_code
                     unit_display_options.append(display_name)
 
-                # 💡 셀렉트 박스 속도 최적화를 위해 캐싱된 딕셔너리 정보 활용
                 selected_display_unit = st.selectbox("확인할 단원 선택", unit_display_options, key="saved_unit_select_box")
                 view_target_code = unit_map_dict.get(selected_display_unit, "") if selected_display_unit != "-- 저장된 단원을 선택하세요 --" else ""
 
@@ -1411,6 +1410,7 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
+                        # 💡 모바일 화면 배지 겹침 현상 방지를 위한 CSS 세밀 조정
                         st.markdown("""
                         <style>
                         div[data-testid="stHorizontalBlock"] {
@@ -1418,8 +1418,8 @@ if not st.session_state["teacher_authenticated"]:
                             gap: 0px !important;
                         }
                         div[data-testid="stCheckbox"] {
-                            margin-top: -10px !important;
-                            margin-bottom: -10px !important;
+                            margin-top: -6px !important;
+                            margin-bottom: -6px !important;
                         }
                         </style>
                         """, unsafe_allow_html=True)
@@ -1454,9 +1454,10 @@ if not st.session_state["teacher_authenticated"]:
                                 
                             with cols_w[1]:
                                 if is_new_alert:
-                                    st.markdown('<div style="margin-top: -4px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;">🔥 새해설</span></div>', unsafe_allow_html=True)
+                                    # 💡 모바일 줄바꿈/겹침 방지를 위해 상단 여백(margin-top)을 확보한 블록 구조 적용
+                                    st.markdown('<div style="margin-top: 4px; margin-bottom: 4px;"><span style="background-color:#EF4444; color:white; padding:3px 7px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
                                 elif not v_url:
-                                    st.markdown('<div style="margin-top: -4px;"><span style="color:#DC2626; font-size:11px; font-weight:bold;">(링크 누락)</span></div>', unsafe_allow_html=True)
+                                    st.markdown('<div style="margin-top: 4px; margin-bottom: 4px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
                                 else:
                                     st.markdown("")
                                     
