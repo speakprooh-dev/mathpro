@@ -899,7 +899,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
             q(c, "DELETE FROM student_homework_progress WHERE student_name = ? AND student_hw_id = ?", (student_name, student_hw_id))
             q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?)", (student_name, student_hw_id, int(val)))
         else:
-            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_homework_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
+            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
         st.cache_data.clear()
     except Exception:
@@ -1402,7 +1402,9 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown("---")
                         st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
                         solved_map = get_student_wrong_solved_status(selected_student)
+                        now_datetime = datetime.now()
                         
+                        query_params = st.query_params
                         for n in sorted(list(parsed_nums)):
                             full_code = f"{view_target_code}{n:03d}".upper()
                             v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
@@ -1412,38 +1414,36 @@ if not st.session_state["teacher_authenticated"]:
                             if v_url and v_updated_at and not is_solved:
                                 try:
                                     up_dt = datetime.strptime(v_updated_at, "%Y-%m-%d %H:%M:%S")
-                                    if (datetime.now() - up_dt).total_seconds() <= 30 * 86400:
+                                    if (now_datetime - up_dt).total_seconds() <= 30 * 86400:
                                         is_new_alert = True
                                 except Exception:
                                     pass
 
-                            chk_key = f"student_solved_chk_{selected_student}_{full_code}"
-                            
-                            def make_on_change(s_name=selected_student, f_code=full_code, key=chk_key):
-                                def callback():
-                                    new_val = st.session_state[key]
-                                    save_single_wrong_solved_status(s_name, f_code, new_val)
-                                return callback
+                            action_key = f"toggle_solved_{selected_student}_{full_code}"
+                            if query_params.get(action_key) == "true":
+                                new_state = not is_solved
+                                save_single_wrong_solved_status(selected_student, full_code, new_state)
+                                query_params.pop(action_key, None)
+                                st.rerun()
 
-                            # HTML/CSS Flexbox 컨테이너를 사용하여 체크박스와 상태 텍스트, 버튼을 무조건 한 줄에 배치
-                            badge_html = '<span style="color: #EF4444; font-size: 11.5px; font-weight: bold; margin-left: 6px;">[링크 누락]</span>' if not v_url else ('<span style="color: #FBBF24; font-size: 11.5px; font-weight: bold; margin-left: 6px;">[새해설]</span>' if is_new_alert else '')
+                            badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
+                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
+                            checkbox_checked_attr = "checked" if is_solved else ""
                             
-                            col_chk, col_btn = st.columns([3.3, 1.7], vertical_alignment="center")
-                            with col_chk:
-                                st.checkbox(
-                                    f"복습 완료 ({full_code})", 
-                                    value=is_solved, 
-                                    key=chk_key,
-                                    on_change=make_on_change()
-                                )
-                                if badge_html:
-                                    # 체크박스 바로 옆 오른쪽에 라벨과 동일 선상으로 배정
-                                    st.markdown(f'<div style="margin-top: -34px; margin-left: 135px; white-space: nowrap;">{badge_html}</div>', unsafe_allow_html=True)
-                            with col_btn:
-                                if v_url:
-                                    st.markdown(f'<div style="text-align: right;"><a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3);">🎥 해설 영상</a></div>', unsafe_allow_html=True)
-                                else:
-                                    st.markdown('<div style="text-align: right; font-size:11px; color:#EF4444; font-weight:bold;">준비중</div>', unsafe_allow_html=True)
+                            html_row_content = f'''
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                                    <input type="checkbox" {checkbox_checked_attr} 
+                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
+                                        style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
+                                    <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
+                                </div>
+                                <div style="flex-shrink: 0; margin-left: 10px;">
+                                    {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
+                                </div>
+                            </div>
+                            '''
+                            st.markdown(html_row_content, unsafe_allow_html=True)
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
