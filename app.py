@@ -1579,120 +1579,87 @@ if not st.session_state["teacher_authenticated"]:
                     
                     # 툴바와 캔버스가 포함된 고급 HTML5 화이트보드
                     canvas_html = f"""
-                    <div style="background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; max-width: 700px;">
-                        <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                            <label style="font-size: 12px; font-weight: bold;">색상:</label>
-                            <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
-                            
-                            <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
-                            <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;">
-                                <option value="2">얇게</option>
-                                <option value="4" selected>보통</option>
-                                <option value="8">두껍게</option>
-                            </select>
-
-                            <button onclick="setMode_{prob_id}('pen')" id="btnPen_{prob_id}" style="background-color:#0284C7; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: 10px;">✍️ 펜</button>
-                            <button onclick="setMode_{prob_id}('eraser')" id="btnEraser_{prob_id}" style="background-color:#64748b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🧹 지우개</button>
-                            <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">↩️ 되돌리기</button>
-                            <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
-                        </div>
+                <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+                <div style="background: #ffffff; padding: 12px; border-radius: 10px; border: 2px solid #0284C7; max-width: 700px;">
+                    <div style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <label style="font-size: 12px; font-weight: bold;">색상:</label>
+                        <input type="color" id="penColor_{prob_id}" value="#000000" style="width: 35px; height: 30px; border:none; cursor:pointer;">
                         
-                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px; display:block;"></canvas>
+                        <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
+                        <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;" onchange="updatePenWidth()">
+                            <option value="1">얇게</option>
+                            <option value="2.5" selected>보통</option>
+                            <option value="5">두껍게</option>
+                        </select>
+
+                        <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: 10px;">↩️ 되돌리기</button>
+                        <button onclick="clearCanvas_{prob_id}()" style="background-color:#EF4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">🗑️ 전체삭제</button>
                     </div>
+                    
+                    <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
+                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="touch-action: none; width: 100%; height: 400px; display: block;"></canvas>
+                    </div>
+                </div>
 
-                    <script>
-                        const canvas = document.getElementById('drawCanvas_{prob_id}');
-                        if (canvas) {{
-                            const ctx = canvas.getContext('2d');
-                            let painting = false;
-                            let currentMode = 'pen';
-                            let history = [];
+                <script>
+                    const canvas = document.getElementById('drawCanvas_{prob_id}');
+                    
+                    // 고해상도 지원을 위한 캔버스 스케일링
+                    function resizeCanvas() {{
+                        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                        canvas.width = canvas.offsetWidth * ratio;
+                        canvas.height = canvas.offsetHeight * ratio;
+                        canvas.getContext("2d").scale(ratio, ratio);
+                    }}
+                    window.addEventListener("resize", resizeCanvas);
+                    resizeCanvas();
 
-                            // 초기 흰 배경 설정
-                            ctx.fillStyle = "#ffffff";
-                            ctx.fillRect(0, 0, canvas.width, canvas.height);
-                            saveState();
+                    const signaturePad = new SignaturePad(canvas, {{
+                        backgroundColor: 'rgba(255, 255, 255, 1)',
+                        penColor: '#000000',
+                        minWidth: 2,
+                        maxWidth: 4
+                    }});
 
-                            function saveState() {{
-                                history.push(canvas.toDataURL());
-                                if (history.length > 20) history.shift();
-                            }}
+                    // 색상 및 두께 실시간 반영 리스너
+                    document.getElementById('penColor_{prob_id}').addEventListener('change', (e) => {{
+                        signaturePad.penColor = e.target.value;
+                    }});
 
-                            window.setMode_{prob_id} = function(mode) {{
-                                currentMode = mode;
-                                document.getElementById('btnPen_{prob_id}').style.background = (mode === 'pen') ? '#0284C7' : '#64748b';
-                                document.getElementById('btnEraser_{prob_id}').style.background = (mode === 'eraser') ? '#0284C7' : '#64748b';
-                            }}
+                    window.updatePenWidth = function() {{
+                        const val = parseFloat(document.getElementById('penWidth_{prob_id}').value);
+                        signaturePad.minWidth = val;
+                        signaturePad.maxWidth = val * 1.8;
+                    }};
 
-                            window.undo_{prob_id} = function() {{
-                                if (history.length > 1) {{
-                                    history.pop();
-                                    let img = new Image();
-                                    img.src = history[history.length - 1];
-                                    img.onload = function() {{
-                                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                                        ctx.drawImage(img, 0, 0);
-                                        saveCanvasState();
-                                    }}
-                                }}
-                            }}
+                    signaturePad.onEnd = function() {{
+                        saveCanvasState();
+                    }};
 
-                            function startPosition(e) {{ painting = true; draw(e); }}
-                            function finishedPosition() {{ 
-                                if (!painting) return;
-                                painting = false; 
-                                ctx.beginPath(); 
-                                saveState();
-                                saveCanvasState(); 
-                            }}
-
-                            function draw(e) {{
-                                if (!painting) return;
-                                
-                                let rect = canvas.getBoundingClientRect();
-                                let clientX = e.clientX || (e.touches ? e.touches[0].clientX : 0);
-                                let clientY = e.clientY || (e.touches ? e.touches[0].clientY : 0);
-                                let x = clientX - rect.left;
-                                let y = clientY - rect.top;
-
-                                ctx.lineWidth = document.getElementById('penWidth_{prob_id}').value;
-                                ctx.lineCap = 'round';
-                                ctx.lineJoin = 'round';
-
-                                if (currentMode === 'eraser') {{
-                                    ctx.strokeStyle = '#ffffff';
-                                    ctx.lineWidth = 20; // 지우개는 굵게
-                                }} else {{
-                                    ctx.strokeStyle = document.getElementById('penColor_{prob_id}').value;
-                                }}
-
-                                ctx.lineTo(x, y);
-                                ctx.stroke();
-                                ctx.beginPath();
-                                ctx.moveTo(x, y);
-                            }}
-
-                            canvas.addEventListener('mousedown', startPosition);
-                            canvas.addEventListener('mouseup', finishedPosition);
-                            canvas.addEventListener('mousemove', draw);
-                            canvas.addEventListener('touchstart', (e) => {{ startPosition(e); e.preventDefault(); }});
-                            canvas.addEventListener('touchend', (e) => {{ finishedPosition(); e.preventDefault(); }});
-                            canvas.addEventListener('touchmove', (e) => {{ draw(e); e.preventDefault(); }});
-
-                            window.clearCanvas_{prob_id} = function() {{
-                                ctx.fillStyle = "#ffffff";
-                                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                                saveState();
-                                saveCanvasState();
-                            }}
-
-                            function saveCanvasState() {{
-                                const dataURL = canvas.toDataURL('image/png');
-                                window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
-                            }}
+                    window.undo_{prob_id} = function() {{
+                        const data = signaturePad.toData();
+                        if (data) {{
+                            data.pop(); // 가장 마지막 스트로크 제거
+                            signaturePad.fromData(data);
+                            saveCanvasState();
                         }}
-                    </script>
-                    """
+                    }};
+
+                    window.clearCanvas_{prob_id} = function() {{
+                        signaturePad.clear();
+                        saveCanvasState();
+                    }}
+
+                    function saveCanvasState() {{
+                        if (!signaturePad.isEmpty()) {{
+                            const dataURL = signaturePad.toDataURL('image/png');
+                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: dataURL }}, '*');
+                        }} else {{
+                            window.parent.postMessage({{ type: 'streamlit:setComponentValue', value: '' }}, '*');
+                        }}
+                    }}
+                </script>
+                """
                     import streamlit.components.v1 as components
                     components.html(canvas_html, height=480)
 
