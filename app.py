@@ -1559,7 +1559,7 @@ if not st.session_state["teacher_authenticated"]:
                 st.divider()
                 st.markdown("**✍️ 태블릿 펜 / 손가락 풀이 필기 공간**")
 
-                # HTML5 기반 가상 화이트보드 캔버스 컴포넌트 삽입
+                # HTML 기반 가상 화이트보드 캔버스 컴포넌트 (SyntaxError 해결 완료)
                 canvas_html = f"""
                 <div>
                     <canvas id="drawCanvas_{prob_id}" width="700" height="350" style="border:2px solid #0284C7; border-radius:8px; background-color:#ffffff; touch-action:none; width:100%; max-width:700px;"></canvas>
@@ -1572,16 +1572,16 @@ if not st.session_state["teacher_authenticated"]:
                     const ctx = canvas.getContext('2d');
                     let painting = false;
 
-                    function startPosition(e) {
+                    function startPosition(e) {{
                         painting = true;
                         draw(e);
-                    }
-                    function finishedPosition() {
+                    }}
+                    function finishedPosition() {{
                         painting = false;
                         ctx.beginPath();
                         saveCanvasState();
-                    }
-                    function draw(e) {
+                    }}
+                    function draw(e) {{
                         if (!painting) return;
                         ctx.lineWidth = 3;
                         ctx.lineCap = 'round';
@@ -1598,7 +1598,7 @@ if not st.session_state["teacher_authenticated"]:
                         ctx.stroke();
                         ctx.beginPath();
                         ctx.moveTo(x, y);
-                    }
+                    }}
 
                     canvas.addEventListener('mousedown', startPosition);
                     canvas.addEventListener('mouseup', finishedPosition);
@@ -1611,7 +1611,7 @@ if not st.session_state["teacher_authenticated"]:
                     function clearCanvas() {{
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         saveCanvasState();
-                    }
+                    }}
 
                     function saveCanvasState() {{
                         const dataURL = canvas.toDataURL('image/png');
