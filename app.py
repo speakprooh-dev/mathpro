@@ -1437,30 +1437,14 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            cols_w = st.columns([3.5, 1.5, 1])
+                            # 💡 3개의 열로 정확하게 분할하여 겹침 현상 원천 차단
+                            cols_w = st.columns([2.2, 1.1, 1.0])
                             
                             with cols_w[0]:
                                 def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
                                     new_val = st.session_state[key]
                                     save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                                # 💡 Flexbox를 사용하여 체크박스와 배지를 마진 없이 한 줄에 완벽하게 나란히 배치
-                                badge_html = ""
-                                if is_new_alert:
-                                    badge_html = '<span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:8px; display:inline-block;">🔥 새해설</span>'
-                                elif not v_url:
-                                    badge_html = '<span style="color:#DC2626; font-size:11px; font-weight:bold; margin-left:8px; display:inline-block;">(링크 누락)</span>'
-
-                                st.markdown(
-                                    f'''
-                                    <div style="display: flex; align-items: center; width: 100%;">
-                                        <div style="flex-grow: 1;"></div>
-                                        {badge_html}
-                                    </div>
-                                    ''',
-                                    unsafe_allow_html=True
-                                )
-                                
                                 st.checkbox(
                                     f"복습 완료 ({full_code})", 
                                     value=is_solved, 
@@ -1469,13 +1453,18 @@ if not st.session_state["teacher_authenticated"]:
                                 )
 
                             with cols_w[1]:
-                                st.markdown("")
+                                if is_new_alert:
+                                    st.markdown('<div style="margin-top: 6px;"><span style="background-color:#EF4444; color:white; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; display:inline-block;">🔥 새해설</span></div>', unsafe_allow_html=True)
+                                elif not v_url:
+                                    st.markdown('<div style="margin-top: 6px;"><span style="color:#DC2626; font-size:11px; font-weight:bold; display:inline-block;">(링크 누락)</span></div>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown("")
 
                             with cols_w[2]:
                                 if v_url and v_url.strip():
-                                    st.markdown(f"<div style='text-align: right; margin-top: -4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='text-align: right; margin-top: 6px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown("<div style='text-align: right; margin-top: -4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                                    st.markdown("<div style='text-align: right; margin-top: 6px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
