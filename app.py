@@ -7,7 +7,6 @@ import pandas as pd
 import io
 import os
 from PIL import Image
-from streamlit_drawable_canvas import st_canvas
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -1520,7 +1519,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("한 문제씩 슬라이드로 풀고, 태블릿 화면 필기 또는 사진 업로드로 풀이 과정을 제출하세요!")
+            st.markdown("한 문제씩 슬라이드로 풀고, 풀이 사진을 업로드하여 제출하세요!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1556,43 +1555,15 @@ if not st.session_state["teacher_authenticated"]:
                 st.divider()
 
                 st.markdown("**✍️ 풀이 과정 제출 (필수)**")
-                solve_mode = st.radio(
-                    "풀이 방식을 선택하세요:",
-                    ["태블릿 화면에 직접 필기", "연습장에 풀고 사진 찍어 올리기"],
-                    horizontal=True,
-                    key=f"mode_{prob_id}"
+                uploaded_file = st.file_uploader(
+                    "📸 풀이 사진 업로드 (연습장에 푼 사진 또는 캡처)",
+                    type=["png", "jpg", "jpeg"],
+                    key=f"upload_{prob_id}"
                 )
-
-                if solve_mode == "태블릿 화면에 직접 필기":
-                    col_tool1, col_tool2 = st.columns([1, 2])
-                    with col_tool1:
-                        stroke_color = st.color_picker("펜 색상", "#000000", key=f"color_{prob_id}")
-                    with col_tool2:
-                        stroke_width = st.slider("펜 굵기", 1, 10, 2, key=f"width_{prob_id}")
-
-                    canvas_result = st_canvas(
-                        fill_color="rgba(255, 255, 255, 0)",
-                        stroke_width=stroke_width,
-                        stroke_color=stroke_color,
-                        background_color="#FFFFFF",
-                        height=320,
-                        drawing_mode="freedraw",
-                        key=f"canvas_{prob_id}",
-                    )
-                    if canvas_result.image_data is not None:
-                        img = Image.fromarray(canvas_result.image_data.astype("uint8"), "RGBA").convert("RGB")
-                        st.session_state.quiz_images[prob_id] = img
-
-                else:
-                    uploaded_file = st.file_uploader(
-                        "📸 풀이 사진 업로드 (카메라 촬영 가능)",
-                        type=["png", "jpg", "jpeg"],
-                        key=f"upload_{prob_id}"
-                    )
-                    if uploaded_file is not None:
-                        img = Image.open(uploaded_file).convert("RGB")
-                        st.session_state.quiz_images[prob_id] = img
-                        st.image(img, caption="업로드된 풀이 미리보기", width=250)
+                if uploaded_file is not None:
+                    img = Image.open(uploaded_file).convert("RGB")
+                    st.session_state.quiz_images[prob_id] = img
+                    st.image(img, caption="업로드된 풀이 미리보기", width=250)
 
                 st.divider()
 
