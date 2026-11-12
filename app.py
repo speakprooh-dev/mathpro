@@ -788,7 +788,7 @@ def get_all_students_homework_map(hw_date):
         if db_type == "postgres":
             q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
         else:
-            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY student_name, id", (student_name, hw_date))
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = ? ORDER BY student_name, id", (hw_date,))
         rows = c.fetchall()
         hw_map = {}
         for row in rows:
@@ -1404,7 +1404,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
                         
-                        query_params = st.query_params
                         for n in sorted(list(parsed_nums)):
                             full_code = f"{view_target_code}{n:03d}".upper()
                             v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
@@ -1419,31 +1418,25 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception:
                                     pass
 
-                            action_key = f"toggle_solved_{selected_student}_{full_code}"
-                            if query_params.get(action_key) == "true":
-                                new_state = not is_solved
-                                save_single_wrong_solved_status(selected_student, full_code, new_state)
-                                query_params.pop(action_key, None)
-                                st.rerun()
-
                             badge_html = ' <span style="background-color:#EF4444; color:white; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:bold;">🔥 새해설</span>' if is_new_alert else (' <span style="color:#DC2626; font-size:11px;">(링크 누락)</span>' if not v_url else '')
-                            text_style = "text-decoration: line-through; color: gray;" if is_solved else "font-weight: bold;"
-                            checkbox_checked_attr = "checked" if is_solved else ""
                             
-                            html_row_content = f'''
-                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; padding: 4px 0;">
-                                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
-                                    <input type="checkbox" {checkbox_checked_attr} 
-                                        onchange="window.location.href='/?student={selected_student}&{action_key}=true'" 
-                                        style="width: 18px; height: 18px; cursor: pointer; accent-color: #0284C7; flex-shrink: 0;">
-                                    <div style="{text_style} font-size: 14px; white-space: nowrap;">복습 완료 ({full_code}){badge_html}</div>
-                                </div>
-                                <div style="flex-shrink: 0; margin-left: 10px;">
-                                    {"<a href='" + v_url + "' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a>" if v_url else "<span style='font-size:11px; color:gray;'>준비중</span>"}
-                                </div>
-                            </div>
-                            '''
-                            st.markdown(html_row_content, unsafe_allow_html=True)
+                            cols_w = st.columns([4, 1])
+                            with cols_w[0]:
+                                def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
+                                    new_val = st.session_state[key]
+                                    save_single_wrong_solved_status(selected_student, f_code, new_val)
+
+                                st.checkbox(
+                                    f"복습 완료 ({full_code}){badge_html}", 
+                                    value=is_solved, 
+                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                    on_change=on_wrong_solved_change
+                                )
+                            with cols_w[1]:
+                                if v_url and v_url.strip():
+                                    st.markdown(f"<div style='text-align:right; margin-top:4px;'><a href='{v_url}' target='_blank' style='padding:4px 10px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit;'>🎥 해설 영상</a></div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown("<div style='text-align:right; font-size:11px; color:gray; margin-top:6px;'>준비중</div>", unsafe_allow_html=True)
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
