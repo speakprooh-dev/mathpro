@@ -1700,7 +1700,7 @@ else:
     st.divider()
     st.markdown("### ⚙️ 통합 관리 대시보드")
 
-    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats = st.tabs([
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests = st.tabs([
         "👤 1. [개별] 학생 진도 관리", 
         "📢 2. 공지사항 관리",
         "📅 3. 개별 과제 관리", 
@@ -1708,7 +1708,8 @@ else:
         "🔍 5. 오답노트 모아보기",
         "📊 6. 전체 숙제 매트릭스",
         "🎥 7. 해설 링크 관리",
-        "📈 8. 실시간 학습 참여 현황"
+        "📈 8. 실시간 학습 참여 현황",
+        "📋 9. 학생 제출물 및 풀이 검사"
     ])
 
     with t_cfg_student:
@@ -2241,3 +2242,40 @@ else:
             for s_name, last_time, v_count in s_summary:
                 with st.container(border=True):
                     st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
+
+    with t_cfg_tests:
+        st.markdown("#### 📋 학생 온라인 테스트 제출물 및 풀이 뷰어")
+        
+        conn_sub, _ = get_db_connection()
+        c_sub = conn_sub.cursor()
+        try:
+            q(c_sub, "SELECT id, student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions ORDER BY submitted_at DESC")
+            sub_rows = c_sub.fetchall()
+        except Exception:
+            sub_rows = []
+
+        if sub_rows:
+            filter_stu = st.selectbox("학생별 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
+            filtered_subs = sub_rows if filter_stu == "전체 학생 보기" else [r for r in sub_rows if r[1] == filter_stu]
+
+            st.markdown(f"**총 제출 내역: {len(filtered_subs)}건**")
+            st.markdown("---")
+
+            for sub_id, s_name, t_title, p_id, s_ans, is_corr, img_path, sub_at in filtered_subs:
+                corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
+                with st.container(border=True):
+                    cols_info, cols_img = st.columns([1.5, 2.5])
+                    with cols_info:
+                        st.markdown(f"👤 **학생**: `{s_name}`")
+                        st.markdown(f"📝 **테스트명**: {t_title}")
+                        st.markdown(f"📌 **문제 ID**: `{p_id}`")
+                        st.markdown(f"🎯 **학생 답안**: `{s_ans}` ({corr_badge})")
+                        st.markdown(f"🕒 **제출 일시**: {sub_at}")
+                    
+                    with cols_img:
+                        if img_path and os.path.exists(img_path):
+                            st.image(img_path, caption=f"{s_name} 학생 풀이 과정", use_container_width=True)
+                        else:
+                            st.info("첨부된 풀이 이미지 파일이 없거나 경로를 찾을 수 없습니다.")
+        else:
+            st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
