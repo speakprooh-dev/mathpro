@@ -1589,9 +1589,9 @@ if not st.session_state["teacher_authenticated"]:
                         
                         <label style="font-size: 12px; font-weight: bold; margin-left: 10px;">두께:</label>
                         <select id="penWidth_{prob_id}" style="padding: 4px; border-radius: 4px;" onchange="updatePenWidth()">
-                            <option value="1">얇게</option>
-                            <option value="2.5" selected>보통</option>
-                            <option value="5">두껍게</option>
+                            <option value="1.5">얇게</option>
+                            <option value="3" selected>보통</option>
+                            <option value="6">두껍게</option>
                         </select>
 
                         <button onclick="undo_{prob_id}()" style="background-color:#f59e0b; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; margin-left: auto;">↩️ 되돌리기</button>
@@ -1599,48 +1599,76 @@ if not st.session_state["teacher_authenticated"]:
                     </div>
                     
                     <div style="border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; background-color: #ffffff;">
-                        <canvas id="drawCanvas_{prob_id}" width="700" height="400" style="touch-action: none; width: 100%; height: 400px; display: block; cursor: crosshair;"></canvas>
+                        <canvas id="drawCanvas_{prob_id}" width="700" height="450" style="touch-action: none; width: 100%; height: 450px; display: block; cursor: crosshair;"></canvas>
                     </div>
                 </div>
 
                 <script>
                     const canvas = document.getElementById('drawCanvas_{prob_id}');
+                    const ctx = canvas.getContext('2d');
                     
                     function resizeCanvas() {{
                         const ratio = Math.max(window.devicePixelRatio || 1, 1);
                         canvas.width = canvas.offsetWidth * ratio;
                         canvas.height = canvas.offsetHeight * ratio;
-                        canvas.getContext("2d").scale(ratio, ratio);
+                        ctx.scale(ratio, ratio);
+                        drawGrid();
                     }}
+
+                    // 수학 풀이에 최적화된 연한 모눈종이(Grid) 배경 그려넣기
+                    function drawGrid() {{
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+                        
+                        ctx.strokeStyle = '#f1f5f9'; // 아주 연한 회색 모눈선
+                        ctx.lineWidth = 1;
+                        const gridSize = 25;
+                        
+                        for (let x = 0; x < canvas.offsetWidth; x += gridSize) {{
+                            ctx.beginPath();
+                            ctx.moveTo(x, 0);
+                            ctx.lineTo(x, canvas.offsetHeight);
+                            ctx.stroke();
+                        }}
+                        for (let y = 0; y < canvas.offsetHeight; y += gridSize) {{
+                            ctx.beginPath();
+                            ctx.moveTo(0, y);
+                            ctx.lineTo(canvas.offsetWidth, y);
+                            ctx.stroke();
+                        }}
+                    }}
+
                     window.addEventListener("resize", resizeCanvas);
                     resizeCanvas();
 
                     const signaturePad = new SignaturePad(canvas, {{
-                        backgroundColor: 'rgba(255, 255, 255, 1)',
+                        backgroundColor: 'rgba(0,0,0,0)', // 투명 배경으로 모눈종이선 살림
                         penColor: '#000000',
                         minWidth: 2.5,
-                        maxWidth: 4.5
+                        maxWidth: 5
                     }});
-
-                    const defaultColor = '#000000';
 
                     window.setTool_{prob_id} = function(tool) {{
                         if (tool === 'pen') {{
                             signaturePad.compositeOperation = 'source-over';
                             signaturePad.penColor = document.getElementById('penColor_{prob_id}').value;
+                            signaturePad.minWidth = parseFloat(document.getElementById('penWidth_{prob_id}').value);
+                            signaturePad.maxWidth = signaturePad.minWidth * 1.8;
                             document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#0284C7';
                             document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#64748b';
                         }} else if (tool === 'eraser') {{
-                            // 지우개 모드: 배경색(흰색)으로 덧칠하는 방식 적용
+                            // 지우개: 흰색 펜으로 덮어쓰되, 굵기를 시원하게 키워서 슥슥 지워지도록 설정
                             signaturePad.compositeOperation = 'source-over';
-                            signaturePad.penColor = 'rgba(255, 255, 255, 1)';
+                            signaturePad.penColor = '#ffffff';
+                            signaturePad.minWidth = 20;
+                            signaturePad.maxWidth = 30;
                             document.getElementById('btnEraser_{prob_id}').style.backgroundColor = '#0284C7';
                             document.getElementById('btnPen_{prob_id}').style.backgroundColor = '#64748b';
                         }}
                     }}
 
                     document.getElementById('penColor_{prob_id}').addEventListener('change', (e) => {{
-                        if (signaturePad.penColor !== 'rgba(255, 255, 255, 1)') {{
+                        if (signaturePad.penColor !== '#ffffff') {{
                             signaturePad.penColor = e.target.value;
                         }}
                     }});
@@ -1666,6 +1694,7 @@ if not st.session_state["teacher_authenticated"]:
 
                     window.clearCanvas_{prob_id} = function() {{
                         signaturePad.clear();
+                        drawGrid(); // 전체 삭제 시 모눈종이 배경 복원
                         saveCanvasState();
                     }}
 
