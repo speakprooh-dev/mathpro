@@ -1648,10 +1648,11 @@ if not st.session_state["teacher_authenticated"]:
                             all_results.append({
                                 "order": prob["order"],
                                 "full_code": prob["full_code"],
+                                "unit_code": prob["unit_code"],  # 이 부분이 담겨 있어야 합니다
+                                "prob_num": prob["prob_num"],    # 이 부분도 담겨 있어야 합니다
                                 "user_ans": u_ans,
                                 "real_ans": real_ans,
                                 "is_correct": is_correct,
-                                "unit_code": prob["unit_code"]
                             })
 
                         # 2. 데이터베이스 저장 처리
@@ -1713,6 +1714,7 @@ if not st.session_state["teacher_authenticated"]:
                                 link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 해설 영상</a>' if v_url else '<span style="color:gray; font-size:12px;">해설 준비중</span>'
                                 
                                 u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
+                                r_ans = res["real_ans"]
                                 
                                 with st.container(border=True):
                                     col_info, col_link = st.columns([4, 1])
@@ -1725,52 +1727,41 @@ if not st.session_state["teacher_authenticated"]:
                                     st.markdown("---")
                                     st.markdown("📌 **정답:**")
                                     
-                                    # 절대 경로 설정
-                                    base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
-                                    
-                                    ans_img_path = None
-                                    checked_paths = []
-                                    
-                                    # 예: full_code가 A137207 이라면 단원코드(A137)와 문제번호(207)로 분리
-                                    # 혹은 prob_num이나 full_code 활용 패턴 생성
-                                    full_c = res["full_code"] # 예: A137207 또는 A137_207 등
-                                    
-                                    # 단원 알파벳+숫자 추출 (예: A137) 및 번호 추출
-                                    import re
-                                    match = re.match(r"^([A-Za-z]+\d+)(.+)$", full_c)
-                                    
-                                    possible_filenames = []
-                                    if match:
-                                        u_part = match.group(1) # A137
-                                        n_part = match.group(2).lstrip("0") or "0" # 207 (앞의 0 제거 형태 등)
-                                        n_padded = match.group(2) # 원래 자릿수
+                                    # 정답이 텍스트/숫자 형태인 경우 (이미지 정답이 아님) 바로 출력
+                                    if r_ans and r_ans != "-":
+                                        st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
+                                    else:
+                                        # 정답이 '-'이거나 비어있는 경우에만 master_answer 이미지 탐색
+                                        base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # 스크린샷 파일명 형식: A137_ans_(207).png
-                                        possible_filenames.extend([
-                                            f"{u_part}_ans_({n_part})",
-                                            f"{u_part}_ans_({n_padded})",
-                                            f"{u_part}_ans_{n_part}",
-                                            f"{full_c}"
-                                        ])
-                                    else:
-                                        possible_filenames.append(full_c)
-
-                                    for fname in possible_filenames:
-                                        for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG"]:
-                                            test_path = os.path.join(base_master_dir, f"{fname}{ext}")
-                                            checked_paths.append(test_path)
-                                            if os.path.exists(test_path):
-                                                ans_img_path = test_path
+                                        u_code = res["unit_code"] # 예: A114
+                                        p_raw = res["prob_num"]   # 예: 067 또는 67
+                                        p_clean = str(int(p_raw)) if p_raw.isdigit() else p_raw.lstrip("0")
+                                        
+                                        # 파일명 패턴 생성 (예: A114_ans_(67), A114_ans_(067) 등)
+                                        possible_filenames = [
+                                            f"{u_code}_ans_({p_clean})",
+                                            f"{u_code}_ans_({p_raw})",
+                                            f"{u_code}_ans_{p_clean}"
+                                        ]
+                                        
+                                        ans_img_path = None
+                                        checked_paths = []
+                                        for fname in possible_filenames:
+                                            for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG"]:
+                                                test_path = os.path.join(base_master_dir, f"{fname}{ext}")
+                                                checked_paths.append(test_path)
+                                                if os.path.exists(test_path):
+                                                    ans_img_path = test_path
+                                                    break
+                                            if ans_img_path:
                                                 break
+                                        
                                         if ans_img_path:
-                                            break
-                                    
-                                    if ans_img_path:
-                                        st.image(ans_img_path, width=350)
-                                    else:
-                                        st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 탐색 경로: <code>{checked_paths[0]}</code> 등</span>", unsafe_allow_html=True)
-                                        r_ans_str = res["real_ans"] if res["real_ans"] and res["real_ans"] != "-" else "정답 이미지 파일명 매칭 확인 필요"
-                                        st.markdown(f"<span style='font-size: 14px; color: #10B981; font-weight: bold;'>{r_ans_str}</span>", unsafe_allow_html=True)
+                                            st.image(ans_img_path, width=350)
+                                        else:
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 탐색 경로: <code>{checked_paths[0]}</code> 등</span>", unsafe_allow_html=True)
+                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
 
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
