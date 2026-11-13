@@ -1731,37 +1731,45 @@ if not st.session_state["teacher_authenticated"]:
                                     if r_ans and r_ans != "-":
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
-                                        # master_answer 폴더에서 스마트 파일 탐색
+                                        # master_answer 폴더 경로 설정
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
                                         u_code = res["unit_code"] # 예: A114
-                                        p_raw = res["prob_num"]   # 예: 067 또는 67
+                                        p_raw = str(res["prob_num"]).strip() # 예: 67 또는 067
                                         
-                                        # 숫자만 추출하여 정수형 및 2자리/3자리 문자열 준비
                                         import re
-                                        digits_only = "".join(re.findall(r'\d+', str(p_raw)))
-                                        num_int = str(int(digits_only)) if digits_only.isdigit() else digits_only
-                                        num_padded3 = num_int.zfill(3) # 067 형태
+                                        digits = "".join(re.findall(r'\d+', p_raw))
+                                        num_padded3 = digits.zfill(3) # 3자리 형태 (예: 067)
+                                        num_int = str(int(digits)) if digits.isdigit() else digits # 일반 형태 (예: 67)
+                                        
+                                        # 파일명 조합 패턴 생성 (예: A114_ans_(067), A114_ans_(67) 등)
+                                        possible_filenames = [
+                                            f"{u_code}_ans_({num_padded3})",
+                                            f"{u_code}_ans_({num_int})",
+                                            f"{u_code}_ans_{num_padded3}",
+                                            f"{u_code}_ans_{num_int}",
+                                            f"{res['full_code']}"
+                                        ]
                                         
                                         ans_img_path = None
+                                        checked_paths = []
                                         
-                                        if os.path.exists(base_master_dir):
-                                            try:
-                                                all_files = os.listdir(base_master_dir)
-                                                for fname in all_files:
-                                                    f_lower = fname.lower()
-                                                    # 파일명에 단원 코드와 문제 번호(숫자)가 모두 포함되어 있는지 확인
-                                                    if u_code.lower() in f_lower and (num_int in f_lower or num_padded3 in f_lower):
-                                                        ans_img_path = os.path.join(base_master_dir, fname)
-                                                        break
-                                            except Exception:
-                                                pass
+                                        for fname in possible_filenames:
+                                            for ext in [".png", ".jpg", ".jpeg", ".PNG", ".JPG"]:
+                                                test_path = os.path.join(base_master_dir, f"{fname}{ext}")
+                                                checked_paths.append(test_path)
+                                                if os.path.exists(test_path):
+                                                    ans_img_path = test_path
+                                                    break
+                                            if ans_img_path:
+                                                break
                                         
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 탐색 폴더: <code>{base_master_dir}</code> (단원: {u_code}, 번호: {num_int})</span>", unsafe_allow_html=True)
-                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일을 찾지 못했습니다.</span>", unsafe_allow_html=True)
+                                            # 어떤 경로들을 직접 확인했는지 안내
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 확인한 첫 번째 경로: <code>{checked_paths[0] if checked_paths else '없음'}</code></span>", unsafe_allow_html=True)
+                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
 
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
