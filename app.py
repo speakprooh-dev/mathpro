@@ -1733,48 +1733,75 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # 단원 코드 및 번호 추출 (예: A114, 067)
-                                        u_code = str(res.get("unit_code", "")).strip()
-                                        p_raw = str(res.get("prob_num", "")).strip()
-                                        
-                                        if not u_code or u_code == "TEST":
-                                            import re
-                                            match_u = re.match(r"^([A-Za-z]+\d+)", str(res["full_code"]))
-                                            if match_u:
-                                                u_code = match_u.group(1)
-                                        
+                                        # 1. 단원 코드 및 문제 번호 정밀 추출 (예: A114, 112)
+                                        f_code = str(res.get("full_code", "")).strip()
                                         import re
-                                        digits = "".join(re.findall(r'\d+', p_raw))
-                                        if not digits and res["full_code"]:
-                                            digits = "".join(re.findall(r'\d+', str(res["full_code"])))[-3:]
+                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
+                                        
+                                        unit_c = "TEST"
+                                        num_str = "000"
+                                        
+                                        if match:
+                                            unit_c = match.group(1) # A114
+                                            sub_digits = "".join(re.findall(r'\d+', match.group(2)))
+                                            if sub_digits:
+                                                num_str = sub_digits
+                                            else:
+                                                # 뒤에 숫자가 없으면 full_code 전체에서 숫자 추출
+                                                all_digits = "".join(re.findall(r'\d+', f_code))
+                                                if len(all_digits) > len(unit_c):
+                                                    num_str = all_digits[len(''.join(re.findall(r'\d+', unit_c))):]
+                                        
+                                        # 숫자를 정수형으로 변환 후 다양한 패딩 형태 생성 (예: 112, 0112 등)
+                                        try:
+                                            n_int = int(num_str)
+                                        except:
+                                            n_int = 0
                                             
-                                        num_padded3 = digits.zfill(3) # 067
-                                        num_int = str(int(digits)) if digits.isdigit() else digits # 67
+                                        p3 = str(n_int).zfill(3) # 112
+                                        p_raw = num_str.lstrip("0") or "0" # 112
+                                        
+                                        # 시도해볼 파일명 후보 리스트 대폭 확장
+                                        candidate_names = [
+                                            f"{unit_c}_ans_({p3})",      # A114_ans_(112)
+                                            f"{unit_c}_ans_({p_raw})",     # A114_ans_(112)
+                                            f"{unit_c}_ans_{p3}",        # A114_ans_112
+                                            f"{f_code}_ans_({p3})",      # A114112_ans_(112)
+                                            f"{f_code}"                  # A114112
+                                        ]
                                         
                                         ans_img_path = None
+                                        last_tried_path = ""
                                         
-                                        # G 드라이브 가상 폴더의 파일 목록을 안전하게 읽어서 매칭
-                                        if os.path.exists(base_master_dir):
+                                        for cname in candidate_names:
+                                            for ext in [".png", ".PNG", ".jpg", ".JPG", ".jpeg"]:
+                                                full_p = os.path.join(base_master_dir, f"{cname}{ext}")
+                                                last_tried_path = full_p
+                                                if os.path.exists(full_p):
+                                                    ans_img_path = full_p
+                                                    break
+                                            if ans_img_path:
+                                                break
+                                        
+                                        # 만약 위 방법으로도 못 찾았을 경우, G 드라이브 캐시 우회를 위해 pathlib로 한 번 더 강제 검색 시도
+                                        if not ans_img_path:
                                             try:
-                                                for fname in os.listdir(base_master_dir):
-                                                    f_lower = fname.lower()
-                                                    # 파일명에 단원 코드(예: a114)와 번호(예: 067 또는 _67)가 모두 포함되어 있는지 확인
-                                                    if u_code.lower() in f_lower and (f"({num_padded3})" in f_lower or f"({num_int})" in f_lower or f"_{num_padded3}" in f_lower):
-                                                        ans_img_path = os.path.join(base_master_dir, fname)
-                                                        break
+                                                from pathlib import Path
+                                                master_path_obj = Path(base_master_dir)
+                                                if master_path_obj.exists():
+                                                    # 폴더 안에서 unit_c와 p3가 들어간 파일을 직접 glob으로 검색
+                                                    pattern = f"*{unit_c}*{p3}*"
+                                                    matched_files = list(master_path_obj.glob(pattern))
+                                                    if matched_files:
+                                                        ans_img_path = str(matched_files[0])
                                             except Exception:
                                                 pass
-                                        
+
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            # 직접 경로 지정 방식도 예비로 한 번 더 체크
-                                            fallback_path = os.path.join(base_master_dir, f"{u_code}_ans_({num_padded3}).png")
-                                            if os.path.exists(fallback_path):
-                                                st.image(fallback_path, width=350)
-                                            else:
-                                                st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 대상 폴더: <code>{base_master_dir}</code> (단원: {u_code}, 번호: {num_padded3})</span>", unsafe_allow_html=True)
-                                                st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일을 찾지 못했습니다.</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 최종 시도 경로: <code>{last_tried_path}</code></span>", unsafe_allow_html=True)
+                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
