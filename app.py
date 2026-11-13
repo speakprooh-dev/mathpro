@@ -1768,11 +1768,15 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
-                                # 정답 데이터가 '1번', '2번', '3번', '4번', '5번' 형태이거나 끝에 '번'이 붙어 있으면 객관식으로 판단
-                                is_multiple_choice = raw_ans_db in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"] and "번" in raw_ans_db or raw_ans_db in ["1번", "2번", "3번", "4번", "5번"]
+
+                                # 1번~5번 또는 '1번', '3번'처럼 '번'이 들어가 있거나 1~5 사이의 숫자인 경우 객관식으로 판별
+                                is_multiple_choice = (
+                                    "번" in raw_ans_db or 
+                                    raw_ans_db in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]
+                                )
                                 
-                                # 실제 비교를 위한 정답 정제 (객관식일 경우 '3번' -> '3', 주관식일 경우 원래 값 유지)
-                                real_ans_clean = raw_ans_db.replace("번", "").strip() if raw_ans_db in ["1번", "2번", "3번", "4번", "5번"] else raw_ans_db
+                                # 실제 채점을 위한 정답 정제 ('3번' -> '3', '3' -> '3')
+                                real_ans_clean = raw_ans_db.replace("번", "").strip()
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
