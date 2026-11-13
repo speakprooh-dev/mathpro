@@ -1769,15 +1769,12 @@ if not st.session_state["teacher_authenticated"]:
         
                                 raw_ans_db = str(prob["answer"]).strip()
 
-                                # 1번~5번 또는 '1번', '3번'처럼 '번'이 들어가 있거나 1~5 사이의 숫자인 경우 객관식으로 판별
-                                is_multiple_choice = (
-                                    "번" in raw_ans_db or 
-                                    raw_ans_db in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]
-                                )
+                                # 정답에 '@' 기호가 포함되어 있으면 객관식(1~5번 선택지), 아니면 주관식 단답형으로 판별
+                                is_multiple_choice = "@" in raw_ans_db
                                 
-                                # 실제 채점을 위한 정답 정제 ('3번' -> '3', '3' -> '3')
-                                real_ans_clean = raw_ans_db.replace("번", "").strip()
-        
+                                # 실제 채점을 위한 정답 정제 ('@1' -> '1', '3' -> '3' 등)
+                                real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
+
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     selected_choice = st.radio(
