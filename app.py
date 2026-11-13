@@ -1737,33 +1737,29 @@ if not st.session_state["teacher_authenticated"]:
                                     st.markdown("---")
                                     st.markdown("📌 **정답:**")
                                     
+                                    # 1. 텍스트 정답인 경우 (컴팩트하게 수정)
                                     if r_ans and r_ans != "-":
-                                        st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='font-size: 13px; color: #10B981; font-weight: bold; margin-top: -5px; margin-bottom: 5px;'>📌 정답: {r_ans}</div>", unsafe_allow_html=True)
                                     else:
-                                        f_code = str(res.get("full_code", "")).strip() # 예: A114112
-                                        
-                                        # 앞 4글자(단원코드)와 뒤의 문제 번호 추출
-                                        u_part = f_code[:4] if len(f_code) > 4 else "A114" # A114
+                                        # 2. 이미지 정답인 경우 (크기도 150px로 아담하게 줄이고 여백 최소화)
+                                        f_code = str(res.get("full_code", "")).strip()
+                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112
+                                        n_digits = "".join(filter(str.isdigit, num_part))
                                         
                                         try:
                                             project_id = "qfpclacalaaxbhhheosw"
-                                            
-                                            # 스토리지에 실제 저장된 형식: A114_ans_(112).png
                                             target_filename = f"{u_part}_ans_({n_digits}).png"
-                                            
-                                            # Supabase Storage 공식 Public URL 조합
                                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                                             
                                             if img_url:
-                                                # width 값을 150 ~ 200 사이로 고정하면 아담하고 깔끔하게 나옵니다.
-                                                st.image(img_url, width=180)
+                                                st.markdown("<div style='font-size: 13px; color: #9CA3AF; margin-bottom: 2px;'>📌 정답:</div>", unsafe_allow_html=True)
+                                                st.image(img_url, width=150)  # 이미지 크기를 150px로 아담하게 고정
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 주소 생성 실패</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 11px; color: #EF4444;'>❌ 이미지 주소 생성 실패</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
-                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: #EF4444;'>❌ 오류: {str(e)}</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
