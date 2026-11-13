@@ -1713,17 +1713,32 @@ if not st.session_state["teacher_authenticated"]:
                                 link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 해설 영상</a>' if v_url else '<span style="color:gray; font-size:12px;">해설 준비중</span>'
                                 
                                 u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
-                                r_ans_str = res["real_ans"] if res["real_ans"] else "확인 필요"
+                                
+                                with st.container(border=True):
+                                    col_info, col_link = st.columns([4, 1])
+                                    with col_info:
+                                        st.markdown(f"<b style='color: #EF4444; font-size: 15px;'>{res['order']}번 문제</b> &nbsp; <span style='color:gray; font-size:13px;'>(`{res['full_code']}`)</span>", unsafe_allow_html=True)
+                                        st.markdown(f"<span style='font-size: 14px;'>내 답: <b style='color:#EF4444;'>{u_ans_str}</b></span>", unsafe_allow_html=True)
+                                    with col_link:
+                                        st.markdown(f"<div style='text-align: right; margin-top: 10px;'>{link_btn}</div>", unsafe_allow_html=True)
 
-                                st.markdown(f"""
-                                <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <b style="color: #EF4444; font-size: 15px;">{res['order']}번 문제</b> &nbsp; <span style="color:gray; font-size:13px;">(`{res['full_code']}`)</span><br>
-                                        <span style="font-size: 14px; margin-top: 4px; display: inline-block;">내 답: <b style="color:#EF4444;">{u_ans_str}</b> &nbsp;|&nbsp; 정답: <b style="color: #10B981;">{r_ans_str}</b></span>
-                                    </div>
-                                    <div>{link_btn}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
+                                    st.markdown("---")
+                                    st.markdown("📌 **정답:**")
+                                    
+                                    # master_answer 폴더에서 해당 문제 정답 이미지 찾아서 띄우기
+                                    ans_img_path = None
+                                    for ext in [".png", ".jpg", ".jpeg"]:
+                                        test_path = os.path.join("master_answer", f"{res['full_code']}{ext}")
+                                        if os.path.exists(test_path):
+                                            ans_img_path = test_path
+                                            break
+                                    
+                                    if ans_img_path:
+                                        st.image(ans_img_path, width=350)
+                                    else:
+                                        # 이미지가 없다면 기존 텍스트 정답 표시 (- 기호 대신 저장된 값)
+                                        r_ans_str = res["real_ans"] if res["real_ans"] and res["real_ans"] != "-" else "정답 이미지 확인 필요"
+                                        st.markdown(f"<span style='font-size: 14px; color: #10B981; font-weight: bold;'>{r_ans_str}</span>", unsafe_allow_html=True)
 
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
