@@ -1741,16 +1741,17 @@ if not st.session_state["teacher_authenticated"]:
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
+                                        
+                                        # 앞 4글자(단원코드)와 뒤의 문제 번호 추출
+                                        u_part = f_code[:4] if len(f_code) > 4 else "A114" # A114
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
+                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112
                                         
                                         try:
-                                            # 선생님의 Supabase 프로젝트 ID를 반영한 정확한 스토리지 공인 주소 포맷
                                             project_id = "qfpclacalaaxbhhheosw"
                                             
-                                            # 스토리지에 올라가 있는 파일명 규칙에 맞게 조합 (예: 101_ans_(112).png 등)
-                                            # 만약 다른 파일명 형태라면 이 부분을 맞출 수 있습니다.
-                                            target_filename = f"101_ans_({n_digits}).png"
+                                            # 스토리지에 실제 저장된 형식: A114_ans_(112).png
+                                            target_filename = f"{u_part}_ans_({n_digits}).png"
                                             
                                             # Supabase Storage 공식 Public URL 조합
                                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
@@ -1762,6 +1763,7 @@ if not st.session_state["teacher_authenticated"]:
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
+                                            
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
