@@ -1588,6 +1588,7 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown("---")
             
                         # 🚀 [수동 선택형] fragment 함수 (안내 문구 포함 및 버튼 중복 제거)
+                        # 🚀 [수동 선택형] fragment 함수 (개별 문항 비활성화 및 추가 등록 지원)
                         @st.fragment
                         def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                             correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
@@ -1603,7 +1604,7 @@ if not st.session_state["teacher_authenticated"]:
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-            
+        
                             if "master_dir_input" not in st.session_state:
                                 st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                                 
@@ -1613,11 +1614,11 @@ if not st.session_state["teacher_authenticated"]:
                                     value=st.session_state["master_dir_input"],
                                     key=f"master_dir_{sess_id}"
                                 )
-            
+        
                             st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(prob_list)}개)")
-            
+        
                             selected_wrong_notes = {}
-            
+        
                             for prob in prob_list:
                                 matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
                                 
@@ -1632,10 +1633,10 @@ if not st.session_state["teacher_authenticated"]:
                                     r_ans = prob["answer"].replace("번", "").strip()
                                     ox_mark = "-"
                                     ox_color = "gray"
-            
+        
                                 v_url, _ = get_problem_link_info(prob["full_code"])
                                 link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
-            
+        
                                 f_code = str(prob["full_code"]).strip()
                                 u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                 num_part = f_code[4:] if len(f_code) > 4 else f_code
@@ -1648,7 +1649,7 @@ if not st.session_state["teacher_authenticated"]:
                                     ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
                                 else:
                                     ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
-            
+        
                                 with st.container(border=True):
                                     st.markdown(
                                         f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
@@ -1667,7 +1668,7 @@ if not st.session_state["teacher_authenticated"]:
                                             st.image(prob["img_bytes"], use_container_width=True)
                                         else:
                                             st.info("💡 등록된 문제 이미지가 없습니다.")
-            
+        
                                     with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
                                         st.markdown(
                                             f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
@@ -1676,17 +1677,12 @@ if not st.session_state["teacher_authenticated"]:
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
-            
-                                    # 틀린 문제는 기본 체크(True) + 친절한 안내 문구
-                                    # 만약 이미 오답노트에 들어간 상태인지 체크하는 로직이 있다면 연동합니다.
-                                    # (예: 이미 등록된 상태라면 is_already_saved = True)
-                                    # 🌟 [수정 후] 해당 세션의 오답노트 저장 완료 여부 확인
-                                    # 🌟 1) 이 문제별로 이전에 등록 완료된 적이 있는지 세션에서 개별 확인
+        
+                                    # 🌟 개별 문항별 등록 완료 여부 확인 후 비활성화 분기
                                     is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                     is_checked_default = (is_cor == 0)
-            
+        
                                     if is_item_saved:
-                                        # 🌟 이미 체크해서 등록했던 문제는 비활성화(잠금) + 체크 상태 유지
                                         st.checkbox(
                                             f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
                                             value=True,
@@ -1694,42 +1690,39 @@ if not st.session_state["teacher_authenticated"]:
                                             key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
                                         )
                                     else:
-                                        # 🌟 체크 안 했던(등록 안 한) 문제들은 여전히 활성화 상태로 제공 (나중에 언제든 추가 체크 가능!)
                                         selected_wrong_notes[prob['full_code']] = st.checkbox(
                                             f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
                                             value=is_checked_default,
                                             key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                         )
-            
-                        if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
-                            manual_wrong_units = {}
-                            current_checked_codes = [] # 이번에 체크한 문제 코드를 담을 리스트
-                            
-                            for prob in prob_list:
-                                if selected_wrong_notes.get(prob['full_code'], False):
-                                    current_checked_codes.append(prob['full_code'])
-                                    if prob["unit_code"] != "TEST":
-                                        manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
-            
-                            try:
-                                for u_code, num_set in manual_wrong_units.items():
-                                    existing_txt = get_student_wrong_entry(s_name, u_code)
-                                    pre_nums = parse_numbers(existing_txt)
-                                    merged_nums = pre_nums | num_set
-                                    merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                    save_student_wrong_entry(s_name, u_code, merged_txt)
+        
+                            # 📥 하단 등록 버튼 (함수 내부의 올바른 `sess_id` 참조)
+                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
+                                manual_wrong_units = {}
+                                current_checked_codes = []
                                 
-                                # 🌟 이번에 새로 체크해서 등록한 문제들만 개별적으로 '등록 완료' 플래그 지정
-                                for f_code in current_checked_codes:
-                                    st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
-            
-                                st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
-                                
-                                # 🌟 화면을 즉시 갱신하여, 방금 등록한 항목들만 비활성화 잠금 처리
-                                st.rerun()
-                                
-                            except Exception as e:
-                                st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
+                                for prob in prob_list:
+                                    if selected_wrong_notes.get(prob['full_code'], False):
+                                        current_checked_codes.append(prob['full_code'])
+                                        if prob["unit_code"] != "TEST":
+                                            manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
+        
+                                try:
+                                    for u_code, num_set in manual_wrong_units.items():
+                                        existing_txt = get_student_wrong_entry(s_name, u_code)
+                                        pre_nums = parse_numbers(existing_txt)
+                                        merged_nums = pre_nums | num_set
+                                        merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                        save_student_wrong_entry(s_name, u_code, merged_txt)
+                                    
+                                    for f_code in current_checked_codes:
+                                        st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
+        
+                                    st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
+                                    st.rerun()
+                                    
+                                except Exception as e:
+                                    st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
             
                         if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
                             if f"all_results_{selected_session_id}" not in st.session_state:
