@@ -1748,41 +1748,34 @@ if not st.session_state["teacher_authenticated"]:
                                         target_filename = ""
                                         
                                         try:
-                                            db_client = None
-                                            for var_name in ['client', 'supabase', 'db', 'supabase_client']:
-                                                if var_name in locals() or var_name in globals():
-                                                    db_client = eval(var_name)
-                                                    break
-                                            if not db_client and 'st' in globals() and hasattr(st, 'session_state'):
-                                                for k, v in st.session_state.items():
-                                                    if 'supabase' in str(type(v)).lower() or 'client' in str(type(v)).lower():
-                                                        db_client = v
-                                                        break
-
-                                            if db_client:
-                                                # 스토리지에 실제 올라가 있는 형태(101_ans_(112).png 등)를 유연하게 조합
-                                                # 만약 파일들이 모두 101로 시작한다면 101_ans_({n_digits}).png 로 매칭합니다.
-                                                candidates = [
-                                                    f"101_ans_({n_digits}).png",
-                                                    f"101_ans_({n_digits.zfill(3)}).png",
-                                                    f"{f_code[:4]}_ans_({n_digits}).png",
-                                                    f"{n_digits}.png"
-                                                ]
+                                            from supabase import create_client
+                                            
+                                            # st.secrets에서 Supabase 정보를 직접 가져와서 확실하게 연결합니다.
+                                            sb_url = st.secrets["SUPABASE_URL"]
+                                            sb_key = st.secrets["SUPABASE_KEY"]
+                                            temp_client = create_client(sb_url, sb_key)
+                                            
+                                            # 스토리지 파일명 후보 조합 (101_ans_(112).png 등)
+                                            candidates = [
+                                                f"101_ans_({n_digits}).png",
+                                                f"101_ans_({n_digits.zfill(3)}).png",
+                                                f"{f_code[:4]}_ans_({n_digits}).png",
+                                                f"{n_digits}.png"
+                                            ]
+                                            
+                                            for cand in candidates:
+                                                target_filename = cand
+                                                pub_res = temp_client.storage.from_("master_answer").get_public_url(cand)
+                                                temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
                                                 
-                                                for cand in candidates:
-                                                    target_filename = cand
-                                                    pub_res = db_client.storage.from_("master_answer").get_public_url(cand)
-                                                    temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
-                                                    
-                                                    # Supabase는 파일이 없어도 URL 문자열을 뱉기 때문에, 실제 존재하는지 확인하거나 101_ 패턴으로 확정
-                                                    if temp_url and "http" in temp_url:
-                                                        img_url = temp_url
-                                                        break
+                                                if temp_url and "http" in temp_url:
+                                                    img_url = temp_url
+                                                    break
                                             
                                             if img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 로드 실패 (파일명: {target_filename})</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 로드 실패 (시도한 파일명: {target_filename})</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
