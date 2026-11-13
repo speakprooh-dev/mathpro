@@ -1519,7 +1519,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("노트에 푼 후, 정답을 체크하고 **맨 아래 제출 버튼**을 누르면 자동 채점 및 오답노트로 바로 연동됩니다!")
+            st.markdown("노트에 푼 후, 객관식은 번호를 선택하고 주관식은 정답을 입력한 뒤 **맨 아래 제출 버튼**을 눌러주세요!")
             
             conn_test, db_type_test = get_db_connection()
             c_test = conn_test.cursor()
@@ -1598,23 +1598,36 @@ if not st.session_state["teacher_authenticated"]:
                         else:
                             st.info("💡 등록된 문제 이미지가 없습니다.")
 
-                        saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
-                        default_idx = int(saved_ans) if saved_ans in ["1", "2", "3", "4", "5"] else 0
+                        # 정답이 1~5 단일 숫자이면 객관식(라디오), 아니면 주관식(텍스트 입력)
+                        real_ans_clean = prob["answer"].replace("번", "").strip()
+                        is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
 
-                        choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
-                        selected_choice = st.radio(
-                            f"{idx + 1}번 정답 선택:",
-                            options=choice_options,
-                            index=default_idx,
-                            key=f"radio_{p_key}",
-                            horizontal=True
-                        )
+                        if is_multiple_choice:
+                            saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
+                            default_idx = int(saved_ans) if saved_ans in ["1", "2", "3", "4", "5"] else 0
 
-                        if selected_choice != "선택 안 함":
-                            user_ans = selected_choice.replace("번", "").strip()
+                            choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
+                            selected_choice = st.radio(
+                                f"{idx + 1}번 정답 선택 (객관식):",
+                                options=choice_options,
+                                index=default_idx,
+                                key=f"radio_{p_key}",
+                                horizontal=True
+                            )
+
+                            if selected_choice != "선택 안 함":
+                                user_ans = selected_choice.replace("번", "").strip()
+                            else:
+                                user_ans = ""
                         else:
-                            user_ans = ""
-                            
+                            saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
+                            user_ans = st.text_input(
+                                f"{idx + 1}번 정답 입력 (주관식 단답형):",
+                                value=saved_ans,
+                                key=f"text_{p_key}",
+                                placeholder="정답을 입력하세요"
+                            ).strip()
+
                         st.session_state.scroll_quiz_answers[p_key] = user_ans
                         st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
 
@@ -1640,8 +1653,8 @@ if not st.session_state["teacher_authenticated"]:
                               (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
 
                             if is_correct == 0 and prob["unit_code"] != "TEST":
-                                existing_txt = get_student_wrong_entry(selected_student, prob["unit_code"])
-                                pre_nums = parse_numbers(existing_txt)
+                                existing_st = get_student_wrong_entry(selected_student, prob["unit_code"])
+                                pre_nums = parse_numbers(existing_st)
                                 try:
                                     pre_nums.add(int(prob["prob_num"]))
                                     merged_txt = ", ".join(map(str, sorted(list(pre_nums))))
