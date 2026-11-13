@@ -1678,12 +1678,25 @@ if not st.session_state["teacher_authenticated"]:
                                         )
             
                                     # 틀린 문제는 기본 체크(True) + 친절한 안내 문구
-                                    is_checked_default = (is_cor == 0)
-                                    selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
-                                        value=is_checked_default,
-                                        key=f"wrong_chk_{sess_id}_{prob['item_id']}"
-                                    )
+                                    # 만약 이미 오답노트에 들어간 상태인지 체크하는 로직이 있다면 연동합니다.
+                                    # (예: 이미 등록된 상태라면 is_already_saved = True)
+                                    is_already_saved = False # 실제 DB나 세션에 저장된 여부에 따라 True/False 설정
+                                    
+                                    is_checked_default = (is_cor == 0) and not is_already_saved
+                                    
+                                    if is_already_saved:
+                                        st.checkbox(
+                                            f"✅ {prob['order']}번 문제 (이미 오답노트에 등록 완료됨)",
+                                            value=True,
+                                            disabled=True,
+                                            key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
+                                        )
+                                    else:
+                                        selected_wrong_notes[prob['full_code']] = st.checkbox(
+                                            f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
+                                            value=is_checked_default,
+                                            key=f"wrong_chk_{sess_id}_{prob['item_id']}"
+                                        )
             
                             # 🚀 오직 맨 아래에 딱 1개만 깔끔하게 위치하는 등록 버튼
                             if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
