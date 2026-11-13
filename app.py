@@ -1550,7 +1550,7 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, file_name FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
         
                     problem_list = []
@@ -1770,7 +1770,8 @@ if not st.session_state["teacher_authenticated"]:
         
                                 raw_ans_db = str(prob["answer"]).strip()
 
-                                # 💡 정답에 '번'이나 '@'가 포함된 경우만 객관식으로 판별 (숫자 '1' 단독은 주관식 처리)
+                                # 💡 핵심: 정답 글자에 '번'이 포함되어 있거나 '@'가 있는 경우만 객관식! 
+                                # (주관식 정답인 숫자 '1' 등에는 '번'이나 '@'가 없으므로 절대 객관식으로 오인되지 않습니다)
                                 is_multiple_choice = "번" in raw_ans_db or "@" in raw_ans_db
                                 
                                 real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
