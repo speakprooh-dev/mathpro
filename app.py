@@ -1733,64 +1733,47 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # 1. 단원 코드(예: A114)와 문제 번호(예: 112) 정확히 추출
-                                        f_code = str(res.get("full_code", "")).strip() # 예: A114112
-                                        u_code = str(res.get("unit_code", "")).strip() # 예: A114
-                                        p_raw = str(res.get("prob_num", "")).strip()   # 예: 112
+                                        # 1. full_code (예: A114112)에서 단원코드(A114)와 문제번호(112)를 무조건 깔끔하게 분리
+                                        f_code = str(res.get("full_code", "")).strip()
                                         
                                         import re
-                                        if not u_code or u_code == "TEST":
-                                            match_u = re.match(r"^([A-Za-z]+\d+)", f_code)
-                                            if match_u:
-                                                u_code = match_u.group(1)
-                                        
-                                        # 문제 번호에서 숫자만 추출 (예: 112)
-                                        digits = "".join(re.findall(r'\d+', p_raw))
-                                        if not digits and f_code:
-                                            digits = "".join(re.findall(r'\d+', f_code))
-                                            # 앞부분이 단원 코드 숫자라면 뒤쪽을 문제번호로 취급
-                                            if len(digits) > len(''.join(re.findall(r'\d+', u_code))):
-                                                digits = digits[len(''.join(re.findall(r'\d+', u_code))):]
-                                        
-                                        # 2. 선생님의 실제 파일명 규칙 조합: 단원코드_ans_(문제번호)
-                                        # 예: A114_ans_(112), A137_ans_(207) 등
-                                        candidate_names = [
-                                            f"{u_code}_ans_({digits})",      # A114_ans_(112) -> 패딩 없는 원래 번호
-                                            f"{u_code}_ans_({digits.lstrip('0')})", # 앞 0 제거 버전
-                                            f"{u_code}_ans_({digits.zfill(3)})",    # 3자리 패딩 버전
-                                            f"{f_code}"                      # 혹시 모를 전체 코드 형태
-                                        ]
+                                        # 영문 알파벳 + 숫자로 된 단원 코드 추출 (예: A114)
+                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
                                         
                                         ans_img_path = None
-                                        last_tried_path = ""
+                                        tried_filename = ""
                                         
-                                        for cname in candidate_names:
-                                            for ext in [".png", ".PNG", ".jpg", ".JPG", ".jpeg"]:
-                                                full_p = os.path.join(base_master_dir, f"{cname}{ext}")
-                                                last_tried_path = full_p
-                                                if os.path.exists(full_p):
-                                                    ans_img_path = full_p
+                                        if match:
+                                            u_part = match.group(1) # A114
+                                            remainder = match.group(2) # 112
+                                            # 남은 부분에서 숫자만 추출 (문제 번호)
+                                            num_part = "".join(re.findall(r'\d+', remainder))
+                                            if not num_part:
+                                                num_part = "".join(re.findall(r'\d+', f_code))[len(''.join(re.findall(r'\d+', u_part))):]
+                                            
+                                            # 선생님의 정확한 파일명 규칙: A114_ans_(112).png
+                                            # 괄호 포함, 패딩 여부 등 다양한 경우의 수 조합
+                                            possible_files = [
+                                                f"{u_part}_ans_({num_part})",          # A114_ans_(112)
+                                                f"{u_part}_ans_({num_part.lstrip('0')})",# A114_ans_(112) (앞 0 제거)
+                                                f"{u_part}_ans_({num_part.zfill(3)})",   # A114_ans_(0112)
+                                                f"{u_part}_ans_{num_part}"             # A114_ans_112
+                                            ]
+                                            
+                                            for fname in possible_files:
+                                                for ext in [".png", ".PNG", ".jpg", ".JPG"]:
+                                                    test_p = os.path.join(base_master_dir, f"{fname}{ext}")
+                                                    tried_filename = f"{fname}{ext}"
+                                                    if os.path.exists(test_p):
+                                                        ans_img_path = test_p
+                                                        break
+                                                if ans_img_path:
                                                     break
-                                            if ans_img_path:
-                                                break
                                         
-                                        # 3. 만약 위 경로로 안 잡히면 pathlib glob으로 유연하게 한 번 더 탐색
-                                        if not ans_img_path:
-                                            try:
-                                                from pathlib import Path
-                                                m_dir = Path(base_master_dir)
-                                                if m_dir.exists():
-                                                    # 예: *A114*112* 형태 검색
-                                                    matched = list(m_dir.glob(f"*{u_code}*{digits}*"))
-                                                    if matched:
-                                                        ans_img_path = str(matched[0])
-                                            except:
-                                                pass
-
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 최종 시도 경로: <code>{last_tried_path}</code></span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 시도한 파일명: <code>{tried_filename}</code></span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
