@@ -1740,57 +1740,43 @@ if not st.session_state["teacher_authenticated"]:
                                     if r_ans and r_ans != "-":
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
-                                        from pathlib import Path
-                                        import os
+                                        # 💡 Supabase Storage에서 이미지를 공인 URL로 가져와 렌더링합니다.
+                                        f_code = str(res.get("full_code", "")).strip() # 예: A114112 또는 101 등
                                         
-                                        # 💡 app.py가 있는 폴더 기준 절대 경로를 강제로 생성합니다. (어디서 실행하든 100% 일치)
-                                        try:
-                                            current_script_dir = Path(__file__).resolve().parent
-                                        except NameError:
-                                            current_script_dir = Path.cwd()
-                                            
-                                        base_master_dir = current_script_dir / "master_answer"
-                                        
-                                        f_code = str(res.get("full_code", "")).strip() # 예: A114112
-                                        ans_img_path = None
-                                        
-                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
-                                        num_part = f_code[4:] if len(f_code) > 4 else "112"
+                                        u_part = f_code[:4] if len(f_code) > 4 else "101"
+                                        num_part = f_code[4:] if len(f_code) > 4 else f_code
                                         n_digits = "".join(filter(str.isdigit, num_part))
                                         
-                                        is_ok = base_master_dir.exists()
+                                        # Supabase에 업로드된 파일명 형식에 맞춤 (예: 101_ans_(003).png 또는 A114_ans_(112).png)
+                                        target_filename = f"{u_part}_ans_({n_digits}).png"
                                         
-                                        if is_ok:
-                                            try:
-                                                # 1. 정확한 파일명 조합 시도 (A114_ans_(112).png 등)
-                                                for fname_candidate in [
-                                                    f"{u_part}_ans_({n_digits}).png",
-                                                    f"{u_part}_ans_({n_digits}).PNG",
-                                                    f"{u_part}_ans_({n_digits}).jpg",
-                                                    f"{u_part}_ans_({n_digits}).JPG",
-                                                    f"{u_part}_{n_digits}.png"
-                                                ]:
-                                                    target_p = base_master_dir / fname_candidate
-                                                    if target_p.is_file():
-                                                        ans_img_path = str(target_p)
-                                                        break
+                                        try:
+                                            # Supabase client 객체 이름(supabase 또는 client 등 프로젝트에 맞게 수정 가능)
+                                            # 보통 supabase 로 선언되어 있습니다.
+                                            public_url_res = supabase.storage.from_("master_answer").get_public_url(target_filename)
+                                            
+                                            # 반환 형태에 따른 처리 (버전에 따라 문자열 또는 dict일 수 있음)
+                                            if isinstance(public_url_res, dict):
+                                                img_url = public_url_res.get("publicUrl") or public_url_res.get("data", {}).get("publicUrl")
+                                            else:
+                                                img_url = str(public_url_res)
                                                 
-                                                # 2. 안 되면 폴더 전체 검색
-                                                if not ans_img_path:
-                                                    for file_p in base_master_dir.glob("*"):
-                                                        if file_p.is_file():
-                                                            fname = file_p.name.lower()
-                                                            if u_part.lower() in fname and n_digits in fname:
-                                                                ans_img_path = str(file_p)
-                                                                break
-                                            except Exception:
-                                                pass
-                                        
-                                        if ans_img_path:
-                                            st.image(ans_img_path, width=350)
-                                        else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로 상태: <code>{base_master_dir}</code> (존재함: {is_ok})</span>", unsafe_allow_html=True)
-                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
+                                            if img_url:
+                                                st.image(img_url, width=350)
+                                            else:
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 URL 생성 실패 ({target_filename})</span>", unsafe_allow_html=True)
+                                        except Exception as e:
+                                            # 만약 다른 파일명 패턴일 경우를 대비한 대체 후보
+                                            try:
+                                                alt_filename = f"{f_code}_ans.png"
+                                                public_url_res = supabase.storage.from_("master_answer").get_public_url(alt_filename)
+                                                img_url = str(public_url_res) if not isinstance(public_url_res, dict) else public_url_res.get("publicUrl")
+                                                if img_url:
+                                                    st.image(img_url, width=350)
+                                                else:
+                                                    raise Exception()
+                                            except:
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 로드 오류: {target_filename}</span>", unsafe_allow_html=True)
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
