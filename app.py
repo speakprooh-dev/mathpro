@@ -1706,7 +1706,7 @@ if not st.session_state["teacher_authenticated"]:
                         incorrect_list = [r for r in all_results if r["is_correct"] == 0]
                         correct_list = [r for r in all_results if r["is_correct"] == 1]
 
-                        # 틀린 문제 카드 섹션
+                       # 틀린 문제 카드 섹션
                         if incorrect_list:
                             st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
                             for res in incorrect_list:
