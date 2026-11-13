@@ -1709,6 +1709,17 @@ if not st.session_state["teacher_authenticated"]:
                        # 틀린 문제 카드 섹션
                         if incorrect_list:
                             st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
+                            
+                            # 💡 세션에 경로 저장용 변수 초기화
+                            if "master_dir_input" not in st.session_state:
+                                st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
+                                
+                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정 (경로가 안 잡힐 때 여기를 확인하세요)", expanded=False):
+                                st.session_state["master_dir_input"] = st.text_input(
+                                    "master_answer 폴더의 실제 경로를 입력해주세요:",
+                                    value=st.session_state["master_dir_input"]
+                                )
+
                             for res in incorrect_list:
                                 v_url, _ = get_problem_link_info(res["full_code"])
                                 link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 해설 영상</a>' if v_url else '<span style="color:gray; font-size:12px;">해설 준비중</span>'
@@ -1732,59 +1743,46 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         from pathlib import Path
                                         
-                                        # 후보 경로들을 여러 개 준비해서 존재하는 것을 무조건 찾아냄
-                                        possible_dirs = [
-                                            Path(r"D:\MathPro\master_answer"),
-                                            Path(r"D:\MathPro 프로그램\Math_Master\master_answer"),
-                                            Path(r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer")
-                                        ]
+                                        user_path_str = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer")
+                                        base_master_dir = Path(user_path_str.strip())
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
-                                        checked_dir_msg = ""
                                         
                                         u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else "112"
                                         n_digits = "".join(filter(str.isdigit, num_part))
                                         
-                                        for d_path in possible_dirs:
-                                            checked_dir_msg += f"<br>· 시도한 폴더 ({d_path}): "
-                                            if d_path.exists():
-                                                checked_dir_msg += "<b>존재함(O)</b>"
-                                                try:
-                                                    # 정확한 파일명 직접 조합 시도 (예: A114_ans_(112).png 등)
-                                                    for fname_candidate in [
-                                                        f"{u_part}_ans_({n_digits}).png",
-                                                        f"{u_part}_ans_({n_digits}).JPG",
-                                                        f"{u_part}_ans_({n_digits}).PNG",
-                                                        f"{u_part}_ans__{n_digits}.png"
-                                                    ]:
-                                                        target_p = d_path / fname_candidate
-                                                        if target_p.exists():
-                                                            ans_img_path = str(target_p)
-                                                            break
-                                                    
-                                                    # 그래도 못 찾았으면 폴더 안에서 glob 스캔
-                                                    if not ans_img_path:
-                                                        for file_p in d_path.glob("*"):
-                                                            if file_p.is_file():
-                                                                fname = file_p.name.lower()
-                                                                if u_part.lower() in fname and n_digits in fname:
-                                                                    ans_img_path = str(file_p)
-                                                                    break
-                                                except Exception as e:
-                                                    checked_dir_msg += f" (에러: {e})"
-                                            else:
-                                                checked_dir_msg += "없음(X)"
-                                            
-                                            if ans_img_path:
-                                                break
+                                        if base_master_dir.exists():
+                                            try:
+                                                # 1. 정확한 이름 매칭 시도 (A114_ans_(112).png 등)
+                                                for fname_candidate in [
+                                                    f"{u_part}_ans_({n_digits}).png",
+                                                    f"{u_part}_ans_({n_digits}).PNG",
+                                                    f"{u_part}_ans_({n_digits}).jpg",
+                                                    f"{u_part}_ans_({n_digits}).JPG"
+                                                ]:
+                                                    target_p = base_master_dir / fname_candidate
+                                                    if target_p.exists():
+                                                        ans_img_path = str(target_p)
+                                                        break
+                                                
+                                                # 2. 안 되면 폴더 내 검색
+                                                if not ans_img_path:
+                                                    for file_p in base_master_dir.glob("*"):
+                                                        if file_p.is_file():
+                                                            fname = file_p.name.lower()
+                                                            if u_part.lower() in fname and n_digits in fname:
+                                                                ans_img_path = str(file_p)
+                                                                break
+                                            except Exception:
+                                                pass
                                         
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 12px; color: #D97706;'>⚠️ <b>진단 로그 (단원: {u_part}, 번호: {n_digits})</b> {checked_dir_msg}</span>", unsafe_allow_html=True)
-                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 입력된 경로: <code>{base_master_dir}</code> (존재 여부: {base_master_dir.exists()})</span>", unsafe_allow_html=True)
+                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다. 경로가 올바른지 위 설정에서 확인해 주세요.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
