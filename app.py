@@ -1677,7 +1677,6 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
     
-                                # 🌟 개별 문항별 등록 완료 여부 확인 후 비활성화 분기
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = (is_cor == 0)
     
@@ -1695,7 +1694,6 @@ if not st.session_state["teacher_authenticated"]:
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
     
-                        # 📥 하단 등록 버튼 (함수 내부의 올바른 `sess_id` 참조)
                         if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                             manual_wrong_units = {}
                             current_checked_codes = []
@@ -1755,8 +1753,6 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
         
                         all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
-                        
-                        # 리뷰 리스트 함수 호출
                         render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
         
                     else:
@@ -2011,12 +2007,18 @@ else:
 
             templates = get_homework_templates()
             if templates:
-                def on_template_change():
-                    chosen = st.session_state.get("select_hw_template_box", "")
-                    if chosen and chosen != "-- 템플릿 선택 --":
-                        cur = st.session_state.get("hw_text_area_input", "")
-                        st.session_state["hw_text_area_input"] = (cur + "\n" + chosen) if cur.strip() else chosen
-                st.selectbox("📌 템플릿 불러오기", ["-- 템플릿 선택 --"] + [t[1] for t in templates], key="select_hw_template_box", on_template_change=on_template_change)
+                st.markdown("📌 **템플릿 불러오기**")
+                selected_template_to_load = st.selectbox(
+                    "불러올 템플릿 선택", 
+                    ["-- 템플릿 선택 --"] + [t[1] for t in templates], 
+                    key="select_hw_template_box"
+                )
+                if st.button("📥 선택한 템플릿 내용 적용하기", type="secondary"):
+                    if selected_template_to_load and selected_template_to_load != "-- 템플릿 선택 --":
+                        current_hw_area = st.session_state.get("hw_text_area_input", "")
+                        st.session_state["hw_text_area_input"] = (current_hw_area + "\n" + selected_template_to_load) if current_hw_area.strip() else selected_template_to_load
+                        st.success("템플릿 내용이 아래 과제 입력란에 추가되었습니다!")
+                        st.rerun()
 
             with st.form("add_student_hw_form"):
                 hw_date_input = st.date_input("과제 등록일(날짜)", value=get_korean_today())
@@ -2024,6 +2026,7 @@ else:
                 
                 hw_text_area = st.text_area(
                     "과제 내용 (문장 끝에 26/11/15 적으면 개별 마감일 자동 지정)", 
+                    value=st.session_state.get("hw_text_area_input", ""),
                     key="hw_text_area_input", 
                     height=150, 
                     placeholder="예시:\n교과서 10쪽 풀기\n단원 평가 오답노트 작성 26/11/15"
@@ -2429,7 +2432,6 @@ else:
         conn_sub, _ = get_db_connection()
         c_sub = conn_sub.cursor()
         try:
-            # 🌟 테스트(세션) 단위로 묶어서 학생명, 테스트명, 제출일시, 총 문항 수, 정답 수를 집계
             q(c_sub, """
                 SELECT 
                     student_name, 
@@ -2467,7 +2469,6 @@ else:
                         unsafe_allow_html=True
                     )
 
-                    # 상세 문항 내역이 필요할 때만 펼쳐 볼 수 있도록 expander 제공
                     with st.expander(f"🔍 문항별 상세 답안 보기 ({total_cnt}문항)", expanded=False):
                         q(c_sub, """
                             SELECT problem_id, student_answer, is_checked 
