@@ -1677,10 +1677,9 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
             
-                                    # 틀린 문제는 기본 체크(True)
                                     is_checked_default = (is_cor == 0)
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
+                                        f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
                                         value=is_checked_default,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
@@ -1828,37 +1827,9 @@ if not st.session_state["teacher_authenticated"]:
                                 st.session_state[f"correct_count_{selected_session_id}"] = correct_count
                                 st.balloons()
                                 st.rerun()
-                            
-                                # 4) 📌 오답노트 추가 선택 체크박스 (틀린 문제는 기본 체크, 맞은 문제는 해제 상태)
-                                is_checked_default = (is_cor == 0)
-                                selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                    f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
-                                    value=is_checked_default,
-                                    key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
-                                )
-
-                        # 5) 🚀 선택한 문제들을 오답노트에 최종 등록하는 버튼
-                        if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True):
-                            manual_wrong_units = {}
-                            for prob in problem_list:
-                                if selected_wrong_notes.get(prob['full_code'], False):
-                                    if prob["unit_code"] != "TEST":
-                                        manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
-
-                            try:
-                                for u_code, num_set in manual_wrong_units.items():
-                                    existing_txt = get_student_wrong_entry(selected_student, u_code)
-                                    pre_nums = parse_numbers(existing_txt)
-                                    merged_nums = pre_nums | num_set
-                                    merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                    save_student_wrong_entry(selected_student, u_code, merged_txt)
-                                
-                                st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
-                            except Exception as e:
-                                st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
-
-    else:
-        st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
+            
+                else:
+                    st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
 
 # ====================================================
 # 2. [선생님 전용 관리 모드]
