@@ -1733,27 +1733,32 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # full_code (예: A114067)에서 알파벳+숫자 단원코드와 뒤의 문제번호를 정밀 분리
-                                        import re
-                                        f_code = str(res["full_code"]).strip()
-                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
+                                        # res["unit_code"] (예: A114)와 res["prob_num"] (예: 67) 활용
+                                        u_code = str(res.get("unit_code", "")).strip()
+                                        p_raw = str(res.get("prob_num", "")).strip()
                                         
-                                        possible_filenames = []
-                                        if match:
-                                            alpha_unit = match.group(1) # 예: A114
-                                            num_part = match.group(2).lstrip("0") or "0" # 예: 67
-                                            num_padded3 = num_part.zfill(3) # 예: 067
+                                        # 만약 unit_code가 비어있다면 full_code(A114067)에서 앞 영문+숫자만 추출 (예: A114)
+                                        if not u_code or u_code == "TEST":
+                                            import re
+                                            match_u = re.match(r"^([A-Za-z]+\d+)", str(res["full_code"]))
+                                            if match_u:
+                                                u_code = match_u.group(1)
+                                        
+                                        # 번호 정제 및 3자리 패딩 (예: 67 -> 067)
+                                        import re
+                                        digits = "".join(re.findall(r'\d+', p_raw))
+                                        if not digits and res["full_code"]:
+                                            digits = "".join(re.findall(r'\d+', str(res["full_code"])))[-3:] # 뒤에서 3자리
                                             
-                                            # 가능한 모든 파일명 패턴 나열
-                                            possible_filenames.extend([
-                                                f"{alpha_unit}_ans_({num_padded3})",
-                                                f"{alpha_unit}_ans_({num_part})",
-                                                f"{alpha_unit}_ans_{num_padded3}",
-                                                f"{f_code}_ans",
-                                                f"{f_code}"
-                                            ])
-                                        else:
-                                            possible_filenames.append(f_code)
+                                        num_padded3 = digits.zfill(3) if digits else "000"
+                                        num_int = str(int(digits)) if digits.isdigit() else digits
+                                        
+                                        # 파일명 패턴 조합 (A114_ans_(067) 형태)
+                                        possible_filenames = [
+                                            f"{u_code}_ans_({num_padded3})",
+                                            f"{u_code}_ans_({num_int})",
+                                            f"{u_code}_ans_{num_padded3}"
+                                        ]
                                         
                                         ans_img_path = None
                                         checked_paths = []
@@ -1771,7 +1776,7 @@ if not st.session_state["teacher_authenticated"]:
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 첫 번째 확인 경로: <code>{checked_paths[0] if checked_paths else '없음'}</code></span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 확인한 경로: <code>{checked_paths[0] if checked_paths else '없음'}</code></span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
