@@ -1762,7 +1762,7 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
                                 
-                                # 2) 🔒 문제 사진 토글 (기본값 expanded=False로 설정하여 제출 후 무조건 접혀있도록 처리)
+                                # 2) 🔒 문제 사진 토글 (기본값 expanded=False로 설정하여 평소에는 완전히 접혀 있음)
                                 with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
                                     if prob["img_bytes"]:
                                         st.image(prob["img_bytes"], use_container_width=True)
@@ -1778,11 +1778,6 @@ if not st.session_state["teacher_authenticated"]:
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
-                                # 2) 문제 이미지 사진 출력
-                                if prob["img_bytes"]:
-                                    st.image(prob["img_bytes"], use_container_width=True)
-                                else:
-                                    st.info("💡 등록된 문제 이미지가 없습니다.")
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
