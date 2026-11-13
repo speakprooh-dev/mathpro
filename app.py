@@ -1587,7 +1587,7 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
                         st.markdown("---")
             
-                        # 🚀 [핵심] 체크박스와 카드 렌더링 부분을 별도의 fragment 함수로 분리하여 로딩/깜빡임 차단
+                        # 🚀 [수동 선택형] fragment 함수 (안내 문구 추가 및 버튼 중복 제거)
                         @st.fragment
                         def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                             correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
@@ -1597,6 +1597,9 @@ if not st.session_state["teacher_authenticated"]:
                                 <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
                                 <p style="font-size: 18px; font-weight: bold; margin: 0;">
                                     총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
+                                </p>
+                                <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
+                                    ⚠️ 오답노트에 담을 문제를 체크하신 후, <b>반드시 맨 아래의 [선택한 문제들을 오답노트에 등록하기] 버튼을 눌러주세요!</b>
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -1674,13 +1677,15 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
             
-                                    is_checked_default = False
+                                    # 틀린 문제는 기본 체크(True)
+                                    is_checked_default = (is_cor == 0)
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
                                         f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
                                         value=is_checked_default,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
             
+                            # 🚀 오직 맨 아래에 딱 1개만 깔끔하게 위치하는 등록 버튼
                             if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                                 manual_wrong_units = {}
                                 for prob in prob_list:
@@ -1733,7 +1738,7 @@ if not st.session_state["teacher_authenticated"]:
             
                             all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
                             
-                            # 🌟 fragment 함수 호출로 대체하여 체크박스 클릭 시 깜빡임/로딩 방지
+                            # 수동 등록형 리뷰 리스트 호출 (중복 버튼 제거 및 상단 안내문구 포함)
                             render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
             
                         else:
