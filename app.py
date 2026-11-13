@@ -6,7 +6,6 @@ import re
 import pandas as pd
 import io
 import os
-from PIL import Image
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -1519,7 +1518,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("태블릿 노트 앱(굿노트·삼성노트 등)에 풀이한 후 캡처하거나, 연습장에 풀고 카메라로 촬영하여 **풀이 사진을 업로드**하고 **정답을 입력**하여 제출하세요!")
+            st.markdown("노트에 푼 후, 정답을 입력하고 제출하면 **자동 채점 및 오답노트**로 바로 연동됩니다!")
             
             sample_online_problems = [
                 {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
@@ -1537,8 +1536,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state.quiz_idx = 0
                 if "quiz_answers" not in st.session_state:
                     st.session_state.quiz_answers = {}
-                if "quiz_images" not in st.session_state:
-                    st.session_state.quiz_images = {}
 
                 total_q = len(problem_list)
                 idx = st.session_state.quiz_idx
@@ -1551,21 +1548,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.image(curr_prob["img_path"], use_container_width=True)
                 else:
                     st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없어 가상 공간으로 표시됩니다. 실제 이미지 파일 경로를 연결해 주세요!")
-
-                st.divider()
-
-                st.markdown("**📸 풀이 사진 업로드 (태블릿 노트 캡처 / 휴대폰 카메라 촬영)**")
-                st.caption("💡 태블릿파는 노트 앱 캡처본을 선택하고, 연습장파는 [카메라]를 선택해 바로 촬영하여 업로드하세요!")
-                
-                uploaded_file = st.file_uploader(
-                    "풀이 이미지 파일 선택 또는 카메라 촬영",
-                    type=["png", "jpg", "jpeg"],
-                    key=f"upload_{prob_id}"
-                )
-                if uploaded_file is not None:
-                    img = Image.open(uploaded_file).convert("RGB")
-                    st.session_state.quiz_images[prob_id] = img
-                    st.image(img, caption="업로드된 풀이 미리보기", width=300)
 
                 st.divider()
 
@@ -1608,12 +1590,6 @@ if not st.session_state["teacher_authenticated"]:
                         correct_count += 1
 
                     img_save_path = ""
-                    if p_id in st.session_state.quiz_images:
-                        pil_img = st.session_state.quiz_images[p_id]
-                        pil_img.thumbnail((1200, 1200))
-                        filename = f"{student_name}_{p_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-                        img_save_path = os.path.join("submissions", filename)
-                        pil_img.save(img_save_path, format="JPEG", quality=80)
 
                     if db_type == "postgres":
                         q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
@@ -1633,7 +1609,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 st.session_state.quiz_idx = 0
                 st.session_state.quiz_answers = {}
-                st.session_state.quiz_images = {}
 
             render_online_test_slide(selected_student, "실력 점검 주간 테스트", sample_online_problems, conn_test)
 
@@ -2217,12 +2192,12 @@ else:
                     st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
 
     with t_cfg_tests:
-        st.markdown("#### 📋 학생 온라인 테스트 제출물 및 풀이 뷰어")
+        st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회")
         
         conn_sub, _ = get_db_connection()
         c_sub = conn_sub.cursor()
         try:
-            q(c_sub, "SELECT id, student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions ORDER BY submitted_at DESC")
+            q(c_sub, "SELECT id, student_name, test_title, problem_id, student_answer, is_checked, submitted_at FROM student_test_submissions ORDER BY submitted_at DESC")
             sub_rows = c_sub.fetchall()
         except Exception:
             sub_rows = []
@@ -2234,21 +2209,10 @@ else:
             st.markdown(f"**총 제출 내역: {len(filtered_subs)}건**")
             st.markdown("---")
 
-            for sub_id, s_name, t_title, p_id, s_ans, is_corr, img_path, sub_at in filtered_subs:
+            for sub_id, s_name, t_title, p_id, s_ans, is_corr, sub_at in filtered_subs:
                 corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
                 with st.container(border=True):
-                    cols_info, cols_img = st.columns([1.5, 2.5])
-                    with cols_info:
-                        st.markdown(f"👤 **학생**: `{s_name}`")
-                        st.markdown(f"📝 **테스트명**: {t_title}")
-                        st.markdown(f"📌 **문제 ID**: `{p_id}`")
-                        st.markdown(f"🎯 **학생 답안**: `{s_ans}` ({corr_badge})")
-                        st.markdown(f"🕒 **제출 일시**: {sub_at}")
-                    
-                    with cols_img:
-                        if img_path and os.path.exists(img_path):
-                            st.image(img_path, caption=f"{s_name} 학생 풀이 과정", use_container_width=True)
-                        else:
-                            st.info("첨부된 풀이 이미지 파일이 없거나 경로를 찾을 수 없습니다.")
+                    st.markdown(f"👤 **학생**: `{s_name}` &nbsp;|&nbsp; 📝 **테스트명**: {t_title}")
+                    st.markdown(f"📌 **문제 ID**: `{p_id}` &nbsp;|&nbsp; 🎯 **학생 답안**: `{s_ans}` ({corr_badge}) &nbsp;|&nbsp; 🕒 **제출일시**: {sub_at}")
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
