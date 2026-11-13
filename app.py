@@ -1733,42 +1733,36 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # MathPro 코드 규칙: 앞 4글자는 단원 코드(A114), 나머지는 문제 번호(112 등)
                                         f_code = str(res.get("full_code", "")).strip()
-                                        
                                         ans_img_path = None
-                                        tried_filename = ""
+                                        tried_info = ""
                                         
                                         if len(f_code) > 4:
                                             u_part = f_code[:4]  # 예: A114
-                                            num_part = f_code[4:] # 예: 112 또는 067
+                                            num_part = f_code[4:] # 예: 112
+                                            n_clean = str(int(num_part)) if num_part.isdigit() else num_part
+                                            tried_info = f"단원: {u_part}, 번호: {n_clean}"
                                             
-                                            # 숫자로 변환 후 다양한 자릿수 조합 생성 (예: 112, 0112 등)
-                                            try:
-                                                n_val = int(num_part)
-                                            except:
-                                                n_val = num_part
-                                                
-                                            possible_files = [
-                                                f"{u_part}_ans_({num_part})",         # A114_ans_(112)
-                                                f"{u_part}_ans_({str(n_val)})",       # A114_ans_(112) (앞 0 제거)
-                                                f"{u_part}_ans_({str(n_val).zfill(3)})"# A114_ans_(0112) (3자리 패딩)
-                                            ]
+                                            from pathlib import Path
+                                            master_dir_p = Path(base_master_dir)
                                             
-                                            for fname in possible_files:
-                                                for ext in [".png", ".PNG", ".jpg", ".JPG"]:
-                                                    test_p = os.path.join(base_master_dir, f"{fname}{ext}")
-                                                    tried_filename = f"{fname}{ext}"
-                                                    if os.path.exists(test_p):
-                                                        ans_img_path = test_p
-                                                        break
-                                                if ans_img_path:
-                                                    break
+                                            if master_dir_p.exists():
+                                                try:
+                                                    # G 드라이브 폴더 내부를 직접 스캔하여 단원코드와 번호가 모두 포함된 파일 탐색
+                                                    for file_path in master_dir_p.iterdir():
+                                                        if file_path.is_file():
+                                                            fname_lower = file_path.name.lower()
+                                                            # 파일명에 단원 코드(예: a114)와 문제 번호(예: 112)가 모두 들어가 있다면 매칭!
+                                                            if u_part.lower() in fname_lower and n_clean in fname_lower:
+                                                                ans_img_path = str(file_path)
+                                                                break
+                                                except Exception:
+                                                    pass
                                         
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 시도한 파일명: <code>{tried_filename}</code></span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 탐색 정보: <code>{tried_info}</code></span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
