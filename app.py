@@ -1648,8 +1648,8 @@ if not st.session_state["teacher_authenticated"]:
                             all_results.append({
                                 "order": prob["order"],
                                 "full_code": prob["full_code"],
-                                "unit_code": prob["unit_code"],  # 이 부분이 담겨 있어야 합니다
-                                "prob_num": prob["prob_num"],    # 이 부분도 담겨 있어야 합니다
+                                "unit_code": prob["unit_code"],
+                                "prob_num": prob["prob_num"],
                                 "user_ans": u_ans,
                                 "real_ans": real_ans,
                                 "is_correct": is_correct,
