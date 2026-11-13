@@ -1554,7 +1554,7 @@ if not st.session_state["teacher_authenticated"]:
                     raw_items = c_test.fetchall()
         
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:  # <-- 변수 6개만 정확히 맞춤
+                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -1564,6 +1564,16 @@ if not st.session_state["teacher_authenticated"]:
                             except Exception:
                                 pass
         
+                        # 💡 원본 문제 테이블(예: problems)에서 해당 문제의 file_name을 조회해 옵니다.
+                        # (테이블 이름이 다를 경우 실제 원본 테이블명으로 맞춰주세요)
+                        f_name = ""
+                        try:
+                            res_fn = q(c_test, "SELECT file_name FROM problems WHERE unit_code = ? AND prob_num = ?", (u_code, p_num))
+                            if res_fn and res_fn[0]:
+                                f_name = str(res_fn[0][0])
+                        except Exception:
+                            pass
+
                         problem_list.append({
                             "item_id": item_id,
                             "order": p_order,
@@ -1571,7 +1581,8 @@ if not st.session_state["teacher_authenticated"]:
                             "unit_code": u_code or "TEST",
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
-                            "img_bytes": decoded_img
+                            "img_bytes": decoded_img,
+                            "file_name": f_name
                         })
                     st.session_state[cache_key_items] = problem_list
         
@@ -1768,9 +1779,10 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
+                                file_name_val = str(prob.get("file_name", ""))
 
-                                # 💡 정답에 '번'이나 '@'가 포함된 경우만 객관식 (숫자 '1' 등 주관식과 완벽 분리)
-                                is_multiple_choice = "번" in raw_ans_db or "@" in raw_ans_db
+                                # 💡 파일명에 '@'가 있거나 정답에 '번'이 있으면 객관식! (주관식 '1' 등과 완벽 분리)
+                                is_multiple_choice = "@" in file_name_val or "번" in raw_ans_db or "@" in raw_ans_db
                                 
                                 real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
 
