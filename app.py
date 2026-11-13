@@ -1733,31 +1733,26 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # 1. full_code (예: A114112)에서 단원코드(A114)와 문제번호(112)를 무조건 깔끔하게 분리
+                                        # MathPro 코드 규칙: 앞 4글자는 단원 코드(A114), 나머지는 문제 번호(112 등)
                                         f_code = str(res.get("full_code", "")).strip()
-                                        
-                                        import re
-                                        # 영문 알파벳 + 숫자로 된 단원 코드 추출 (예: A114)
-                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
                                         
                                         ans_img_path = None
                                         tried_filename = ""
                                         
-                                        if match:
-                                            u_part = match.group(1) # A114
-                                            remainder = match.group(2) # 112
-                                            # 남은 부분에서 숫자만 추출 (문제 번호)
-                                            num_part = "".join(re.findall(r'\d+', remainder))
-                                            if not num_part:
-                                                num_part = "".join(re.findall(r'\d+', f_code))[len(''.join(re.findall(r'\d+', u_part))):]
+                                        if len(f_code) > 4:
+                                            u_part = f_code[:4]  # 예: A114
+                                            num_part = f_code[4:] # 예: 112 또는 067
                                             
-                                            # 선생님의 정확한 파일명 규칙: A114_ans_(112).png
-                                            # 괄호 포함, 패딩 여부 등 다양한 경우의 수 조합
+                                            # 숫자로 변환 후 다양한 자릿수 조합 생성 (예: 112, 0112 등)
+                                            try:
+                                                n_val = int(num_part)
+                                            except:
+                                                n_val = num_part
+                                                
                                             possible_files = [
-                                                f"{u_part}_ans_({num_part})",          # A114_ans_(112)
-                                                f"{u_part}_ans_({num_part.lstrip('0')})",# A114_ans_(112) (앞 0 제거)
-                                                f"{u_part}_ans_({num_part.zfill(3)})",   # A114_ans_(0112)
-                                                f"{u_part}_ans_{num_part}"             # A114_ans_112
+                                                f"{u_part}_ans_({num_part})",         # A114_ans_(112)
+                                                f"{u_part}_ans_({str(n_val)})",       # A114_ans_(112) (앞 0 제거)
+                                                f"{u_part}_ans_({str(n_val).zfill(3)})"# A114_ans_(0112) (3자리 패딩)
                                             ]
                                             
                                             for fname in possible_files:
