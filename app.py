@@ -1587,7 +1587,7 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
                         st.markdown("---")
             
-                        # 🚀 [수동 선택형] fragment 함수 (안내 문구 추가 및 버튼 중복 제거)
+                        # 🚀 [수동 선택형] fragment 함수 (안내 문구 포함 및 버튼 중복 제거)
                         @st.fragment
                         def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                             correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
@@ -1677,6 +1677,7 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
             
+                                    # 틀린 문제는 기본 체크(True) + 친절한 안내 문구
                                     is_checked_default = (is_cor == 0)
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
                                         f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
@@ -1737,7 +1738,7 @@ if not st.session_state["teacher_authenticated"]:
             
                             all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
                             
-                            # 수동 등록형 리뷰 리스트 호출 (중복 버튼 제거 및 상단 안내문구 포함)
+                            # 리뷰 리스트 함수 호출
                             render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
             
                         else:
