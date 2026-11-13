@@ -1625,66 +1625,54 @@ if not st.session_state["teacher_authenticated"]:
                         # 폼 내부의 제출 버튼 (이 버튼을 누르기 전까지는 새로고침이 전혀 일어나지 않습니다)
                         submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
 
-                    # 폼이 제출된 시점에 실행되는 채점 및 DB 저장 로직 (디자인 및 가독성 대폭 개선)
-                    if submitted:
-                        now_str = get_korean_now_str()
-                        correct_count = 0
-                        all_results = []
-                        wrong_units_to_update = {}
+                   # 폼이 제출된 시점에 실행되는 채점 및 DB 저장 로직 (자동 오답노트 등록 제거 버전)
+                if submitted:
+                    now_str = get_korean_now_str()
+                    correct_count = 0
+                    all_results = []
 
-                        # 1. 채점 및 결과 수집
-                        for prob in problem_list:
-                            p_key = f"form_{selected_session_id}_{prob['item_id']}"
-                            real_ans = prob["answer"].replace("번", "").strip()
-                            u_ans = form_answers.get(p_key, "").replace("번", "").strip()
-                            
-                            is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
-                            if is_correct:
-                                correct_count += 1
+                    # 1. 채점 및 결과 수집 (자동 오답노트 수집 로직 제거)
+                    for prob in problem_list:
+                        p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                        real_ans = prob["answer"].replace("번", "").strip()
+                        u_ans = form_answers.get(p_key, "").replace("번", "").strip()
+                        
+                        is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
+                        if is_correct:
+                            correct_count += 1
+
+                        all_results.append({
+                            "order": prob["order"],
+                            "full_code": prob["full_code"],
+                            "unit_code": prob["unit_code"],
+                            "prob_num": prob["prob_num"],
+                            "user_ans": u_ans,
+                            "real_ans": real_ans,
+                            "is_correct": is_correct,
+                        })
+
+                    # 2. 데이터베이스 저장 처리 (제출 결과만 저장)
+                    try:
+                        is_postgres = "psycopg2" in str(type(conn_test))
+
+                        for res in all_results:
+                            if is_postgres:
+                                c_test.execute(
+                                    "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                                    (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_checked"], "", now_str)
+                                )
                             else:
-                                if prob["unit_code"] != "TEST":
-                                    wrong_units_to_update.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
+                                q(c_test,
+                                  "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                  (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
 
-                            all_results.append({
-                                "order": prob["order"],
-                                "full_code": prob["full_code"],
-                                "unit_code": prob["unit_code"],
-                                "prob_num": prob["prob_num"],
-                                "user_ans": u_ans,
-                                "real_ans": real_ans,
-                                "is_correct": is_correct,
-                            })
+                        # 세션 완료 처리
+                        q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
+                        conn_test.commit()
+                        st.cache_data.clear()
 
-                        # 2. 데이터베이스 저장 처리
-                        try:
-                            is_postgres = "psycopg2" in str(type(conn_test))
-
-                            for res in all_results:
-                                if is_postgres:
-                                    c_test.execute(
-                                        "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                                        (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str)
-                                    )
-                                else:
-                                    q(c_test,
-                                      "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                      (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
-
-                            # 오답노트 일괄 반영
-                            for u_code, num_set in wrong_units_to_update.items():
-                                existing_txt = get_student_wrong_entry(selected_student, u_code)
-                                pre_nums = parse_numbers(existing_txt)
-                                merged_nums = pre_nums | num_set
-                                merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                save_student_wrong_entry(selected_student, u_code, merged_txt)
-
-                            # 세션 완료 처리
-                            q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
-                            conn_test.commit()
-                            st.cache_data.clear()
-
-                        except Exception as db_err:
-                            st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
+                    except Exception as db_err:
+                        st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
 
                        # 1. 과제 제출 완료 축하 배너
                         st.balloons()
@@ -1710,8 +1698,10 @@ if not st.session_state["teacher_authenticated"]:
                                 value=st.session_state["master_dir_input"]
                             )
 
-                        # 2. 🌟 채점 완료 후: 상단 한 줄 바 + 접혀 있는 문제 사진 토글 + 접혀 있는 정답 토글
+                        # 2. 🌟 채점 완료 후: 상단 한 줄 바 + 접혀 있는 문제 사진 토글 + 접혀 있는 정답 토글 + 오답노트 선택 체크박스
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({total_q_cnt}개)")
+
+                        selected_wrong_notes = {}
 
                         for prob in problem_list:
                             matched_res = next((r for r in all_results if r['full_code'] == prob['full_code']), None)
@@ -1762,7 +1752,7 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
                                 
-                                # 2) 🔒 문제 사진 토글 (기본값 expanded=False로 설정하여 평소에는 완전히 접혀 있음)
+                                # 2) 🔒 문제 사진 토글 (기본값 expanded=False로 설정하여 완벽히 접혀 있음)
                                 with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
                                     if prob["img_bytes"]:
                                         st.image(prob["img_bytes"], use_container_width=True)
@@ -1778,6 +1768,34 @@ if not st.session_state["teacher_authenticated"]:
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
+
+                                # 4) 📌 오답노트 추가 선택 체크박스 (틀린 문제는 기본 체크, 맞은 문제는 해제 상태)
+                                is_checked_default = (is_cor == 0)
+                                selected_wrong_notes[prob['full_code']] = st.checkbox(
+                                    f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
+                                    value=is_checked_default,
+                                    key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
+                                )
+
+                        # 5) 🚀 선택한 문제들을 오답노트에 최종 등록하는 버튼
+                        if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True):
+                            manual_wrong_units = {}
+                            for prob in problem_list:
+                                if selected_wrong_notes.get(prob['full_code'], False):
+                                    if prob["unit_code"] != "TEST":
+                                        manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
+
+                            try:
+                                for u_code, num_set in manual_wrong_units.items():
+                                    existing_txt = get_student_wrong_entry(selected_student, u_code)
+                                    pre_nums = parse_numbers(existing_txt)
+                                    merged_nums = pre_nums | num_set
+                                    merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                    save_student_wrong_entry(selected_student, u_code, merged_txt)
+                                
+                                st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
+                            except Exception as e:
+                                st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
