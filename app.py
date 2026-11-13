@@ -1744,43 +1744,35 @@ if not st.session_state["teacher_authenticated"]:
                                         
                                         u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
+                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112
                                         
                                         img_url = None
                                         
                                         try:
-                                            # 1차 시도: A114_ans_(112).png 형태로 조합해서 요청
-                                            target_filename = f"{u_part}_ans_({n_digits}).png"
-                                            pub_res = supabase.storage.from_("master_answer").get_public_url(target_filename)
-                                            img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                            # 후보 파일명들을 여러 개 만들어두고 Supabase에서 직접 Public URL을 생성합니다.
+                                            # 예: A114_ans_(112).png, A114_ans_(0112).png 등
+                                            candidates = [
+                                                f"{u_part}_ans_({n_digits}).png",
+                                                f"{u_part}_ans_({n_digits.zfill(3)}).png", # 112 -> 112 (세 자리 이상은 그대로)
+                                                f"{n_digits}.png"
+                                            ]
                                             
-                                            # 이미지가 실제로 존재하는지 확인하기 위해 가볍게 체크 (만약 주소가 비어있거나 에러면 예외로 빠짐)
-                                            if not img_url or "error" in str(pub_res).lower():
+                                            for candidate in candidates:
+                                                pub_res = supabase.storage.from_("master_answer").get_public_url(candidate)
+                                                temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                                
+                                                # URL이 정상적으로 만들어졌다면 채택
+                                                if temp_url and "http" in temp_url:
+                                                    img_url = temp_url
+                                                    break
+                                                    
+                                            if img_url:
+                                                st.image(img_url, width=350)
+                                            else:
                                                 raise Exception()
                                                 
                                         except Exception:
-                                            try:
-                                                # 2차 시도: 만약 파일명이 다른 형식(예: 번호만 있거나 다른 단원 코드)일 경우를 대비해 스토리지 목록에서 n_digits가 포함된 파일을 검색
-                                                files_list = supabase.storage.from_("master_answer").list()
-                                                matched_file = None
-                                                if files_list:
-                                                    for file_info in files_list:
-                                                        fname = file_info.get("name", "")
-                                                        # 파일 이름 안에 문제 번호(예: 112)가 포함되어 있다면 채택!
-                                                        if f"({n_digits})" in fname or f"_{n_digits}." in fname:
-                                                            matched_file = fname
-                                                            break
-                                                
-                                                if matched_file:
-                                                    pub_res = supabase.storage.from_("master_answer").get_public_url(matched_file)
-                                                    img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
-                                            except Exception:
-                                                pass
-                                        
-                                        if img_url:
-                                            st.image(img_url, width=350)
-                                        else:
-                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 정답 이미지 매칭 실패 (코드: {f_code}, 번호: {n_digits})</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 정답 이미지 로드 실패 (코드: {f_code}, 대상파일명: {u_part}_ans_({n_digits}).png)</span>", unsafe_allow_html=True)
                                         
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
