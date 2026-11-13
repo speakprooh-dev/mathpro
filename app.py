@@ -1744,42 +1744,43 @@ if not st.session_state["teacher_authenticated"]:
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
                                         n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
-                                        img_url = None
-                                        target_filename = ""
-                                        
                                         try:
-                                            from supabase import create_client
+                                            # Supabase 프로젝트의 URL과 버킷 이름을 활용한 직접 Public 주소 조합
+                                            # 선생님의 Supabase 프로젝트 주소 기반
+                                            project_ref = "speakprooh-dev's Project" # 또는 Supabase 고유 프로젝트 ID
                                             
-                                            # st.secrets에서 Supabase 정보를 직접 가져와서 확실하게 연결합니다.
-                                            sb_url = st.secrets["SUPABASE_URL"]
-                                            sb_key = st.secrets["SUPABASE_KEY"]
-                                            temp_client = create_client(sb_url, sb_key)
-                                            
-                                            # 스토리지 파일명 후보 조합 (101_ans_(112).png 등)
+                                            # 가장 확실한 방법: Supabase 스토리지의 공인 URL 구조 직접 생성
+                                            # 예시 파일명 후보들 중 스토리지에 있는 형태 매칭
                                             candidates = [
                                                 f"101_ans_({n_digits}).png",
                                                 f"101_ans_({n_digits.zfill(3)}).png",
-                                                f"{f_code[:4]}_ans_({n_digits}).png",
-                                                f"{n_digits}.png"
+                                                f"{f_code[:4]}_ans_({n_digits}).png"
                                             ]
                                             
-                                            for cand in candidates:
-                                                target_filename = cand
-                                                pub_res = temp_client.storage.from_("master_answer").get_public_url(cand)
-                                                temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
-                                                
-                                                if temp_url and "http" in temp_url:
-                                                    img_url = temp_url
-                                                    break
+                                            # st.secrets에서 프로젝트 URL을 가져오거나 직접 표준 URL 사용
+                                            # Supabase Public URL 기본 포맷: https://[PROJECT_ID].supabase.co/storage/v1/object/public/master_answer/[FILENAME]
+                                            base_url = "https://rruuubvtzjhzrghwuxyz.supabase.co" # 만약 secrets에 있다면 st.secrets에 맞게 수정 가능
+                                            
+                                            # st.secrets에 supabase url이 있다면 가져오기 시도
+                                            try:
+                                                if hasattr(st, 'secrets') and "SUPABASE_URL" in st.secrets:
+                                                    base_url = st.secrets["SUPABASE_URL"]
+                                            except:
+                                                pass
+                                            
+                                            # URL에 직접 꽂아 넣을 파일명 결정 (예: 101_ans_(112).png 등)
+                                            target_filename = f"101_ans_({n_digits}).png"
+                                            
+                                            # 최종 퍼블릭 이미지 URL 완성
+                                            img_url = f"{base_url}/storage/v1/object/public/master_answer/{target_filename}"
                                             
                                             if img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 로드 실패 (시도한 파일명: {target_filename})</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 주소 생성 실패</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
-                                        
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
