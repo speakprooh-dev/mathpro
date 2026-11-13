@@ -1603,10 +1603,13 @@ if not st.session_state["teacher_authenticated"]:
                         is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
 
                         if is_multiple_choice:
+                            # 1~5번 객관식 라디오
                             saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
                             default_idx = int(saved_ans) if saved_ans in ["1", "2", "3", "4", "5"] else 0
 
                             choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
+                            
+                            # key를 고정하여 상태 유지 최적화
                             selected_choice = st.radio(
                                 f"{idx + 1}번 정답 선택 (객관식):",
                                 options=choice_options,
@@ -1620,6 +1623,7 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 user_ans = ""
                         else:
+                            # 주관식 단답형 입력
                             saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
                             user_ans = st.text_input(
                                 f"{idx + 1}번 정답 입력 (주관식 단답형):",
@@ -1628,6 +1632,7 @@ if not st.session_state["teacher_authenticated"]:
                                 placeholder="정답을 입력하세요"
                             ).strip()
 
+                        # 입력 즉시 메모리에 반영 (DB 저장은 아님!)
                         st.session_state.scroll_quiz_answers[p_key] = user_ans
                         st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
 
