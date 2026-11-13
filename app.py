@@ -1710,7 +1710,6 @@ if not st.session_state["teacher_authenticated"]:
                         if incorrect_list:
                             st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
                             
-                            # 항상 강제로 올바른 초기값 설정
                             if "master_dir_input" not in st.session_state:
                                 st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                                 
@@ -1742,9 +1741,19 @@ if not st.session_state["teacher_authenticated"]:
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
                                         from pathlib import Path
+                                        import os
                                         
-                                        curr_path_str = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer").strip()
-                                        base_master_dir = Path(curr_path_str)
+                                        raw_input_path = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer").strip()
+                                        
+                                        # 백슬래시 정리 및 경로 객체 생성
+                                        clean_path_str = raw_input_path.replace('"', '').replace("'", "")
+                                        base_master_dir = Path(clean_path_str)
+                                        
+                                        # 만약 리눅스 환경(WSL 등)에서 D:\ 로 입력했을 때의 예외 처리 보정
+                                        if not base_master_dir.exists() and clean_path_str.startswith("D:\\"):
+                                            alt_wsl_path = Path("/mnt/d/" + clean_path_str[3:].replace("\\", "/"))
+                                            if alt_wsl_path.exists():
+                                                base_master_dir = alt_wsl_path
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
@@ -1753,10 +1762,11 @@ if not st.session_state["teacher_authenticated"]:
                                         num_part = f_code[4:] if len(f_code) > 4 else "112"
                                         n_digits = "".join(filter(str.isdigit, num_part))
                                         
-                                        # 경로가 존재할 때만 파일 탐색 수행
-                                        if base_master_dir.is_dir():
+                                        is_ok = base_master_dir.exists()
+                                        
+                                        if is_ok:
                                             try:
-                                                # 후보 파일명 순회
+                                                # 1. 정확한 파일명 조합 시도 (A114_ans_(112).png 등)
                                                 for fname_candidate in [
                                                     f"{u_part}_ans_({n_digits}).png",
                                                     f"{u_part}_ans_({n_digits}).PNG",
@@ -1769,7 +1779,7 @@ if not st.session_state["teacher_authenticated"]:
                                                         ans_img_path = str(target_p)
                                                         break
                                                 
-                                                # 안 되면 glob 전체 검색
+                                                # 2. 안 되면 폴더 전체 검색
                                                 if not ans_img_path:
                                                     for file_p in base_master_dir.glob("*"):
                                                         if file_p.is_file():
@@ -1783,8 +1793,7 @@ if not st.session_state["teacher_authenticated"]:
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            is_ok = base_master_dir.is_dir()
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로 상태: <code>{base_master_dir}</code> (폴더 존재함: {is_ok})</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로 상태: <code>{base_master_dir}</code> (존재함: {is_ok})</span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
