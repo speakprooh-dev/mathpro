@@ -1733,41 +1733,32 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        # 1. 단원 코드 및 문제 번호 정밀 추출 (예: A114, 112)
-                                        f_code = str(res.get("full_code", "")).strip()
+                                        # 1. 단원 코드(예: A114)와 문제 번호(예: 112) 정확히 추출
+                                        f_code = str(res.get("full_code", "")).strip() # 예: A114112
+                                        u_code = str(res.get("unit_code", "")).strip() # 예: A114
+                                        p_raw = str(res.get("prob_num", "")).strip()   # 예: 112
+                                        
                                         import re
-                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
+                                        if not u_code or u_code == "TEST":
+                                            match_u = re.match(r"^([A-Za-z]+\d+)", f_code)
+                                            if match_u:
+                                                u_code = match_u.group(1)
                                         
-                                        unit_c = "TEST"
-                                        num_str = "000"
+                                        # 문제 번호에서 숫자만 추출 (예: 112)
+                                        digits = "".join(re.findall(r'\d+', p_raw))
+                                        if not digits and f_code:
+                                            digits = "".join(re.findall(r'\d+', f_code))
+                                            # 앞부분이 단원 코드 숫자라면 뒤쪽을 문제번호로 취급
+                                            if len(digits) > len(''.join(re.findall(r'\d+', u_code))):
+                                                digits = digits[len(''.join(re.findall(r'\d+', u_code))):]
                                         
-                                        if match:
-                                            unit_c = match.group(1) # A114
-                                            sub_digits = "".join(re.findall(r'\d+', match.group(2)))
-                                            if sub_digits:
-                                                num_str = sub_digits
-                                            else:
-                                                # 뒤에 숫자가 없으면 full_code 전체에서 숫자 추출
-                                                all_digits = "".join(re.findall(r'\d+', f_code))
-                                                if len(all_digits) > len(unit_c):
-                                                    num_str = all_digits[len(''.join(re.findall(r'\d+', unit_c))):]
-                                        
-                                        # 숫자를 정수형으로 변환 후 다양한 패딩 형태 생성 (예: 112, 0112 등)
-                                        try:
-                                            n_int = int(num_str)
-                                        except:
-                                            n_int = 0
-                                            
-                                        p3 = str(n_int).zfill(3) # 112
-                                        p_raw = num_str.lstrip("0") or "0" # 112
-                                        
-                                        # 시도해볼 파일명 후보 리스트 대폭 확장
+                                        # 2. 선생님의 실제 파일명 규칙 조합: 단원코드_ans_(문제번호)
+                                        # 예: A114_ans_(112), A137_ans_(207) 등
                                         candidate_names = [
-                                            f"{unit_c}_ans_({p3})",      # A114_ans_(112)
-                                            f"{unit_c}_ans_({p_raw})",     # A114_ans_(112)
-                                            f"{unit_c}_ans_{p3}",        # A114_ans_112
-                                            f"{f_code}_ans_({p3})",      # A114112_ans_(112)
-                                            f"{f_code}"                  # A114112
+                                            f"{u_code}_ans_({digits})",      # A114_ans_(112) -> 패딩 없는 원래 번호
+                                            f"{u_code}_ans_({digits.lstrip('0')})", # 앞 0 제거 버전
+                                            f"{u_code}_ans_({digits.zfill(3)})",    # 3자리 패딩 버전
+                                            f"{f_code}"                      # 혹시 모를 전체 코드 형태
                                         ]
                                         
                                         ans_img_path = None
@@ -1783,18 +1774,17 @@ if not st.session_state["teacher_authenticated"]:
                                             if ans_img_path:
                                                 break
                                         
-                                        # 만약 위 방법으로도 못 찾았을 경우, G 드라이브 캐시 우회를 위해 pathlib로 한 번 더 강제 검색 시도
+                                        # 3. 만약 위 경로로 안 잡히면 pathlib glob으로 유연하게 한 번 더 탐색
                                         if not ans_img_path:
                                             try:
                                                 from pathlib import Path
-                                                master_path_obj = Path(base_master_dir)
-                                                if master_path_obj.exists():
-                                                    # 폴더 안에서 unit_c와 p3가 들어간 파일을 직접 glob으로 검색
-                                                    pattern = f"*{unit_c}*{p3}*"
-                                                    matched_files = list(master_path_obj.glob(pattern))
-                                                    if matched_files:
-                                                        ans_img_path = str(matched_files[0])
-                                            except Exception:
+                                                m_dir = Path(base_master_dir)
+                                                if m_dir.exists():
+                                                    # 예: *A114*112* 형태 검색
+                                                    matched = list(m_dir.glob(f"*{u_code}*{digits}*"))
+                                                    if matched:
+                                                        ans_img_path = str(matched[0])
+                                            except:
                                                 pass
 
                                         if ans_img_path:
