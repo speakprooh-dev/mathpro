@@ -1735,14 +1735,18 @@ if not st.session_state["teacher_authenticated"]:
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
                                         u_code = res["unit_code"] # 예: A114
-                                        p_raw = res["prob_num"]   # 예: 067 또는 67
-                                        p_clean = str(int(p_raw)) if p_raw.isdigit() else p_raw.lstrip("0")
+                                        p_raw = res["prob_num"]   # 예: 67 또는 067
                                         
-                                        # 파일명 패턴 생성 (예: A114_ans_(67), A114_ans_(067) 등)
+                                        # 문제 번호를 3자리 문자열로 강제 변환 (예: 67 -> 067)
+                                        try:
+                                            p_3digits = str(int(p_raw)).zfill(3)
+                                        except Exception:
+                                            p_3digits = str(p_raw).zfill(3)
+                                        
+                                        # 파일명 패턴 생성 (예: A114_ans_(067))
                                         possible_filenames = [
-                                            f"{u_code}_ans_({p_clean})",
-                                            f"{u_code}_ans_({p_raw})",
-                                            f"{u_code}_ans_{p_clean}"
+                                            f"{u_code}_ans_({p_3digits})",
+                                            f"{u_code}_ans_({p_raw})"
                                         ]
                                         
                                         ans_img_path = None
