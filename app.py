@@ -1686,10 +1686,11 @@ if not st.session_state["teacher_authenticated"]:
                                     is_checked_default = (is_cor == 0)
                                     
                                     if is_wrong_saved:
-                                        # 이미 등록 완료된 경우 체크박스를 비활성화(disabled=True)하고 잠금 처리
+                                        # 🌟 사용자가 실제로 체크했던 상태(True/False)를 가져와서 잠금 상태에서도 그대로 유지
+                                        user_checked_before = st.session_state.get(f"wrong_chk_{sess_id}_{prob['item_id']}", is_checked_default)
                                         st.checkbox(
                                             f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
-                                            value=is_checked_default,
+                                            value=user_checked_before,
                                             disabled=True,
                                             key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
                                         )
