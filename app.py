@@ -1741,11 +1741,11 @@ if not st.session_state["teacher_authenticated"]:
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
+                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
                                         n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
                                         img_url = None
-                                        file_names_preview = []
                                         
                                         try:
                                             db_client = None
@@ -1760,28 +1760,16 @@ if not st.session_state["teacher_authenticated"]:
                                                         break
 
                                             if db_client:
-                                                files_list = db_client.storage.from_("master_answer").list()
+                                                # Supabase Storage에 저장된 파일명 패턴 조합 (예: A114_ans_(112).png 등)
+                                                target_filename = f"{u_part}_ans_({n_digits}).png"
                                                 
-                                                matched_filename = None
-                                                if files_list:
-                                                    for file_info in files_list:
-                                                        fname = file_info.get("name", "")
-                                                        file_names_preview.append(fname)
-                                                        
-                                                        # 숫자가 포함되어 있는지 유연하게 검사 (112, 0112 등)
-                                                        if n_digits in fname or str(int(n_digits)) in fname:
-                                                            matched_filename = fname
-                                                            break
-                                                
-                                                if matched_filename:
-                                                    pub_res = db_client.storage.from_("master_answer").get_public_url(matched_filename)
-                                                    img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                                pub_res = db_client.storage.from_("master_answer").get_public_url(target_filename)
+                                                img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
                                             
-                                            if img_url:
+                                            if img_url and "http" in img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 찾으려는 번호: <strong>{n_digits}</strong></span>", unsafe_allow_html=True)
-                                                st.markdown(f"<span style='font-size: 11px; color: #6B7280;'>스토리지에 있는 파일 목록 일부: {file_names_preview[:10]}</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 URL 생성 실패 ({target_filename})</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
