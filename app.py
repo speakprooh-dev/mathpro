@@ -1593,7 +1593,11 @@ if not st.session_state["teacher_authenticated"]:
                             
                             # DB나 session_state에 결과가 없다면 복원
                             if f"all_results_{selected_session_id}" not in st.session_state:
-                                c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
+                                is_postgres = "psycopg2" in str(type(conn_test))
+                                if is_postgres:
+                                    c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (selected_student, selected_test_title))
+                                else:
+                                    q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
                                 submitted_rows = c_test.fetchall()
                                 sub_dict = {row[0]: {"user_ans": row[1], "is_correct": row[2]} for row in submitted_rows}
                                 
