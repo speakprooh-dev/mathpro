@@ -1743,7 +1743,8 @@ if not st.session_state["teacher_authenticated"]:
                                         from pathlib import Path
                                         import os
                                         
-                                        raw_input_path = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer").strip()
+                                        # 💡 G드라이브나 D드라이브 경로 대신, 현재 프로젝트 폴더 안의 master_answer를 바로 바라보게 수정!
+                                        raw_input_path = "master_answer"
                                         
                                         # 백슬래시 정리 및 경로 객체 생성
                                         clean_path_str = raw_input_path.replace('"', '').replace("'", "")
