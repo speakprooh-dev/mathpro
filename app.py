@@ -1745,9 +1745,9 @@ if not st.session_state["teacher_authenticated"]:
                                         n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
                                         img_url = None
+                                        file_names_preview = []
                                         
                                         try:
-                                            # 💡 변수명 충돌 방지: client나 supabase 중 존재하는 것을 자동으로 찾아씁니다.
                                             db_client = None
                                             for var_name in ['client', 'supabase', 'db', 'supabase_client']:
                                                 if var_name in locals() or var_name in globals():
@@ -1766,7 +1766,10 @@ if not st.session_state["teacher_authenticated"]:
                                                 if files_list:
                                                     for file_info in files_list:
                                                         fname = file_info.get("name", "")
-                                                        if f"({n_digits})" in fname or f"_{n_digits}." in fname or f"_{n_digits}_" in fname:
+                                                        file_names_preview.append(fname)
+                                                        
+                                                        # 숫자가 포함되어 있는지 유연하게 검사 (112, 0112 등)
+                                                        if n_digits in fname or str(int(n_digits)) in fname:
                                                             matched_filename = fname
                                                             break
                                                 
@@ -1777,7 +1780,8 @@ if not st.session_state["teacher_authenticated"]:
                                             if img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 스토리지 내에서 번호({n_digits})에 해당하는 이미지를 찾지 못했습니다.</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 찾으려는 번호: <strong>{n_digits}</strong></span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 11px; color: #6B7280;'>스토리지에 있는 파일 목록 일부: {file_names_preview[:10]}</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
