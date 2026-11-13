@@ -1741,21 +1741,30 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
 
-                                # 🌟 카드 전체를 세로 공간 낭비 없이 완벽한 한 줄(Single Line)로 압축
+                                # 🌟 평소에는 닫혀 있다가 클릭(터치)해야만 정답/내답이 열리는 콤팩트 카드
                                 with st.container(border=True):
+                                    # 상단 요약 줄 (문제 번호, 코드, 맞춤 여부, 해설 영상 버튼만 먼저 깔끔하게 표시)
                                     st.markdown(
                                         f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
                                         f"  <div>"
                                         f"    <b style='color: #EF4444;'>{res['order']}번문제</b> "
                                         f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
-                                        f"    <span style='color: #EF4444; font-weight: bold;'>({ 'O' if res['is_correct'] else 'X' })</span> &nbsp;|&nbsp; "
-                                        f"    정답: {ans_display} , "
-                                        f"    내 답: <b style='color: #374151;'>{u_ans_str}</b>"
+                                        f"    <span style='color: #EF4444; font-weight: bold;'>({ 'O' if res['is_correct'] else 'X' })</span>"
                                         f"  </div>"
                                         f"  <div>{link_btn}</div>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
+                                    
+                                    # 🔒 터치(클릭) 전에는 가려져 있는 정답/내답 토글 박스
+                                    with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
+                                        st.markdown(
+                                            f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
+                                            f"정답: {ans_display} &nbsp;|&nbsp; "
+                                            f"내 답: <b style='color: #374151;'>{u_ans_str}</b>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
