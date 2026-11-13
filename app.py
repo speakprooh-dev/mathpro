@@ -1732,33 +1732,58 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         from pathlib import Path
                                         
-                                        # 💡 추천: C드라이브로 복사했다면 경로를 C로 변경해 주세요!
-                                        base_master_dir = Path(r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer")
+                                        # 후보 경로들을 여러 개 준비해서 존재하는 것을 무조건 찾아냄
+                                        possible_dirs = [
+                                            Path(r"D:\MathPro\master_answer"),
+                                            Path(r"D:\MathPro 프로그램\Math_Master\master_answer"),
+                                            Path(r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer")
+                                        ]
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
+                                        checked_dir_msg = ""
                                         
-                                        if len(f_code) > 4:
-                                            u_part = f_code[:4]  # A114
-                                            num_part = f_code[4:] # 112
-                                            n_digits = "".join(filter(str.isdigit, num_part))
-                                            
-                                            if base_master_dir.exists():
+                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
+                                        num_part = f_code[4:] if len(f_code) > 4 else "112"
+                                        n_digits = "".join(filter(str.isdigit, num_part))
+                                        
+                                        for d_path in possible_dirs:
+                                            checked_dir_msg += f"<br>· 시도한 폴더 ({d_path}): "
+                                            if d_path.exists():
+                                                checked_dir_msg += "<b>존재함(O)</b>"
                                                 try:
-                                                    # 폴더 안의 모든 파일을 뒤져서 단원코드와 숫자가 모두 포함된 파일 찾기
-                                                    for file_p in base_master_dir.glob("*"):
-                                                        if file_p.is_file():
-                                                            fname = file_p.name.lower()
-                                                            if u_part.lower() in fname and n_digits in fname:
-                                                                ans_img_path = str(file_p)
-                                                                break
-                                                except Exception:
-                                                    pass
+                                                    # 정확한 파일명 직접 조합 시도 (예: A114_ans_(112).png 등)
+                                                    for fname_candidate in [
+                                                        f"{u_part}_ans_({n_digits}).png",
+                                                        f"{u_part}_ans_({n_digits}).JPG",
+                                                        f"{u_part}_ans_({n_digits}).PNG",
+                                                        f"{u_part}_ans__{n_digits}.png"
+                                                    ]:
+                                                        target_p = d_path / fname_candidate
+                                                        if target_p.exists():
+                                                            ans_img_path = str(target_p)
+                                                            break
+                                                    
+                                                    # 그래도 못 찾았으면 폴더 안에서 glob 스캔
+                                                    if not ans_img_path:
+                                                        for file_p in d_path.glob("*"):
+                                                            if file_p.is_file():
+                                                                fname = file_p.name.lower()
+                                                                if u_part.lower() in fname and n_digits in fname:
+                                                                    ans_img_path = str(file_p)
+                                                                    break
+                                                except Exception as e:
+                                                    checked_dir_msg += f" (에러: {e})"
+                                            else:
+                                                checked_dir_msg += "없음(X)"
+                                            
+                                            if ans_img_path:
+                                                break
                                         
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 폴더 스캔 실패 (단원: {f_code[:4]}, 번호: {f_code[4:]})</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 12px; color: #D97706;'>⚠️ <b>진단 로그 (단원: {u_part}, 번호: {n_digits})</b> {checked_dir_msg}</span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
