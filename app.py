@@ -1741,38 +1741,35 @@ if not st.session_state["teacher_authenticated"]:
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
-                                        
-                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112
+                                        n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
                                         img_url = None
                                         
                                         try:
-                                            # 후보 파일명들을 여러 개 만들어두고 Supabase에서 직접 Public URL을 생성합니다.
-                                            # 예: A114_ans_(112).png, A114_ans_(0112).png 등
-                                            candidates = [
-                                                f"{u_part}_ans_({n_digits}).png",
-                                                f"{u_part}_ans_({n_digits.zfill(3)}).png", # 112 -> 112 (세 자리 이상은 그대로)
-                                                f"{n_digits}.png"
-                                            ]
+                                            # Supabase 스토리지에 있는 master_answer 버킷의 모든 파일 목록을 가져옵니다.
+                                            files_list = supabase.storage.from_("master_answer").list()
                                             
-                                            for candidate in candidates:
-                                                pub_res = supabase.storage.from_("master_answer").get_public_url(candidate)
-                                                temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                            matched_filename = None
+                                            if files_list:
+                                                for file_info in files_list:
+                                                    fname = file_info.get("name", "")
+                                                    # 파일 이름 안에 추출한 숫자(예: 112)가 포함되어 있는지 확인합니다. (예: (112) 또는 _112 등)
+                                                    if f"({n_digits})" in fname or f"_{n_digits}." in fname or f"_{n_digits}_" in fname:
+                                                        matched_filename = fname
+                                                        break
+                                            
+                                            if matched_filename:
+                                                pub_res = supabase.storage.from_("master_answer").get_public_url(matched_filename)
+                                                img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
                                                 
-                                                # URL이 정상적으로 만들어졌다면 채택
-                                                if temp_url and "http" in temp_url:
-                                                    img_url = temp_url
-                                                    break
-                                                    
                                             if img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                raise Exception()
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 스토리지 내에서 번호({n_digits})에 해당하는 이미지를 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                                 
-                                        except Exception:
-                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 정답 이미지 로드 실패 (코드: {f_code}, 대상파일명: {u_part}_ans_({n_digits}).png)</span>", unsafe_allow_html=True)
+                                        except Exception as e:
+                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
                                         
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
