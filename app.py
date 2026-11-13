@@ -1685,22 +1685,15 @@ if not st.session_state["teacher_authenticated"]:
                                     
                                     is_checked_default = (is_cor == 0)
                         
-                                    if is_wrong_saved:
-                                        # 🌟 등록이 완료된 후에는 체크박스 대신 사용자가 담았는지 여부에 따라 깔끔한 문구로 표시
-                                        user_checked_before = st.session_state.get(f"wrong_chk_{sess_id}_{prob['item_id']}", is_checked_default)
-                                        
-                                        if user_checked_before:
-                                            st.markdown(f"<p style='color: #10B981; font-weight: bold; margin: 0;'>✅ {prob['order']}번 문제 — 오답노트 등록 완료됨</p>", unsafe_allow_html=True)
-                                        else:
-                                            st.markdown(f"<p style='color: #6B7280; margin: 0;'>☑️ {prob['order']}번 문제 — 미선택 (등록 안 함)</p>", unsafe_allow_html=True)
-                                    else:
-                                        selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                            f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
-                                            value=is_checked_default,
-                                            key=f"wrong_chk_{sess_id}_{prob['item_id']}"
-                                        )
+                                    # 🌟 언제든 추가/수정할 수 있도록 체크박스를 항상 활성화 상태로 제공
+                                    is_checked_default = (is_cor == 0)
+                                    
+                                    selected_wrong_notes[prob['full_code']] = st.checkbox(
+                                        f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
+                                        value=is_checked_default,
+                                        key=f"wrong_chk_{sess_id}_{prob['item_id']}"
+                                    )
             
-                            # 🚀 오직 맨 아래에 딱 1개만 깔끔하게 위치하는 등록 버튼
                             if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                                 manual_wrong_units = {}
                                 for prob in prob_list:
@@ -1716,13 +1709,8 @@ if not st.session_state["teacher_authenticated"]:
                                         merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
                                         save_student_wrong_entry(s_name, u_code, merged_txt)
                                     
-                                    # 🌟 [추가] 저장이 성공하면 해당 세션의 오답 완료 플래그를 True로 설정!
-                                    st.session_state[f"wrong_saved_{sess_id}"] = True
-                                    
-                                    st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
-                                    
-                                    # 🌟 [추가] 즉시 화면을 새로고침하여 체크박스를 비활성화 상태로 전환
-                                    st.rerun()
+                                    # 🌟 언제든 추가로 체크해서 누를 수 있도록 플래그 없이 성공 메시지만 띄움
+                                    st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영(추가)되었습니다!")
                                     
                                 except Exception as e:
                                     st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
