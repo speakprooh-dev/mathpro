@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import io
 import os
+import base64  # 👈 이 한 줄을 추가해 주세요!
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
@@ -1520,97 +1521,152 @@ if not st.session_state["teacher_authenticated"]:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
             st.markdown("노트에 푼 후, 정답을 입력하고 제출하면 **자동 채점 및 오답노트**로 바로 연동됩니다!")
             
-            sample_online_problems = [
-                {"id": "PROB_01", "img_path": "problems/sample1.png", "answer": "3", "unit": "수1"},
-                {"id": "PROB_02", "img_path": "problems/sample2.png", "answer": "15", "unit": "수1"},
-            ]
-            
-            conn_test, _ = get_db_connection()
-            
-            def render_online_test_slide(student_name, test_title, problem_list, conn):
-                if not problem_list:
-                    st.info("현재 출제된 온라인 테스트가 없습니다.")
-                    return
+            conn_test, db_type_test = get_db_connection()
+            c_test = conn_test.cursor()
 
-                if "quiz_idx" not in st.session_state:
-                    st.session_state.quiz_idx = 0
-                if "quiz_answers" not in st.session_state:
-                    st.session_state.quiz_answers = {}
+            # 1. 클라우드(Supabase)에서 해당 학생의 온라인 테스트 목록 불러오기
+            sessions_list = []
+            try:
+                q(c_test, "SELECT id, test_title, created_at, is_completed FROM online_test_sessions WHERE student_name = ? ORDER BY id DESC", (selected_student,))
+                sessions_list = c_test.fetchall()
+            except Exception:
+                sessions_list = []
 
-                total_q = len(problem_list)
-                idx = st.session_state.quiz_idx
-                curr_prob = problem_list[idx]
-                prob_id = curr_prob["id"]
-
-                st.progress((idx + 1) / total_q, text=f"📝 {test_title} ({idx + 1} / {total_q} 문제)")
-
-                if os.path.exists(curr_prob["img_path"]):
-                    st.image(curr_prob["img_path"], use_container_width=True)
-                else:
-                    st.info(f"💡 [안내] 테스트용 문제 이미지 경로({curr_prob['img_path']})가 아직 없어 가상 공간으로 표시됩니다. 실제 이미지 파일 경로를 연결해 주세요!")
-
-                st.divider()
-
-                saved_ans = st.session_state.quiz_answers.get(prob_id, "")
-                user_ans = st.text_input(
-                    "🎯 정답 입력 (숫자 또는 단답형 입력)",
-                    value=saved_ans,
-                    key=f"ans_input_{prob_id}"
+            if not sessions_list:
+                st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
+            else:
+                # 테스트 선택 드롭다운 (미완료 과제 우선 표시)
+                session_options = {
+                    s[0]: f"{'🆕 [미완료]' if s[3] == 0 else '✅ [제출완료]'} {s[1]} ({s[2]})"
+                    for s in sessions_list
+                }
+                selected_session_id = st.selectbox(
+                    "진행할 테스트 선택",
+                    options=list(session_options.keys()),
+                    format_func=lambda x: session_options[x],
+                    key=f"sel_online_test_{selected_student}"
                 )
-                st.session_state.quiz_answers[prob_id] = user_ans.strip()
 
-                col_prev, col_next = st.columns(2)
-                with col_prev:
-                    if idx > 0:
-                        if st.button("⬅️ 이전 문제", use_container_width=True):
-                            st.session_state.quiz_idx -= 1
-                            st.rerun()
+                # 선택한 테스트가 바뀌면 슬라이드 번호 초기화
+                if st.session_state.get("active_test_session_id") != selected_session_id:
+                    st.session_state["active_test_session_id"] = selected_session_id
+                    st.session_state["quiz_idx"] = 0
+                    st.session_state["quiz_answers"] = {}
 
-                with col_next:
-                    if idx < total_q - 1:
-                        if st.button("다음 문제 ➡️", type="primary", use_container_width=True):
-                            st.session_state.quiz_idx += 1
-                            st.rerun()
+                # 2. 선택한 테스트의 문항 목록 불러오기
+                q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                raw_items = c_test.fetchall()
+
+                problem_list = []
+                for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
+                    full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
+                    problem_list.append({
+                        "item_id": item_id,
+                        "order": p_order,
+                        "full_code": full_code,
+                        "unit_code": u_code or "TEST",
+                        "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
+                        "answer": str(ans).strip() if ans else "",
+                        "img_base64": img_b64 or ""
+                    })
+
+                if not problem_list:
+                    st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
+                else:
+                    total_q = len(problem_list)
+                    idx = st.session_state.get("quiz_idx", 0)
+                    if idx >= total_q:
+                        idx = 0
+                        st.session_state["quiz_idx"] = 0
+
+                    curr_prob = problem_list[idx]
+                    curr_key = f"{selected_session_id}_{curr_prob['item_id']}"
+                    selected_test_title = [s[1] for s in sessions_list if s[0] == selected_session_id][0]
+
+                    # 진행률 표시
+                    st.progress((idx + 1) / total_q, text=f"📝 {selected_test_title} — ({idx + 1} / {total_q} 문제) | 코드: {curr_prob['full_code']}")
+
+                    # 3. Base64로 업로드된 문제 이미지 렌더링
+                    if curr_prob["img_base64"]:
+                        try:
+                            img_bytes = base64.b64decode(curr_prob["img_base64"])
+                            st.image(img_bytes, use_container_width=True)
+                        except Exception:
+                            st.warning("⚠️ 문제 이미지를 표시하는 중 오류가 발생했습니다.")
                     else:
-                        if st.button("🎉 최종 제출 및 자동 채점", type="primary", use_container_width=True):
-                            process_test_submission(student_name, test_title, problem_list, conn)
+                        st.info("💡 등록된 문제 이미지가 없습니다.")
 
-            def process_test_submission(student_name, test_title, problem_list, conn):
-                c = conn.cursor()
-                now_str = get_korean_now_str()
-                correct_count = 0
-                db_type = "postgres" if "psycopg2" in str(type(conn)) else "sqlite"
+                    st.divider()
 
-                for prob in problem_list:
-                    p_id = prob["id"]
-                    real_ans = str(prob["answer"]).strip()
-                    user_ans = str(st.session_state.quiz_answers.get(p_id, "")).strip()
-                    is_correct = 1 if (user_ans == real_ans and user_ans != "") else 0
-                    if is_correct:
-                        correct_count += 1
+                    # 4. 정답 입력 칸
+                    saved_ans = st.session_state["quiz_answers"].get(curr_key, "")
+                    user_ans = st.text_input(
+                        f"🎯 {idx + 1}번 문제 정답 입력 (객관식은 번호 숫자만, 주관식은 단답형 입력)",
+                        value=saved_ans,
+                        key=f"ans_input_{curr_key}"
+                    )
+                    st.session_state["quiz_answers"][curr_key] = user_ans.strip()
 
-                    img_save_path = ""
+                    # 5. 이전 / 다음 / 제출 버튼
+                    col_prev, col_next = st.columns(2)
+                    with col_prev:
+                        if idx > 0:
+                            if st.button("⬅️ 이전 문제", use_container_width=True, key=f"prev_btn_{curr_key}"):
+                                st.session_state["quiz_idx"] -= 1
+                                st.rerun()
 
-                    if db_type == "postgres":
-                        q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
-                    else:
-                        q(c, "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (student_name, test_title, p_id, user_ans, is_correct, img_save_path, now_str))
-
-                    if is_correct == 0:
-                        today_str_wrong = str(get_korean_today())
-                        if db_type == "postgres":
-                            c.execute("INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = student_wrong_entries.numbers_text || ', ' || %s, updated_at = %s", (student_name, prob.get("unit", "TEST"), p_id[-3:], today_str_wrong, p_id[-3:], today_str_wrong))
+                    with col_next:
+                        if idx < total_q - 1:
+                            if st.button("다음 문제 ➡️", type="primary", use_container_width=True, key=f"next_btn_{curr_key}"):
+                                st.session_state["quiz_idx"] += 1
+                                st.rerun()
                         else:
-                            q(c, "INSERT OR IGNORE INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, prob.get("unit", "TEST"), p_id[-3:], today_str_wrong))
+                            if st.button("🎉 최종 제출 및 자동 채점", type="primary", use_container_width=True, key=f"submit_btn_{selected_session_id}"):
+                                now_str = get_korean_now_str()
+                                correct_count = 0
+                                wrong_items_summary = []
 
-                conn.commit()
-                st.balloons()
-                st.success(f"제출 완료! 총 {len(problem_list)}문제 중 **{correct_count}문제** 맞혔습니다. 오답은 오답노트에 자동 등록되었습니다!")
-                
-                st.session_state.quiz_idx = 0
-                st.session_state.quiz_answers = {}
+                                for prob in problem_list:
+                                    p_key = f"{selected_session_id}_{prob['item_id']}"
+                                    real_ans = prob["answer"].replace("번", "").strip()
+                                    u_ans = st.session_state["quiz_answers"].get(p_key, "").replace("번", "").strip()
+                                    
+                                    is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
+                                    if is_correct:
+                                        correct_count += 1
+                                    else:
+                                        wrong_items_summary.append((prob["order"], prob["full_code"], u_ans, real_ans))
 
-            render_online_test_slide(selected_student, "실력 점검 주간 테스트", sample_online_problems, conn_test)
+                                    # 제출 결과 DB 저장
+                                    q(c_test,
+                                      "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                      (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
+
+                                    # 오답인 경우 학생 오답노트(Tab 3)에 자동 등록
+                                    if is_correct == 0 and prob["unit_code"] != "TEST":
+                                        existing_txt = get_student_wrong_entry(selected_student, prob["unit_code"])
+                                        pre_nums = parse_numbers(existing_txt)
+                                        try:
+                                            pre_nums.add(int(prob["prob_num"]))
+                                            merged_txt = ", ".join(map(str, sorted(list(pre_nums))))
+                                            save_student_wrong_entry(selected_student, prob["unit_code"], merged_txt)
+                                        except Exception:
+                                            pass
+
+                                # 세션 완료 표시 업데이트
+                                q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
+                                conn_test.commit()
+                                st.cache_data.clear()
+
+                                st.balloons()
+                                st.success(f"🎉 채점 완료! 총 **{total_q}문제** 중 **{correct_count}문제** 맞혔습니다!")
+                                
+                                if wrong_items_summary:
+                                    st.error(f"❌ 틀린 문제 ({len(wrong_items_summary)}개) — [오답·질문 관리] 탭에 자동 등록되었습니다!")
+                                    for w_ord, w_code, w_uans, w_rans in wrong_items_summary:
+                                        v_url, _ = get_problem_link_info(w_code)
+                                        link_html = f" &nbsp; <a href='{v_url}' target='_blank' style='color:#0284C7; font-weight:bold;'>🎥 해설 영상 보기 ➔</a>" if v_url else ""
+                                        st.markdown(f"- **{w_ord}번 (`{w_code}`)**: 내 답 `{w_uans or '미입력'}` / 정답 `{w_rans or '선생님 확인'}`{link_html}", unsafe_allow_html=True)
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
