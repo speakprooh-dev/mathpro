@@ -1686,7 +1686,7 @@ if not st.session_state["teacher_authenticated"]:
                         except Exception as db_err:
                             st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
 
-                        # 1. 과제 제출 완료 축하 배너
+                       # 1. 과제 제출 완료 축하 배너
                         st.balloons()
                         
                         total_q_cnt = len(problem_list)
@@ -1710,11 +1710,10 @@ if not st.session_state["teacher_authenticated"]:
                                 value=st.session_state["master_dir_input"]
                             )
 
-                        # 2. 🌟 각 문제마다 [상단: 채점 결과 및 해설영상] + [하단: 문제 이미지 사진] 출력
+                        # 2. 🌟 채점 완료 후: 상단 한 줄 결과 바 + 문제 사진 토글 + 정답 토글 구성
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({total_q_cnt}개)")
 
                         for prob in problem_list:
-                            # 해당 문제의 채점 결과 매칭
                             matched_res = next((r for r in all_results if r['full_code'] == prob['full_code']), None)
                             
                             if matched_res:
@@ -1748,23 +1747,37 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
 
-                            # 🌟 각 문제 카드 컨테이너 (상단 결과 바 + 하단 문제 이미지)
+                            # 🌟 각 문제 카드 컨테이너
                             with st.container(border=True):
-                                # 1) 문제 이미지 바로 위(또는 카드 상단)에 위치하는 채점 결과 한 줄 바
+                                # 1) 상단 고정 한 줄 바: 문제 번호, O/X, 해설영상 버튼
                                 st.markdown(
-                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
+                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
                                     f"  <div>"
                                     f"    <b style='color: #374151;'>{prob['order']}번 문제</b> "
                                     f"    <span style='color: #6B7280; font-size: 11px;'>(`{prob['full_code']}`)</span> "
-                                    f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span> &nbsp;|&nbsp; "
-                                    f"    내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b> &nbsp;|&nbsp; "
-                                    f"    정답: {ans_display}"
+                                    f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
                                     f"  </div>"
                                     f"  <div>{link_btn}</div>"
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
                                 
+                                # 2) 🔒 문제 사진 토글 (기본적으로 닫혀 있어서 제출 후에는 자동으로 접혀 있음)
+                                with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
+                                    if prob["img_bytes"]:
+                                        st.image(prob["img_bytes"], use_container_width=True)
+                                    else:
+                                        st.info("💡 등록된 문제 이미지가 없습니다.")
+
+                                # 3) 🔒 정답 및 내 답 토글 (기본적으로 닫혀 있음)
+                                with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
+                                    st.markdown(
+                                        f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
+                                        f"정답: {ans_display} &nbsp;|&nbsp; "
+                                        f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
                                 # 2) 문제 이미지 사진 출력
                                 if prob["img_bytes"]:
                                     st.image(prob["img_bytes"], use_container_width=True)
