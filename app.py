@@ -1710,7 +1710,7 @@ if not st.session_state["teacher_authenticated"]:
                                 value=st.session_state["master_dir_input"]
                             )
 
-                        # 2. 🌟 채점 완료 후: 상단 한 줄 결과 바 + 문제 사진 토글 + 정답 토글 구성
+                        # 2. 🌟 채점 완료 후: 상단 한 줄 바 + 접혀 있는 문제 사진 토글 + 접혀 있는 정답 토글
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({total_q_cnt}개)")
 
                         for prob in problem_list:
@@ -1762,14 +1762,14 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
                                 
-                                # 2) 🔒 문제 사진 토글 (기본적으로 닫혀 있어서 제출 후에는 자동으로 접혀 있음)
+                                # 2) 🔒 문제 사진 토글 (기본값 expanded=False로 설정하여 제출 후 무조건 접혀있도록 처리)
                                 with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
                                     if prob["img_bytes"]:
                                         st.image(prob["img_bytes"], use_container_width=True)
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
 
-                                # 3) 🔒 정답 및 내 답 토글 (기본적으로 닫혀 있음)
+                                # 3) 🔒 정답 및 내 답 토글 (기본값 expanded=False)
                                 with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
                                         f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
