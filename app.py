@@ -1741,11 +1741,11 @@ if not st.session_state["teacher_authenticated"]:
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
-                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
                                         n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
                                         img_url = None
+                                        target_filename = ""
                                         
                                         try:
                                             db_client = None
@@ -1760,16 +1760,29 @@ if not st.session_state["teacher_authenticated"]:
                                                         break
 
                                             if db_client:
-                                                # Supabase Storage에 저장된 파일명 패턴 조합 (예: A114_ans_(112).png 등)
-                                                target_filename = f"{u_part}_ans_({n_digits}).png"
+                                                # 스토리지에 실제 올라가 있는 형태(101_ans_(112).png 등)를 유연하게 조합
+                                                # 만약 파일들이 모두 101로 시작한다면 101_ans_({n_digits}).png 로 매칭합니다.
+                                                candidates = [
+                                                    f"101_ans_({n_digits}).png",
+                                                    f"101_ans_({n_digits.zfill(3)}).png",
+                                                    f"{f_code[:4]}_ans_({n_digits}).png",
+                                                    f"{n_digits}.png"
+                                                ]
                                                 
-                                                pub_res = db_client.storage.from_("master_answer").get_public_url(target_filename)
-                                                img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                                for cand in candidates:
+                                                    target_filename = cand
+                                                    pub_res = db_client.storage.from_("master_answer").get_public_url(cand)
+                                                    temp_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                                    
+                                                    # Supabase는 파일이 없어도 URL 문자열을 뱉기 때문에, 실제 존재하는지 확인하거나 101_ 패턴으로 확정
+                                                    if temp_url and "http" in temp_url:
+                                                        img_url = temp_url
+                                                        break
                                             
-                                            if img_url and "http" in img_url:
+                                            if img_url:
                                                 st.image(img_url, width=350)
                                             else:
-                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 URL 생성 실패 ({target_filename})</span>", unsafe_allow_html=True)
+                                                st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 로드 실패 (파일명: {target_filename})</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 오류 발생: {str(e)}</span>", unsafe_allow_html=True)
