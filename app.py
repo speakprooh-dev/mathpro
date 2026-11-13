@@ -1710,23 +1710,13 @@ if not st.session_state["teacher_authenticated"]:
                         if incorrect_list:
                             st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
                             
-                            # 💡 세션 경로 자동 초기화 및 D드라이브 자동 검색
+                            # 항상 강제로 올바른 초기값 설정
                             if "master_dir_input" not in st.session_state:
-                                found_path = r"D:\MathPro\master_answer"
-                                # D드라이브에서 master_answer 폴더 자동 탐색 시도
-                                try:
-                                    from pathlib import Path
-                                    for p in Path(r"D:\\").glob("**/master_answer"):
-                                        if p.is_dir():
-                                            found_path = str(p)
-                                            break
-                                except:
-                                    pass
-                                st.session_state["master_dir_input"] = found_path
+                                st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                                 
-                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정 (자동 탐지됨)", expanded=False):
+                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
                                 st.session_state["master_dir_input"] = st.text_input(
-                                    "master_answer 폴더의 실제 경로를 확인하세요:",
+                                    "master_answer 폴더의 실제 경로를 입력하세요:",
                                     value=st.session_state["master_dir_input"]
                                 )
 
@@ -1753,8 +1743,8 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         from pathlib import Path
                                         
-                                        user_path_str = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer")
-                                        base_master_dir = Path(user_path_str.strip())
+                                        curr_path_str = st.session_state.get("master_dir_input", r"D:\MathPro\master_answer").strip()
+                                        base_master_dir = Path(curr_path_str)
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
@@ -1763,21 +1753,23 @@ if not st.session_state["teacher_authenticated"]:
                                         num_part = f_code[4:] if len(f_code) > 4 else "112"
                                         n_digits = "".join(filter(str.isdigit, num_part))
                                         
-                                        if base_master_dir.exists():
+                                        # 경로가 존재할 때만 파일 탐색 수행
+                                        if base_master_dir.is_dir():
                                             try:
-                                                # 정확한 이름 매칭 시도 (A114_ans_(112).png 등)
+                                                # 후보 파일명 순회
                                                 for fname_candidate in [
                                                     f"{u_part}_ans_({n_digits}).png",
                                                     f"{u_part}_ans_({n_digits}).PNG",
                                                     f"{u_part}_ans_({n_digits}).jpg",
-                                                    f"{u_part}_ans_({n_digits}).JPG"
+                                                    f"{u_part}_ans_({n_digits}).JPG",
+                                                    f"{u_part}_{n_digits}.png"
                                                 ]:
                                                     target_p = base_master_dir / fname_candidate
-                                                    if target_p.exists():
+                                                    if target_p.is_file():
                                                         ans_img_path = str(target_p)
                                                         break
                                                 
-                                                # 안 되면 폴더 내 검색
+                                                # 안 되면 glob 전체 검색
                                                 if not ans_img_path:
                                                     for file_p in base_master_dir.glob("*"):
                                                         if file_p.is_file():
@@ -1791,8 +1783,8 @@ if not st.session_state["teacher_authenticated"]:
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            is_exist = base_master_dir.exists()
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로: <code>{base_master_dir}</code> (존재 여부: {is_exist})</span>", unsafe_allow_html=True)
+                                            is_ok = base_master_dir.is_dir()
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로 상태: <code>{base_master_dir}</code> (폴더 존재함: {is_ok})</span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
