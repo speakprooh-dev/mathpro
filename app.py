@@ -1602,15 +1602,15 @@ if not st.session_state["teacher_authenticated"]:
                             is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
 
                             if is_multiple_choice:
-                                choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
+                                choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                 selected_choice = st.radio(
                                     f"{idx + 1}번 정답 선택 (객관식):",
                                     options=choice_options,
-                                    index=0,
+                                    index=0,  # 기본 선택값 (0이면 '1번'이 기본 선택됩니다. '잘 모름'을 기본으로 하려면 5로 설정하세요)
                                     key=f"radio_{p_key}",
                                     horizontal=True
                                 )
-                                user_ans = selected_choice.replace("번", "").strip() if selected_choice != "선택 안 함" else ""
+                                user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
                             else:
                                 user_ans = st.text_input(
                                     f"{idx + 1}번 정답 입력 (주관식 단답형):",
