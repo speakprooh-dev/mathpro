@@ -1578,7 +1578,6 @@ if not st.session_state["teacher_authenticated"]:
                     problem_list = st.session_state.get(cache_key_items, [])
                     selected_test_title = [s[1] for s in sessions_list if s[0] == selected_session_id][0]
                     
-                    # 현재 선택된 세션의 제출 완료 여부 확인 (DB의 3번째 인덱스 s[3]이 완료 여부)
                     current_session_info = next((s for s in sessions_list if s[0] == selected_session_id), None)
                     is_db_completed = (current_session_info[3] == 1) if current_session_info else False
             
@@ -1588,49 +1587,16 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
                         st.markdown("---")
             
-                        # 🚀 [핵심] DB에서 이미 제출 완료되었거나, 방금 제출 버튼을 눌렀다면 -> 채점 결과 및 오답 선택 화면 출력!
-                        if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
+                        # 🚀 [핵심] 체크박스와 카드 렌더링 부분을 별도의 fragment 함수로 분리하여 로딩/깜빡임 차단
+                        @st.fragment
+                        def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
+                            correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
                             
-                            # DB나 session_state에 결과가 없다면 복원
-                            if f"all_results_{selected_session_id}" not in st.session_state:
-                                is_postgres = "psycopg2" in str(type(conn_test))
-                                if is_postgres:
-                                    c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (selected_student, selected_test_title))
-                                else:
-                                    q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
-                                submitted_rows = c_test.fetchall()
-                                sub_dict = {row[0]: {"user_ans": row[1], "is_correct": row[2]} for row in submitted_rows}
-                                
-                                restored_results = []
-                                restored_correct_cnt = 0
-                                for idx, prob in enumerate(problem_list):
-                                    f_code = prob['full_code']
-                                    info = sub_dict.get(f_code, {"user_ans": "", "is_correct": 0})
-                                    real_ans = prob["answer"].replace("번", "").strip()
-                                    is_cor = info["is_correct"]
-                                    if is_cor:
-                                        restored_correct_cnt += 1
-                                    restored_results.append({
-                                        "order": prob["order"],
-                                        "full_code": f_code,
-                                        "unit_code": prob["unit_code"],
-                                        "prob_num": prob["prob_num"],
-                                        "user_ans": info["user_ans"],
-                                        "real_ans": real_ans,
-                                        "is_correct": is_cor,
-                                    })
-                                st.session_state[f"all_results_{selected_session_id}"] = restored_results
-                                st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
-            
-                            correct_count = st.session_state.get(f"correct_count_{selected_session_id}", 0)
-                            all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
-            
-                            # 과제 제출 완료 안내 배너
                             st.markdown(f"""
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
                                 <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
                                 <p style="font-size: 18px; font-weight: bold; margin: 0;">
-                                    총 {len(problem_list)}문항 중 <span style="color: #10B981;">{correct_count}문항 정답</span>
+                                    총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -1641,15 +1607,16 @@ if not st.session_state["teacher_authenticated"]:
                             with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
                                 st.session_state["master_dir_input"] = st.text_input(
                                     "master_dir_input 폴더의 실제 경로를 입력하세요:",
-                                    value=st.session_state["master_dir_input"]
+                                    value=st.session_state["master_dir_input"],
+                                    key=f"master_dir_{sess_id}"
                                 )
             
-                            st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(problem_list)}개)")
+                            st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(prob_list)}개)")
             
                             selected_wrong_notes = {}
             
-                            for prob in problem_list:
-                                matched_res = next((r for r in all_results if r['full_code'] == prob['full_code']), None)
+                            for prob in prob_list:
+                                matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
                                 
                                 if matched_res:
                                     u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
@@ -1692,14 +1659,12 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                                     
-                                    # 문제 사진 토글 (기본 접힘)
                                     with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
                                         if prob["img_bytes"]:
                                             st.image(prob["img_bytes"], use_container_width=True)
                                         else:
                                             st.info("💡 등록된 문제 이미지가 없습니다.")
             
-                                    # 정답 토글 (기본 접힘)
                                     with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
                                         st.markdown(
                                             f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
@@ -1709,34 +1674,69 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
             
-                                    is_checked_default = False  # 틀린 문제여도 기본 체크를 해제하려면 False로 설정합니다!
+                                    is_checked_default = False
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
                                         f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
                                         value=is_checked_default,
-                                        key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
+                                        key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
             
-                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{selected_session_id}"):
+                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                                 manual_wrong_units = {}
-                                for prob in problem_list:
+                                for prob in prob_list:
                                     if selected_wrong_notes.get(prob['full_code'], False):
                                         if prob["unit_code"] != "TEST":
                                             manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
             
                                 try:
                                     for u_code, num_set in manual_wrong_units.items():
-                                        existing_txt = get_student_wrong_entry(selected_student, u_code)
+                                        existing_txt = get_student_wrong_entry(s_name, u_code)
                                         pre_nums = parse_numbers(existing_txt)
                                         merged_nums = pre_nums | num_set
                                         merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                        save_student_wrong_entry(selected_student, u_code, merged_txt)
+                                        save_student_wrong_entry(s_name, u_code, merged_txt)
                                     
                                     st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
                                 except Exception as e:
                                     st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
             
+                        if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
+                            if f"all_results_{selected_session_id}" not in st.session_state:
+                                is_postgres = "psycopg2" in str(type(conn_test))
+                                if is_postgres:
+                                    c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (selected_student, selected_test_title))
+                                else:
+                                    q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
+                                submitted_rows = c_test.fetchall()
+                                sub_dict = {row[0]: {"user_ans": row[1], "is_correct": row[2]} for row in submitted_rows}
+                                
+                                restored_results = []
+                                restored_correct_cnt = 0
+                                for idx, prob in enumerate(problem_list):
+                                    f_code = prob['full_code']
+                                    info = sub_dict.get(f_code, {"user_ans": "", "is_correct": 0})
+                                    real_ans = prob["answer"].replace("번", "").strip()
+                                    is_cor = info["is_correct"]
+                                    if is_cor:
+                                        restored_correct_cnt += 1
+                                    restored_results.append({
+                                        "order": prob["order"],
+                                        "full_code": f_code,
+                                        "unit_code": prob["unit_code"],
+                                        "prob_num": prob["prob_num"],
+                                        "user_ans": info["user_ans"],
+                                        "real_ans": real_ans,
+                                        "is_correct": is_cor,
+                                    })
+                                st.session_state[f"all_results_{selected_session_id}"] = restored_results
+                                st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
+            
+                            all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
+                            
+                            # 🌟 fragment 함수 호출로 대체하여 체크박스 클릭 시 깜빡임/로딩 방지
+                            render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
+            
                         else:
-                            # 🚀 아직 제출하지 않은 미완료 테스트인 경우에만 시험 응시 form을 보여줌
                             with st.form(key=f"test_form_{selected_session_id}"):
                                 form_answers = {}
                                 for idx, prob in enumerate(problem_list):
