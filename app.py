@@ -1747,21 +1747,33 @@ if not st.session_state["teacher_authenticated"]:
                                         img_url = None
                                         
                                         try:
-                                            # 💡 아래의 'supabase' 대신, 선생님 프로젝트에서 쓰는 올바른 변수명(예: client 등)으로 바꿔주세요!
-                                            files_list = supabase.storage.from_("master_answer").list()
-                                            
-                                            matched_filename = None
-                                            if files_list:
-                                                for file_info in files_list:
-                                                    fname = file_info.get("name", "")
-                                                    if f"({n_digits})" in fname or f"_{n_digits}." in fname or f"_{n_digits}_" in fname:
-                                                        matched_filename = fname
+                                            # 💡 변수명 충돌 방지: client나 supabase 중 존재하는 것을 자동으로 찾아씁니다.
+                                            db_client = None
+                                            for var_name in ['client', 'supabase', 'db', 'supabase_client']:
+                                                if var_name in locals() or var_name in globals():
+                                                    db_client = eval(var_name)
+                                                    break
+                                            if not db_client and 'st' in globals() and hasattr(st, 'session_state'):
+                                                for k, v in st.session_state.items():
+                                                    if 'supabase' in str(type(v)).lower() or 'client' in str(type(v)).lower():
+                                                        db_client = v
                                                         break
-                                            
-                                            if matched_filename:
-                                                pub_res = supabase.storage.from_("master_answer").get_public_url(matched_filename)
-                                                img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+
+                                            if db_client:
+                                                files_list = db_client.storage.from_("master_answer").list()
                                                 
+                                                matched_filename = None
+                                                if files_list:
+                                                    for file_info in files_list:
+                                                        fname = file_info.get("name", "")
+                                                        if f"({n_digits})" in fname or f"_{n_digits}." in fname or f"_{n_digits}_" in fname:
+                                                            matched_filename = fname
+                                                            break
+                                                
+                                                if matched_filename:
+                                                    pub_res = db_client.storage.from_("master_answer").get_public_url(matched_filename)
+                                                    img_url = pub_res.get("publicUrl") if isinstance(pub_res, dict) else str(pub_res)
+                                            
                                             if img_url:
                                                 st.image(img_url, width=350)
                                             else:
