@@ -1625,15 +1625,14 @@ if not st.session_state["teacher_authenticated"]:
                         # 폼 내부의 제출 버튼 (이 버튼을 누르기 전까지는 새로고침이 전혀 일어나지 않습니다)
                         submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
 
-                    # 폼이 제출된 시점에만 실행되는 채점 및 DB 저장 로직
-                    # 폼이 제출된 시점에 실행되는 채점 및 DB 저장 로직 (최적화 완료)
+                    # 폼이 제출된 시점에 실행되는 채점 및 DB 저장 로직 (디자인 및 가독성 대폭 개선)
                     if submitted:
                         now_str = get_korean_now_str()
                         correct_count = 0
-                        wrong_items_summary = []
+                        all_results = []
                         wrong_units_to_update = {}
 
-                        # 1. 메모리상에서 먼저 빠르게 채점 및 오답 분류 진행
+                        # 1. 채점 및 결과 수집
                         for prob in problem_list:
                             p_key = f"form_{selected_session_id}_{prob['item_id']}"
                             real_ans = prob["answer"].replace("번", "").strip()
@@ -1643,26 +1642,34 @@ if not st.session_state["teacher_authenticated"]:
                             if is_correct:
                                 correct_count += 1
                             else:
-                                wrong_items_summary.append((prob["order"], prob["full_code"], u_ans, real_ans))
                                 if prob["unit_code"] != "TEST":
                                     wrong_units_to_update.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
 
-                            # 제출 결과 임시 적재용 리스트에 담기 (여기서는 DB 안 감)
-                        
-                        # 2. Supabase 클라우드에 한 번에 몰아서 데이터 저장 (벌크 INSERT & UPDATE)
+                            all_results.append({
+                                "order": prob["order"],
+                                "full_code": prob["full_code"],
+                                "user_ans": u_ans,
+                                "real_ans": real_ans,
+                                "is_correct": is_correct,
+                                "unit_code": prob["unit_code"]
+                            })
+
+                        # 2. 데이터베이스 저장 처리
                         try:
-                            # 2-1. 학생 제출 결과 일괄 저장
-                            for prob in problem_list:
-                                p_key = f"form_{selected_session_id}_{prob['item_id']}"
-                                u_ans = form_answers.get(p_key, "").replace("번", "").strip()
-                                real_ans = prob["answer"].replace("번", "").strip()
-                                is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
+                            is_postgres = "psycopg2" in str(type(conn_test))
 
-                                q(c_test,
-                                  "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
+                            for res in all_results:
+                                if is_postgres:
+                                    c_test.execute(
+                                        "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                                        (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str)
+                                    )
+                                else:
+                                    q(c_test,
+                                      "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                      (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
 
-                            # 2-2. 오답노트 단원별 일괄 반영
+                            # 오답노트 일괄 반영
                             for u_code, num_set in wrong_units_to_update.items():
                                 existing_txt = get_student_wrong_entry(selected_student, u_code)
                                 pre_nums = parse_numbers(existing_txt)
@@ -1670,7 +1677,7 @@ if not st.session_state["teacher_authenticated"]:
                                 merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
                                 save_student_wrong_entry(selected_student, u_code, merged_txt)
 
-                            # 2-3. 테스트 세션 완료 처리
+                            # 세션 완료 처리
                             q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
                             conn_test.commit()
                             st.cache_data.clear()
@@ -1678,16 +1685,55 @@ if not st.session_state["teacher_authenticated"]:
                         except Exception as db_err:
                             st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
 
-                        # 3. 결과 화면 출력
+                        # 3. 향상된 가독성의 채점 결과 대시보드 출력
                         st.balloons()
-                        st.success(f"🎉 채점 완료! 총 **{len(problem_list)}문제** 중 **{correct_count}문제** 맞혔습니다!")
                         
-                        if wrong_items_summary:
-                            st.error(f"❌ 틀린 문제 ({len(wrong_items_summary)}개) — [오답·질문 관리] 탭에 자동 등록되었습니다!")
-                            for w_ord, w_code, w_uans, w_rans in wrong_items_summary:
-                                v_url, _ = get_problem_link_info(w_code)
-                                link_html = f" &nbsp; <a href='{v_url}' target='_blank' style='color:#0284C7; font-weight:bold;'>🎥 해설 영상 보기 ➔</a>" if v_url else ""
-                                st.markdown(f"- **{w_ord}번 (`{w_code}`)**: 내 답 `{w_uans or '미입력'}` / 정답 `{w_rans or '선생님 확인'}`{link_html}", unsafe_allow_html=True)
+                        total_q_cnt = len(problem_list)
+                        score_pct = int((correct_count / total_q_cnt) * 100) if total_q_cnt > 0 else 0
+
+                        # 상단 요약 배너
+                        st.markdown(f"""
+                        <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
+                            <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
+                            <p style="font-size: 18px; font-weight: bold; margin: 0;">
+                                총 {total_q_cnt}문항 중 <span style="color: #10B981;">{correct_count}문항 정답</span> (점수: {score_pct}점)
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # 정답/오답 상세 분리
+                        incorrect_list = [r for r in all_results if r["is_correct"] == 0]
+                        correct_list = [r for r in all_results if r["is_correct"] == 1]
+
+                        # 틀린 문제 카드 섹션
+                        if incorrect_list:
+                            st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
+                            for res in incorrect_list:
+                                v_url, _ = get_problem_link_info(res["full_code"])
+                                link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 해설 영상</a>' if v_url else '<span style="color:gray; font-size:12px;">해설 준비중</span>'
+                                
+                                u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
+                                r_ans_str = res["real_ans"] if res["real_ans"] else "확인 필요"
+
+                                st.markdown(f"""
+                                <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <b style="color: #EF4444; font-size: 15px;">{res['order']}번 문제</b> &nbsp; <span style="color:gray; font-size:13px;">(`{res['full_code']}`)</span><br>
+                                        <span style="font-size: 14px; margin-top: 4px; display: inline-block;">내 답: <b style="color:#EF4444;">{u_ans_str}</b> &nbsp;|&nbsp; 정답: <b style="color: #10B981;">{r_ans_str}</b></span>
+                                    </div>
+                                    <div>{link_btn}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                        # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
+                        if correct_list:
+                            with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
+                                for res in correct_list:
+                                    st.markdown(f"""
+                                    <div style="background-color: rgba(16, 185, 129, 0.08); border-left: 4px solid #10B981; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
+                                        <b>{res['order']}번 문제</b> (`{res['full_code']}`) — 내 답: <b style="color: #10B981;">{res['user_ans']}</b> (정답)
+                                    </div>
+                                    """, unsafe_allow_html=True)
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
