@@ -1828,7 +1828,6 @@ if not st.session_state["teacher_authenticated"]:
                                 st.session_state[f"correct_count_{selected_session_id}"] = correct_count
                                 st.balloons()
                                 st.rerun()
-            
                 else:
                     st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
 
