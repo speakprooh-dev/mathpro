@@ -1733,8 +1733,8 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         from pathlib import Path
                                         
-                                        # pathlib을 사용하여 G 드라이브 경로 설정 (슬래시 방향 무관하게 안전하게 처리)
-                                        base_master_dir = Path(r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer")
+                                        # 기존의 G 드라이브 경로 대신 로컬 경로로 변경
+                                        base_master_dir = Path(r"D:\MathPro\master_answer")
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
