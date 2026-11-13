@@ -1768,13 +1768,12 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
+
+                                # 💡 핵심 판별 기준: 정답 글자에 '번'이 포함되어 있거나 '@'가 있으면 무조건 객관식!
+                                # (주관식 정답에는 '번'이나 '@'가 없으므로 정확히 분리됩니다)
+                                is_multiple_choice = "번" in raw_ans_db or "@" in raw_ans_db
                                 
-                                # 💡 핵심: 정답 텍스트나 문제 파일명에 '@'가 포함되어 있으면 객관식으로 판별!
-                                # (prob에 file_name이 있다면 아래와 같이 함께 검사합니다)
-                                file_name_str = str(prob.get("file_name", ""))
-                                is_multiple_choice = "@" in raw_ans_db or "@" in file_name_str
-                                
-                                # 실제 채점을 위한 정답 정제 ('@3' 또는 '3번' -> '3' 등)
+                                # 실제 채점을 위한 정답 정제 ('3번' 또는 '@3' -> '3' 등)
                                 real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
 
                                 if is_multiple_choice:
