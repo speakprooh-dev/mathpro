@@ -1721,56 +1721,41 @@ if not st.session_state["teacher_authenticated"]:
 
                             for res in incorrect_list:
                                 v_url, _ = get_problem_link_info(res["full_code"])
-                                link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold;">🎥 해설 영상</a>' if v_url else '<span style="color:gray; font-size:12px;">해설 준비중</span>'
+                                link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
                                 
                                 u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
                                 r_ans = res["real_ans"]
                                 
-                                with st.container(border=True):
-                                    col_info, col_link = st.columns([4, 1])
-                                    with col_info:
-                                        st.markdown(f"<b style='color: #EF4444; font-size: 15px;'>{res['order']}번 문제</b> &nbsp; <span style='color:gray; font-size:13px;'>(`{res['full_code']}`)</span>", unsafe_allow_html=True)
-                                        st.markdown(f"<span style='font-size: 14px;'>내 답: <b style='color:#EF4444;'>{u_ans_str}</b></span>", unsafe_allow_html=True)
-                                    with col_link:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 10px;'>{link_btn}</div>", unsafe_allow_html=True)
+                                # 이미지 정답인 경우 URL 조합 준비
+                                f_code = str(res.get("full_code", "")).strip()
+                                u_part = f_code[:4] if len(f_code) > 4 else "A114"
+                                num_part = f_code[4:] if len(f_code) > 4 else f_code
+                                n_digits = "".join(filter(str.isdigit, num_part))
+                                project_id = "qfpclacalaaxbhhheosw"
+                                target_filename = f"{u_part}_ans_({n_digits}).png"
+                                img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
+                                
+                                # 정답이 텍스트인지 이미지인지에 따른 표시 방식 분기
+                                if r_ans and r_ans != "-":
+                                    ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
+                                else:
+                                    ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
 
-                                    st.markdown("---")
-                                    st.markdown("📌 **정답:**")
-                                    
-                                    # 1. 텍스트 정답인 경우 (한 줄로 깔끔하게 출력)
-                                    if r_ans and r_ans != "-":
-                                        st.markdown(
-                                            f"<div style='font-size: 13px; color: #10B981; font-weight: bold; margin: 0; line-height: 1.2;'>"
-                                            f"📌 정답: {r_ans}"
-                                            f"</div>", 
-                                            unsafe_allow_html=True
-                                        )
-                                    else:
-                                        # 2. 이미지 정답인 경우 ('정답:'과 이미지를 한 줄에 나란히 배치하여 높이 최소화)
-                                        f_code = str(res.get("full_code", "")).strip()
-                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
-                                        num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                        n_digits = "".join(filter(str.isdigit, num_part))
-                                        
-                                        try:
-                                            project_id = "qfpclacalaaxbhhheosw"
-                                            target_filename = f"{u_part}_ans_({n_digits}).png"
-                                            img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
-                                            
-                                            if img_url:
-                                                # HTML 플렉스박스를 사용해 '정답:'과 이미지를 정확히 한 줄로 밀착 배치
-                                                st.markdown(
-                                                    f"<div style='display: flex; align-items: center; gap: 8px; margin: 0; padding: 0;'>"
-                                                    f"<span style='font-size: 12px; color: #9CA3AF; font-weight: bold;'>📌 정답:</span>"
-                                                    f"<img src='{img_url}' style='height: 30px; width: auto; background: white; padding: 2px; border-radius: 3px; vertical-align: middle;' />"
-                                                    f"</div>", 
-                                                    unsafe_allow_html=True
-                                                )
-                                            else:
-                                                st.markdown("<span style='font-size: 11px; color: #EF4444;'>❌ 이미지 없음</span>", unsafe_allow_html=True)
-                                                
-                                        except Exception as e:
-                                            st.markdown(f"<span style='font-size: 11px; color: #EF4444;'>❌ 오류: {str(e)}</span>", unsafe_allow_html=True)
+                                # 🌟 카드 전체를 세로 공간 낭비 없이 완벽한 한 줄(Single Line)로 압축
+                                with st.container(border=True):
+                                    st.markdown(
+                                        f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
+                                        f"  <div>"
+                                        f"    <b style='color: #EF4444;'>{res['order']}번문제</b> "
+                                        f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
+                                        f"    <span style='color: #EF4444; font-weight: bold;'>({ 'O' if res['is_correct'] else 'X' })</span> &nbsp;|&nbsp; "
+                                        f"    정답: {ans_display} , "
+                                        f"    내 답: <b style='color: #374151;'>{u_ans_str}</b>"
+                                        f"  </div>"
+                                        f"  <div>{link_btn}</div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
