@@ -1745,34 +1745,15 @@ if not st.session_state["teacher_authenticated"]:
                                         n_digits = "".join(filter(str.isdigit, num_part)) # 112 추출
                                         
                                         try:
-                                            # Supabase 프로젝트의 URL과 버킷 이름을 활용한 직접 Public 주소 조합
-                                            # 선생님의 Supabase 프로젝트 주소 기반
-                                            project_ref = "speakprooh-dev's Project" # 또는 Supabase 고유 프로젝트 ID
+                                            # 선생님의 Supabase 프로젝트 ID를 반영한 정확한 스토리지 공인 주소 포맷
+                                            project_id = "qfpclacalaaxbhhheosw"
                                             
-                                            # 가장 확실한 방법: Supabase 스토리지의 공인 URL 구조 직접 생성
-                                            # 예시 파일명 후보들 중 스토리지에 있는 형태 매칭
-                                            candidates = [
-                                                f"101_ans_({n_digits}).png",
-                                                f"101_ans_({n_digits.zfill(3)}).png",
-                                                f"{f_code[:4]}_ans_({n_digits}).png"
-                                            ]
-                                            
-                                            # st.secrets에서 프로젝트 URL을 가져오거나 직접 표준 URL 사용
-                                            # Supabase Public URL 기본 포맷: https://[PROJECT_ID].supabase.co/storage/v1/object/public/master_answer/[FILENAME]
-                                            base_url = "https://rruuubvtzjhzrghwuxyz.supabase.co" # 만약 secrets에 있다면 st.secrets에 맞게 수정 가능
-                                            
-                                            # st.secrets에 supabase url이 있다면 가져오기 시도
-                                            try:
-                                                if hasattr(st, 'secrets') and "SUPABASE_URL" in st.secrets:
-                                                    base_url = st.secrets["SUPABASE_URL"]
-                                            except:
-                                                pass
-                                            
-                                            # URL에 직접 꽂아 넣을 파일명 결정 (예: 101_ans_(112).png 등)
+                                            # 스토리지에 올라가 있는 파일명 규칙에 맞게 조합 (예: 101_ans_(112).png 등)
+                                            # 만약 다른 파일명 형태라면 이 부분을 맞출 수 있습니다.
                                             target_filename = f"101_ans_({n_digits}).png"
                                             
-                                            # 최종 퍼블릭 이미지 URL 완성
-                                            img_url = f"{base_url}/storage/v1/object/public/master_answer/{target_filename}"
+                                            # Supabase Storage 공식 Public URL 조합
+                                            img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                                             
                                             if img_url:
                                                 st.image(img_url, width=350)
