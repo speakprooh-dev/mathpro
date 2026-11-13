@@ -1626,11 +1626,14 @@ if not st.session_state["teacher_authenticated"]:
                         submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
 
                     # 폼이 제출된 시점에만 실행되는 채점 및 DB 저장 로직
+                    # 폼이 제출된 시점에 실행되는 채점 및 DB 저장 로직 (최적화 완료)
                     if submitted:
                         now_str = get_korean_now_str()
                         correct_count = 0
                         wrong_items_summary = []
+                        wrong_units_to_update = {}
 
+                        # 1. 메모리상에서 먼저 빠르게 채점 및 오답 분류 진행
                         for prob in problem_list:
                             p_key = f"form_{selected_session_id}_{prob['item_id']}"
                             real_ans = prob["answer"].replace("번", "").strip()
@@ -1641,25 +1644,41 @@ if not st.session_state["teacher_authenticated"]:
                                 correct_count += 1
                             else:
                                 wrong_items_summary.append((prob["order"], prob["full_code"], u_ans, real_ans))
+                                if prob["unit_code"] != "TEST":
+                                    wrong_units_to_update.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
 
-                            q(c_test,
-                              "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                              (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
+                            # 제출 결과 임시 적재용 리스트에 담기 (여기서는 DB 안 감)
+                        
+                        # 2. Supabase 클라우드에 한 번에 몰아서 데이터 저장 (벌크 INSERT & UPDATE)
+                        try:
+                            # 2-1. 학생 제출 결과 일괄 저장
+                            for prob in problem_list:
+                                p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                                u_ans = form_answers.get(p_key, "").replace("번", "").strip()
+                                real_ans = prob["answer"].replace("번", "").strip()
+                                is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
 
-                            if is_correct == 0 and prob["unit_code"] != "TEST":
-                                existing_txt = get_student_wrong_entry(selected_student, prob["unit_code"])
+                                q(c_test,
+                                  "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                  (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
+
+                            # 2-2. 오답노트 단원별 일괄 반영
+                            for u_code, num_set in wrong_units_to_update.items():
+                                existing_txt = get_student_wrong_entry(selected_student, u_code)
                                 pre_nums = parse_numbers(existing_txt)
-                                try:
-                                    pre_nums.add(int(prob["prob_num"]))
-                                    merged_txt = ", ".join(map(str, sorted(list(pre_nums))))
-                                    save_student_wrong_entry(selected_student, prob["unit_code"], merged_txt)
-                                except Exception:
-                                    pass
+                                merged_nums = pre_nums | num_set
+                                merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                save_student_wrong_entry(selected_student, u_code, merged_txt)
 
-                        q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
-                        conn_test.commit()
-                        st.cache_data.clear()
+                            # 2-3. 테스트 세션 완료 처리
+                            q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
+                            conn_test.commit()
+                            st.cache_data.clear()
 
+                        except Exception as db_err:
+                            st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
+
+                        # 3. 결과 화면 출력
                         st.balloons()
                         st.success(f"🎉 채점 완료! 총 **{len(problem_list)}문제** 중 **{correct_count}문제** 맞혔습니다!")
                         
