@@ -1519,7 +1519,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("노트에 푼 후, 객관식은 번호를 선택하고 주관식은 정답을 입력한 뒤 **맨 아래 최종 제출 버튼**을 눌러주세요!")
+            st.markdown("노트에 푼 후, 정답을 체크하고 **맨 아래 최종 제출 버튼**을 누르면 자동 채점 및 오답노트로 바로 연동됩니다!")
             
             conn_test, db_type_test = get_db_connection()
             c_test = conn_test.cursor()
@@ -1546,9 +1546,9 @@ if not st.session_state["teacher_authenticated"]:
                 )
 
                 # 해당 테스트 문항들 불러오기 (캐싱)
-                cache_key_items = f"cached_items_scroll_{selected_session_id}"
-                if st.session_state.get("active_scroll_session_id") != selected_session_id or cache_key_items not in st.session_state:
-                    st.session_state["active_scroll_session_id"] = selected_session_id
+                cache_key_items = f"cached_items_form_{selected_session_id}"
+                if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
+                    st.session_state["active_form_session_id"] = selected_session_id
                     
                     q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
@@ -1581,61 +1581,60 @@ if not st.session_state["teacher_authenticated"]:
                 if not problem_list:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
                 else:
-                    st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항 (스크롤하며 풀이)")
+                    st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
                     st.markdown("---")
 
-                    if "scroll_quiz_answers" not in st.session_state:
-                        st.session_state.scroll_quiz_answers = {}
+                    # 🚀 st.form을 사용하여 중간 로딩/새로고침을 완전히 차단합니다!
+                    with st.form(key=f"test_form_{selected_session_id}"):
+                        form_answers = {}
 
-                    # 문제 목록 렌더링 (답 입력 시 메모리에만 담아둠)
-                    for idx, prob in enumerate(problem_list):
-                        p_key = f"scroll_{selected_session_id}_{prob['item_id']}"
-                        
-                        st.markdown(f"#### **{idx + 1}번 문제** (`{prob['full_code']}`)")
-                        
-                        if prob["img_bytes"]:
-                            st.image(prob["img_bytes"], use_container_width=True)
-                        else:
-                            st.info("💡 등록된 문제 이미지가 없습니다.")
+                        for idx, prob in enumerate(problem_list):
+                            p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                            
+                            st.markdown(f"#### **{idx + 1}번 문제** (`{prob['full_code']}`)")
+                            
+                            if prob["img_bytes"]:
+                                st.image(prob["img_bytes"], use_container_width=True)
+                            else:
+                                st.info("💡 등록된 문제 이미지가 없습니다.")
 
-                        real_ans_clean = prob["answer"].replace("번", "").strip()
-                        is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
+                            real_ans_clean = prob["answer"].replace("번", "").strip()
+                            is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
 
-                        if is_multiple_choice:
-                            saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
-                            default_idx = int(saved_ans) if saved_ans in ["1", "2", "3", "4", "5"] else 0
+                            if is_multiple_choice:
+                                choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
+                                selected_choice = st.radio(
+                                    f"{idx + 1}번 정답 선택 (객관식):",
+                                    options=choice_options,
+                                    index=0,
+                                    key=f"radio_{p_key}",
+                                    horizontal=True
+                                )
+                                user_ans = selected_choice.replace("번", "").strip() if selected_choice != "선택 안 함" else ""
+                            else:
+                                user_ans = st.text_input(
+                                    f"{idx + 1}번 정답 입력 (주관식 단답형):",
+                                    value="",
+                                    key=f"text_{p_key}",
+                                    placeholder="정답을 입력하세요"
+                                ).strip()
 
-                            choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
-                            selected_choice = st.radio(
-                                f"{idx + 1}번 정답 선택 (객관식):",
-                                options=choice_options,
-                                index=default_idx,
-                                key=f"radio_{p_key}",
-                                horizontal=True
-                            )
-                            user_ans = selected_choice.replace("번", "").strip() if selected_choice != "선택 안 함" else ""
-                        else:
-                            saved_ans = st.session_state.scroll_quiz_answers.get(p_key, "")
-                            user_ans = st.text_input(
-                                f"{idx + 1}번 정답 입력 (주관식 단답형):",
-                                value=saved_ans,
-                                key=f"text_{p_key}",
-                                placeholder="정답을 입력하세요"
-                            ).strip()
+                            form_answers[p_key] = user_ans
+                            st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
 
-                        st.session_state.scroll_quiz_answers[p_key] = user_ans
-                        st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
+                        # 폼 내부의 제출 버튼 (이 버튼을 누르기 전까지는 새로고침이 전혀 일어나지 않습니다)
+                        submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
 
-                    # 맨 아래에서 최종 제출할 때만 DB에 일괄 저장 및 채점 진행
-                    if st.button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True):
+                    # 폼이 제출된 시점에만 실행되는 채점 및 DB 저장 로직
+                    if submitted:
                         now_str = get_korean_now_str()
                         correct_count = 0
                         wrong_items_summary = []
 
                         for prob in problem_list:
-                            p_key = f"scroll_{selected_session_id}_{prob['item_id']}"
+                            p_key = f"form_{selected_session_id}_{prob['item_id']}"
                             real_ans = prob["answer"].replace("번", "").strip()
-                            u_ans = st.session_state.scroll_quiz_answers.get(p_key, "").replace("번", "").strip()
+                            u_ans = form_answers.get(p_key, "").replace("번", "").strip()
                             
                             is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
                             if is_correct:
@@ -1643,12 +1642,10 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 wrong_items_summary.append((prob["order"], prob["full_code"], u_ans, real_ans))
 
-                            # 최종 제출 시점에 DB에 결과 저장
                             q(c_test,
                               "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                               (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
 
-                            # 오답인 경우 오답노트에 자동 등록
                             if is_correct == 0 and prob["unit_code"] != "TEST":
                                 existing_txt = get_student_wrong_entry(selected_student, prob["unit_code"])
                                 pre_nums = parse_numbers(existing_txt)
