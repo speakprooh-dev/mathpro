@@ -1550,11 +1550,11 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, file_name FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
         
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
+                    for item_id, p_order, u_code, p_num, ans, img_b64, f_name in raw_items: # <-- f_name 추가
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -1571,7 +1571,8 @@ if not st.session_state["teacher_authenticated"]:
                             "unit_code": u_code or "TEST",
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
-                            "img_bytes": decoded_img
+                            "img_bytes": decoded_img,
+                            "file_name": f_name or "" # <-- 이 부분이 꼭 들어가야 합니다!
                         })
                     st.session_state[cache_key_items] = problem_list
         
@@ -1768,12 +1769,12 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
-
-                                # 💡 핵심 판별 기준: 정답 글자에 '번'이 포함되어 있거나 '@'가 있으면 무조건 객관식!
-                                # (주관식 정답에는 '번'이나 '@'가 없으므로 정확히 분리됩니다)
-                                is_multiple_choice = "번" in raw_ans_db or "@" in raw_ans_db
                                 
-                                # 실제 채점을 위한 정답 정제 ('3번' 또는 '@3' -> '3' 등)
+                                # 💡 핵심: 정답이 아니라 '파일명(file_name)'에 '@'가 포함되어 있으면 무조건 객관식!
+                                # (DB 파일명에 @3, @1 등으로 확실하게 표시되어 있으므로 100% 정확합니다)
+                                file_name_val = str(prob.get("file_name", ""))
+                                is_multiple_choice = "@" in file_name_val or "@" in raw_ans_db or "번" in raw_ans_db
+                                
                                 real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
 
                                 if is_multiple_choice:
