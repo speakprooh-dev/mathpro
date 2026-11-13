@@ -1524,7 +1524,7 @@ if not st.session_state["teacher_authenticated"]:
             conn_test, db_type_test = get_db_connection()
             c_test = conn_test.cursor()
 
-            # 1. 클라우드(Supabase)에서 해당 학생의 온라인 테스트 목록 불러오기
+            # 1. 클라우드에서 해당 학생의 테스트 세션 목록 불러오기 (캐시 또는 가벼운 쿼리)
             sessions_list = []
             try:
                 q(c_test, "SELECT id, test_title, created_at, is_completed FROM online_test_sessions WHERE student_name = ? ORDER BY id DESC", (selected_student,))
@@ -1535,7 +1535,6 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 테스트 선택 드롭다운 (미완료 과제 우선 표시)
                 session_options = {
                     s[0]: f"{'🆕 [미완료]' if s[3] == 0 else '✅ [제출완료]'} {s[1]} ({s[2]})"
                     for s in sessions_list
@@ -1547,28 +1546,39 @@ if not st.session_state["teacher_authenticated"]:
                     key=f"sel_online_test_{selected_student}"
                 )
 
-                # 선택한 테스트가 바뀌면 슬라이드 번호 초기화
-                if st.session_state.get("active_test_session_id") != selected_session_id:
+                # 선택한 테스트가 바뀌거나 세션에 데이터가 없을 때만 문항 목록 로드 (속도 대폭 개선)
+                cache_key_items = f"cached_items_{selected_session_id}"
+                if st.session_state.get("active_test_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_test_session_id"] = selected_session_id
                     st.session_state["quiz_idx"] = 0
-                    st.session_state["quiz_answers"] = {}
+                    
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                    raw_items = c_test.fetchall()
 
-                # 2. 선택한 테스트의 문항 목록 불러오기
-                q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
-                raw_items = c_test.fetchall()
+                    problem_list = []
+                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
+                        full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
+                        
+                        # 이미지를 미리 디코딩해서 세션에 담아두어 로딩 제거
+                        decoded_img = None
+                        if img_b64:
+                            try:
+                                decoded_img = base64.b64decode(img_b64)
+                            except Exception:
+                                pass
 
-                problem_list = []
-                for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
-                    full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
-                    problem_list.append({
-                        "item_id": item_id,
-                        "order": p_order,
-                        "full_code": full_code,
-                        "unit_code": u_code or "TEST",
-                        "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
-                        "answer": str(ans).strip() if ans else "",
-                        "img_base64": img_b64 or ""
-                    })
+                        problem_list.append({
+                            "item_id": item_id,
+                            "order": p_order,
+                            "full_code": full_code,
+                            "unit_code": u_code or "TEST",
+                            "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
+                            "answer": str(ans).strip() if ans else "",
+                            "img_bytes": decoded_img
+                        })
+                    st.session_state[cache_key_items] = problem_list
+
+                problem_list = st.session_state.get(cache_key_items, [])
 
                 if not problem_list:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
@@ -1583,32 +1593,25 @@ if not st.session_state["teacher_authenticated"]:
                     curr_key = f"{selected_session_id}_{curr_prob['item_id']}"
                     selected_test_title = [s[1] for s in sessions_list if s[0] == selected_session_id][0]
 
-                    # 진행률 표시
                     st.progress((idx + 1) / total_q, text=f"📝 {selected_test_title} — ({idx + 1} / {total_q} 문제) | 코드: {curr_prob['full_code']}")
 
-                    # 3. Base64로 업로드된 문제 이미지 렌더링
-                    if curr_prob["img_base64"]:
-                        try:
-                            img_bytes = base64.b64decode(curr_prob["img_base64"])
-                            st.image(img_bytes, use_container_width=True)
-                        except Exception:
-                            st.warning("⚠️ 문제 이미지를 표시하는 중 오류가 발생했습니다.")
+                    # 메모리에 저장된 이미지 bytes 바로 출력 (속도 최적화)
+                    if curr_prob["img_bytes"]:
+                        st.image(curr_prob["img_bytes"], use_container_width=True)
                     else:
                         st.info("💡 등록된 문제 이미지가 없습니다.")
 
                     st.divider()
 
-                    # 4. 정답 입력 칸
-                    # 4. 정답 입력 칸 (객관식 1~5번 선택 버튼 + 주관식 입력 호환)
+                    # 객관식 1~5번 라디오 버튼 정답 선택
                     st.markdown(f"🎯 **{idx + 1}번 문제 정답 선택**")
                     
-                    # 기존에 저장된 답이 있다면 번호 추출 (숫자 1~5)
-                    saved_ans = st.session_state["quiz_answers"].get(curr_key, "")
-                    default_idx = 0
-                    if saved_ans in ["1", "2", "3", "4", "5"]:
-                        default_idx = int(saved_ans)
+                    if "quiz_answers" not in st.session_state:
+                        st.session_state.quiz_answers = {}
 
-                    # 1~5번 라디오 버튼으로 깔끔하게 선택하도록 제공
+                    saved_ans = st.session_state["quiz_answers"].get(curr_key, "")
+                    default_idx = int(saved_ans) if saved_ans in ["1", "2", "3", "4", "5"] else 0
+
                     choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
                     selected_choice = st.radio(
                         "정답을 선택하세요:",
@@ -1618,7 +1621,6 @@ if not st.session_state["teacher_authenticated"]:
                         horizontal=True
                     )
 
-                    # 선택한 값을 숫자 문자열("1", "2" 등)로 변환하여 세션에 저장
                     if selected_choice != "선택 안 함":
                         user_ans = selected_choice.replace("번", "").strip()
                     else:
@@ -1626,7 +1628,7 @@ if not st.session_state["teacher_authenticated"]:
                         
                     st.session_state["quiz_answers"][curr_key] = user_ans
 
-                    # 5. 이전 / 다음 / 제출 버튼
+                    # 이전 / 다음 / 제출 버튼
                     col_prev, col_next = st.columns(2)
                     with col_prev:
                         if idx > 0:
@@ -1656,12 +1658,10 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         wrong_items_summary.append((prob["order"], prob["full_code"], u_ans, real_ans))
 
-                                    # 제출 결과 DB 저장
                                     q(c_test,
                                       "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                                       (selected_student, selected_test_title, prob["full_code"], u_ans, is_correct, "", now_str))
 
-                                    # 오답인 경우 학생 오답노트(Tab 3)에 자동 등록
                                     if is_correct == 0 and prob["unit_code"] != "TEST":
                                         existing_txt = get_student_wrong_entry(selected_student, prob["unit_code"])
                                         pre_nums = parse_numbers(existing_txt)
@@ -1672,7 +1672,6 @@ if not st.session_state["teacher_authenticated"]:
                                         except Exception:
                                             pass
 
-                                # 세션 완료 표시 업데이트
                                 q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
                                 conn_test.commit()
                                 st.cache_data.clear()
