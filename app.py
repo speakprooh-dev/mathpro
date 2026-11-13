@@ -1731,25 +1731,29 @@ if not st.session_state["teacher_authenticated"]:
                                     if r_ans and r_ans != "-":
                                         st.markdown(f"<span style='font-size: 15px; color: #10B981; font-weight: bold;'>{r_ans}</span>", unsafe_allow_html=True)
                                     else:
-                                        # master_answer 폴더 경로 설정
                                         base_master_dir = r"G:\내 드라이브\MathPro (drive)\온라인과제\다운로드\MathPro 프로그램\Math_Master\master_answer"
                                         
-                                        u_code = res["unit_code"] # 예: A114
-                                        p_raw = str(res["prob_num"]).strip() # 예: 67 또는 067
-                                        
+                                        # full_code (예: A114067)에서 알파벳+숫자 단원코드와 뒤의 문제번호를 정밀 분리
                                         import re
-                                        digits = "".join(re.findall(r'\d+', p_raw))
-                                        num_padded3 = digits.zfill(3) # 3자리 형태 (예: 067)
-                                        num_int = str(int(digits)) if digits.isdigit() else digits # 일반 형태 (예: 67)
+                                        f_code = str(res["full_code"]).strip()
+                                        match = re.match(r"^([A-Za-z]+\d+)(.*)$", f_code)
                                         
-                                        # 파일명 조합 패턴 생성 (예: A114_ans_(067), A114_ans_(67) 등)
-                                        possible_filenames = [
-                                            f"{u_code}_ans_({num_padded3})",
-                                            f"{u_code}_ans_({num_int})",
-                                            f"{u_code}_ans_{num_padded3}",
-                                            f"{u_code}_ans_{num_int}",
-                                            f"{res['full_code']}"
-                                        ]
+                                        possible_filenames = []
+                                        if match:
+                                            alpha_unit = match.group(1) # 예: A114
+                                            num_part = match.group(2).lstrip("0") or "0" # 예: 67
+                                            num_padded3 = num_part.zfill(3) # 예: 067
+                                            
+                                            # 가능한 모든 파일명 패턴 나열
+                                            possible_filenames.extend([
+                                                f"{alpha_unit}_ans_({num_padded3})",
+                                                f"{alpha_unit}_ans_({num_part})",
+                                                f"{alpha_unit}_ans_{num_padded3}",
+                                                f"{f_code}_ans",
+                                                f"{f_code}"
+                                            ])
+                                        else:
+                                            possible_filenames.append(f_code)
                                         
                                         ans_img_path = None
                                         checked_paths = []
@@ -1767,10 +1771,8 @@ if not st.session_state["teacher_authenticated"]:
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            # 어떤 경로들을 직접 확인했는지 안내
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 확인한 첫 번째 경로: <code>{checked_paths[0] if checked_paths else '없음'}</code></span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 첫 번째 확인 경로: <code>{checked_paths[0] if checked_paths else '없음'}</code></span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
-
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
