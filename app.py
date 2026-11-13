@@ -1684,18 +1684,16 @@ if not st.session_state["teacher_authenticated"]:
                                     is_wrong_saved = st.session_state.get(f"wrong_saved_{sess_id}", False)
                                     
                                     is_checked_default = (is_cor == 0)
-                                    
+                        
                                     if is_wrong_saved:
-                                        # 🌟 사용자가 실제로 체크했던 상태(True/False)를 가져와서 잠금 상태에서도 그대로 유지
+                                        # 🌟 등록이 완료된 후에는 체크박스 대신 사용자가 담았는지 여부에 따라 깔끔한 문구로 표시
                                         user_checked_before = st.session_state.get(f"wrong_chk_{sess_id}_{prob['item_id']}", is_checked_default)
-                                        st.checkbox(
-                                            f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
-                                            value=user_checked_before,
-                                            disabled=True,
-                                            key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
-                                        )
+                                        
+                                        if user_checked_before:
+                                            st.markdown(f"<p style='color: #10B981; font-weight: bold; margin: 0;'>✅ {prob['order']}번 문제 — 오답노트 등록 완료됨</p>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<p style='color: #6B7280; margin: 0;'>☑️ {prob['order']}번 문제 — 미선택 (등록 안 함)</p>", unsafe_allow_html=True)
                                     else:
-                                        # 아직 등록 전인 경우 정상적으로 체크 및 선택 가능
                                         selected_wrong_notes[prob['full_code']] = st.checkbox(
                                             f"📌 {prob['order']}번 오답노트 담기 (※ 체크 후 맨 아래 등록 버튼 필수!)",
                                             value=is_checked_default,
