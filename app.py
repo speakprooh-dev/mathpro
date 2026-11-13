@@ -1686,13 +1686,12 @@ if not st.session_state["teacher_authenticated"]:
                         except Exception as db_err:
                             st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
 
-                        # 3. 향상된 가독성의 채점 결과 대시보드 출력
+                        # 1. 과제 제출 완료 축하 배너
                         st.balloons()
                         
                         total_q_cnt = len(problem_list)
                         score_pct = int((correct_count / total_q_cnt) * 100) if total_q_cnt > 0 else 0
 
-                        # 상단 요약 배너
                         st.markdown(f"""
                         <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
                             <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
@@ -1702,13 +1701,6 @@ if not st.session_state["teacher_authenticated"]:
                         </div>
                         """, unsafe_allow_html=True)
 
-                        # 정답/오답 상세 분리
-                        incorrect_list = [r for r in all_results if r["is_correct"] == 0]
-                        correct_list = [r for r in all_results if r["is_correct"] == 1]
-
-                       # 1. 전체 문항별 결과 및 다시 풀기 검토 카드 섹션
-                        st.markdown(f"### 📝 전체 문항별 결과 및 다시 풀기 검토 ({len(all_results)}개)")
-                        
                         if "master_dir_input" not in st.session_state:
                             st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                             
@@ -1718,7 +1710,9 @@ if not st.session_state["teacher_authenticated"]:
                                 value=st.session_state["master_dir_input"]
                             )
 
-                        # 전체 문항(맞은 것 + 틀린 것 모두)을 순회하며 각 카드마다 O/X 및 토글 정답 배치
+                        # 2. 각 문제 카드 바로 옆(오른쪽)에 O/X, 내 답, 정답, 해설영상을 한눈에 바로 노출
+                        st.markdown(f"### 📝 전체 문항별 채점 결과 ({len(all_results)}개)")
+
                         for res in all_results:
                             v_url, _ = get_problem_link_info(res["full_code"])
                             link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
@@ -1744,53 +1738,21 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
 
-                            # 각 문제 카드별로 O/X, 해설영상 버튼, 그리고 평소에는 닫혀 있는 정답 토글 배치
+                            # 🌟 각 문제 카드 내부에 O/X, 정답, 내 답, 해설영상을 한 줄로 깔끔하게 배치 (토글 없음)
                             with st.container(border=True):
                                 st.markdown(
                                     f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
                                     f"  <div>"
                                     f"    <b style='color: #374151;'>{res['order']}번 문제</b> "
                                     f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
-                                    f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
+                                    f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span> &nbsp;|&nbsp; "
+                                    f"    내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b> &nbsp;|&nbsp; "
+                                    f"    정답: {ans_display}"
                                     f"  </div>"
                                     f"  <div>{link_btn}</div>"
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
-                                
-                                # 평소에는 닫혀 있다가 클릭(터치)해야만 정답/내답이 열리는 토글 박스
-                                with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
-                                    st.markdown(
-                                        f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
-                                        f"정답: {ans_display} &nbsp;|&nbsp; "
-                                        f"내 답: <b style='color: #374151;'>{u_ans_str}</b>"
-                                        f"</div>",
-                                        unsafe_allow_html=True
-                                    )
-
-                        # 정답/오답 상세 분리 (하단 요약용)
-                        incorrect_list = [r for r in all_results if r["is_correct"] == 0]
-                        correct_list = [r for r in all_results if r["is_correct"] == 1]
-
-                        # 2. 하단 틀린 문제 요약 섹션
-                        if incorrect_list:
-                            st.markdown(f"### ❌ 틀린 문제 요약 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
-                            for res in incorrect_list:
-                                st.markdown(f"""
-                                <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
-                                    <b>{res['order']}번 문제</b> (`{res['full_code']}`) — 내 답: <b style="color: #EF4444;">{res['user_ans'] or '미입력'}</b> (오답)
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                        # 3. 하단 맞은 문제 모아보기 섹션
-                        if correct_list:
-                            with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
-                                for res in correct_list:
-                                    st.markdown(f"""
-                                    <div style="background-color: rgba(16, 185, 129, 0.08); border-left: 4px solid #10B981; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
-                                        <b>{res['order']}번 문제</b> (`{res['full_code']}`) — 내 답: <b style="color: #10B981;">{res['user_ans']}</b> (정답)
-                                    </div>
-                                    """, unsafe_allow_html=True)
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
