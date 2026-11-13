@@ -1757,7 +1757,8 @@ if not st.session_state["teacher_authenticated"]:
                                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                                             
                                             if img_url:
-                                                st.image(img_url, width=350)
+                                                # width 값을 150 ~ 200 사이로 고정하면 아담하고 깔끔하게 나옵니다.
+                                                st.image(img_url, width=180)
                                             else:
                                                 st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 주소 생성 실패</span>", unsafe_allow_html=True)
                                                 
