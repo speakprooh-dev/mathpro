@@ -1709,7 +1709,7 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
             
-                                    is_checked_default = (is_cor == 0)
+                                    is_checked_default = False  # 틀린 문제여도 기본 체크를 해제하려면 False로 설정합니다!
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
                                         f"📌 이 문제를 오답노트에 담기 ({prob['order']}번)",
                                         value=is_checked_default,
