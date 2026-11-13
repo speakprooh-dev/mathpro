@@ -1743,18 +1743,13 @@ if not st.session_state["teacher_authenticated"]:
                                         from pathlib import Path
                                         import os
                                         
-                                        # 💡 G드라이브나 D드라이브 경로 대신, 현재 프로젝트 폴더 안의 master_answer를 바로 바라보게 수정!
-                                        raw_input_path = "master_answer"
-                                        
-                                        # 백슬래시 정리 및 경로 객체 생성
-                                        clean_path_str = raw_input_path.replace('"', '').replace("'", "")
-                                        base_master_dir = Path(clean_path_str)
-                                        
-                                        # 만약 리눅스 환경(WSL 등)에서 D:\ 로 입력했을 때의 예외 처리 보정
-                                        if not base_master_dir.exists() and clean_path_str.startswith("D:\\"):
-                                            alt_wsl_path = Path("/mnt/d/" + clean_path_str[3:].replace("\\", "/"))
-                                            if alt_wsl_path.exists():
-                                                base_master_dir = alt_wsl_path
+                                        # 💡 app.py가 있는 폴더 기준 절대 경로를 강제로 생성합니다. (어디서 실행하든 100% 일치)
+                                        try:
+                                            current_script_dir = Path(__file__).resolve().parent
+                                        except NameError:
+                                            current_script_dir = Path.cwd()
+                                            
+                                        base_master_dir = current_script_dir / "master_answer"
                                         
                                         f_code = str(res.get("full_code", "")).strip() # 예: A114112
                                         ans_img_path = None
@@ -1796,7 +1791,6 @@ if not st.session_state["teacher_authenticated"]:
                                         else:
                                             st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 경로 상태: <code>{base_master_dir}</code> (존재함: {is_ok})</span>", unsafe_allow_html=True)
                                             st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다.</span>", unsafe_allow_html=True)
-                                            
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
