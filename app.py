@@ -1710,11 +1710,10 @@ if not st.session_state["teacher_authenticated"]:
                         if incorrect_list:
                             st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
                             
-                            # 💡 세션에 경로 저장용 변수 초기화
                             if "master_dir_input" not in st.session_state:
                                 st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                                 
-                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정 (경로가 안 잡힐 때 여기를 확인하세요)", expanded=False):
+                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
                                 st.session_state["master_dir_input"] = st.text_input(
                                     "master_answer 폴더의 실제 경로를 입력해주세요:",
                                     value=st.session_state["master_dir_input"]
@@ -1753,36 +1752,33 @@ if not st.session_state["teacher_authenticated"]:
                                         num_part = f_code[4:] if len(f_code) > 4 else "112"
                                         n_digits = "".join(filter(str.isdigit, num_part))
                                         
+                                        debug_files_found = []
+                                        
                                         if base_master_dir.exists():
                                             try:
-                                                # 1. 정확한 이름 매칭 시도 (A114_ans_(112).png 등)
-                                                for fname_candidate in [
-                                                    f"{u_part}_ans_({n_digits}).png",
-                                                    f"{u_part}_ans_({n_digits}).PNG",
-                                                    f"{u_part}_ans_({n_digits}).jpg",
-                                                    f"{u_part}_ans_({n_digits}).JPG"
-                                                ]:
-                                                    target_p = base_master_dir / fname_candidate
-                                                    if target_p.exists():
-                                                        ans_img_path = str(target_p)
-                                                        break
-                                                
-                                                # 2. 안 되면 폴더 내 검색
-                                                if not ans_img_path:
-                                                    for file_p in base_master_dir.glob("*"):
-                                                        if file_p.is_file():
-                                                            fname = file_p.name.lower()
-                                                            if u_part.lower() in fname and n_digits in fname:
-                                                                ans_img_path = str(file_p)
-                                                                break
-                                            except Exception:
+                                                # 폴더 내의 모든 파일을 스캔
+                                                for file_p in base_master_dir.glob("*"):
+                                                    if file_p.is_file():
+                                                        fname = file_p.name
+                                                        debug_files_found.append(fname)
+                                                        fname_lower = fname.lower()
+                                                        # 단원 코드와 번호가 포함되어 있다면 무조건 채택!
+                                                        if u_part.lower() in fname_lower and n_digits in fname_lower:
+                                                            ans_img_path = str(file_p)
+                                                            break
+                                            except Exception as e:
                                                 pass
                                         
                                         if ans_img_path:
                                             st.image(ans_img_path, width=350)
                                         else:
-                                            st.markdown(f"<span style='font-size: 11px; color: gray;'>🔍 입력된 경로: <code>{base_master_dir}</code> (존재 여부: {base_master_dir.exists()})</span>", unsafe_allow_html=True)
-                                            st.markdown("<span style='font-size: 14px; color: #EF4444;'>정답 이미지 파일명을 찾지 못했습니다. 경로가 올바른지 위 설정에서 확인해 주세요.</span>", unsafe_allow_html=True)
+                                            st.markdown(f"<span style='font-size: 12px; color: #EF4444;'>❌ 이미지 매칭 실패 (단원: {u_part}, 번호: {n_digits})</span>", unsafe_allow_html=True)
+                                            # 폴더 안에 어떤 파일들이 들어있는지 화면에 띄워줍니다 (원인 파악용)
+                                            if base_master_dir.exists():
+                                                sample_list = ", ".join(debug_files_found[:10]) if debug_files_found else "폴더가 비어있음"
+                                                st.markdown(f"<span style='font-size: 11px; color: gray;'>📁 폴더 내 실제 파일 샘플 (총 {len(debug_files_found)}개): <code>{sample_list}</code></span>", unsafe_allow_html=True)
+                                            else:
+                                                st.markdown(f"<span style='font-size: 11px; color: red;'>📁 폴더 경로가 존재하지 않습니다: {base_master_dir}</span>", unsafe_allow_html=True)
                                             
                         # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
                         if correct_list:
