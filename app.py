@@ -1710,21 +1710,31 @@ if not st.session_state["teacher_authenticated"]:
                                 value=st.session_state["master_dir_input"]
                             )
 
-                        # 2. 각 문제 카드 바로 옆(오른쪽)에 O/X, 내 답, 정답, 해설영상을 한눈에 바로 노출
-                        st.markdown(f"### 📝 전체 문항별 채점 결과 ({len(all_results)}개)")
+                        # 2. 🌟 각 문제마다 [상단: 채점 결과 및 해설영상] + [하단: 문제 이미지 사진] 출력
+                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({total_q_cnt}개)")
 
-                        for res in all_results:
-                            v_url, _ = get_problem_link_info(res["full_code"])
+                        for prob in problem_list:
+                            # 해당 문제의 채점 결과 매칭
+                            matched_res = next((r for r in all_results if r['full_code'] == prob['full_code']), None)
+                            
+                            if matched_res:
+                                u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
+                                r_ans = matched_res["real_ans"]
+                                is_cor = matched_res["is_correct"]
+                                ox_mark = "O" if is_cor else "X"
+                                ox_color = "#10B981" if is_cor else "#EF4444"
+                            else:
+                                u_ans_str = "미입력"
+                                r_ans = prob["answer"].replace("번", "").strip()
+                                ox_mark = "-"
+                                ox_color = "gray"
+
+                            # 해설 영상 링크 정보 가져오기
+                            v_url, _ = get_problem_link_info(prob["full_code"])
                             link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
-                            
-                            u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
-                            r_ans = res["real_ans"]
-                            is_cor = res["is_correct"]
-                            ox_mark = "O" if is_cor else "X"
-                            ox_color = "#10B981" if is_cor else "#EF4444"
-                            
+
                             # 이미지 정답인 경우 URL 조합 준비
-                            f_code = str(res.get("full_code", "")).strip()
+                            f_code = str(prob["full_code"]).strip()
                             u_part = f_code[:4] if len(f_code) > 4 else "A114"
                             num_part = f_code[4:] if len(f_code) > 4 else f_code
                             n_digits = "".join(filter(str.isdigit, num_part))
@@ -1738,13 +1748,14 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
 
-                            # 🌟 각 문제 카드 내부에 O/X, 정답, 내 답, 해설영상을 한 줄로 깔끔하게 배치 (토글 없음)
+                            # 🌟 각 문제 카드 컨테이너 (상단 결과 바 + 하단 문제 이미지)
                             with st.container(border=True):
+                                # 1) 문제 이미지 바로 위(또는 카드 상단)에 위치하는 채점 결과 한 줄 바
                                 st.markdown(
-                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
+                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 8px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
                                     f"  <div>"
-                                    f"    <b style='color: #374151;'>{res['order']}번 문제</b> "
-                                    f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
+                                    f"    <b style='color: #374151;'>{prob['order']}번 문제</b> "
+                                    f"    <span style='color: #6B7280; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span> &nbsp;|&nbsp; "
                                     f"    내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b> &nbsp;|&nbsp; "
                                     f"    정답: {ans_display}"
@@ -1753,6 +1764,12 @@ if not st.session_state["teacher_authenticated"]:
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
+                                
+                                # 2) 문제 이미지 사진 출력
+                                if prob["img_bytes"]:
+                                    st.image(prob["img_bytes"], use_container_width=True)
+                                else:
+                                    st.info("💡 등록된 문제 이미지가 없습니다.")
 
     else:
         st.info("👋 전용 URL로 접속한 학생 프로필이 선택되지 않았습니다.")
