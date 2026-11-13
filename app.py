@@ -1681,39 +1681,55 @@ if not st.session_state["teacher_authenticated"]:
                                     # 만약 이미 오답노트에 들어간 상태인지 체크하는 로직이 있다면 연동합니다.
                                     # (예: 이미 등록된 상태라면 is_already_saved = True)
                                     # 🌟 [수정 후] 해당 세션의 오답노트 저장 완료 여부 확인
-                                    is_wrong_saved = st.session_state.get(f"wrong_saved_{sess_id}", False)
-                                    
+                                    # 🌟 1) 이 문제별로 이전에 등록 완료된 적이 있는지 세션에서 개별 확인
+                                    is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                     is_checked_default = (is_cor == 0)
-                        
-                                    # 🌟 언제든 추가/수정할 수 있도록 체크박스를 항상 활성화 상태로 제공
-                                    is_checked_default = (is_cor == 0)
-                                    
-                                    selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
-                                        value=is_checked_default,
-                                        key=f"wrong_chk_{sess_id}_{prob['item_id']}"
-                                    )
             
-                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
-                                manual_wrong_units = {}
-                                for prob in prob_list:
-                                    if selected_wrong_notes.get(prob['full_code'], False):
-                                        if prob["unit_code"] != "TEST":
-                                            manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
+                                    if is_item_saved:
+                                        # 🌟 이미 체크해서 등록했던 문제는 비활성화(잠금) + 체크 상태 유지
+                                        st.checkbox(
+                                            f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
+                                            value=True,
+                                            disabled=True,
+                                            key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
+                                        )
+                                    else:
+                                        # 🌟 체크 안 했던(등록 안 한) 문제들은 여전히 활성화 상태로 제공 (나중에 언제든 추가 체크 가능!)
+                                        selected_wrong_notes[prob['full_code']] = st.checkbox(
+                                            f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
+                                            value=is_checked_default,
+                                            key=f"wrong_chk_{sess_id}_{prob['item_id']}"
+                                        )
             
-                                try:
-                                    for u_code, num_set in manual_wrong_units.items():
-                                        existing_txt = get_student_wrong_entry(s_name, u_code)
-                                        pre_nums = parse_numbers(existing_txt)
-                                        merged_nums = pre_nums | num_set
-                                        merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                        save_student_wrong_entry(s_name, u_code, merged_txt)
-                                    
-                                    # 🌟 언제든 추가로 체크해서 누를 수 있도록 플래그 없이 성공 메시지만 띄움
-                                    st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영(추가)되었습니다!")
-                                    
-                                except Exception as e:
-                                    st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
+                        if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
+                            manual_wrong_units = {}
+                            current_checked_codes = [] # 이번에 체크한 문제 코드를 담을 리스트
+                            
+                            for prob in prob_list:
+                                if selected_wrong_notes.get(prob['full_code'], False):
+                                    current_checked_codes.append(prob['full_code'])
+                                    if prob["unit_code"] != "TEST":
+                                        manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
+            
+                            try:
+                                for u_code, num_set in manual_wrong_units.items():
+                                    existing_txt = get_student_wrong_entry(s_name, u_code)
+                                    pre_nums = parse_numbers(existing_txt)
+                                    merged_nums = pre_nums | num_set
+                                    merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                    save_student_wrong_entry(s_name, u_code, merged_txt)
+                                
+                                # 🌟 이번에 새로 체크해서 등록한 문제들만 개별적으로 '등록 완료' 플래그 지정
+                                for f_code in current_checked_codes:
+                                    st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
+            
+                                st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
+                                
+                                # 🌟 화면을 즉시 갱신하여, 방금 등록한 항목들만 비활성화 잠금 처리
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
             
                         if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
                             if f"all_results_{selected_session_id}" not in st.session_state:
