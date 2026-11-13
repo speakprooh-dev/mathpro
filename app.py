@@ -1599,13 +1599,32 @@ if not st.session_state["teacher_authenticated"]:
                     st.divider()
 
                     # 4. 정답 입력 칸
+                    # 4. 정답 입력 칸 (객관식 1~5번 선택 버튼 + 주관식 입력 호환)
+                    st.markdown(f"🎯 **{idx + 1}번 문제 정답 선택**")
+                    
+                    # 기존에 저장된 답이 있다면 번호 추출 (숫자 1~5)
                     saved_ans = st.session_state["quiz_answers"].get(curr_key, "")
-                    user_ans = st.text_input(
-                        f"🎯 {idx + 1}번 문제 정답 입력 (객관식은 번호 숫자만, 주관식은 단답형 입력)",
-                        value=saved_ans,
-                        key=f"ans_input_{curr_key}"
+                    default_idx = 0
+                    if saved_ans in ["1", "2", "3", "4", "5"]:
+                        default_idx = int(saved_ans)
+
+                    # 1~5번 라디오 버튼으로 깔끔하게 선택하도록 제공
+                    choice_options = ["선택 안 함", "1번", "2번", "3번", "4번", "5번"]
+                    selected_choice = st.radio(
+                        "정답을 선택하세요:",
+                        options=choice_options,
+                        index=default_idx,
+                        key=f"radio_ans_{curr_key}",
+                        horizontal=True
                     )
-                    st.session_state["quiz_answers"][curr_key] = user_ans.strip()
+
+                    # 선택한 값을 숫자 문자열("1", "2" 등)로 변환하여 세션에 저장
+                    if selected_choice != "선택 안 함":
+                        user_ans = selected_choice.replace("번", "").strip()
+                    else:
+                        user_ans = ""
+                        
+                    st.session_state["quiz_answers"][curr_key] = user_ans
 
                     # 5. 이전 / 다음 / 제출 버튼
                     col_prev, col_next = st.columns(2)
