@@ -1716,7 +1716,7 @@ if not st.session_state["teacher_authenticated"]:
                                         key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
                                     )
             
-                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True):
+                            if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{selected_session_id}"):
                                 manual_wrong_units = {}
                                 for prob in problem_list:
                                     if selected_wrong_notes.get(prob['full_code'], False):
