@@ -1706,67 +1706,83 @@ if not st.session_state["teacher_authenticated"]:
                         incorrect_list = [r for r in all_results if r["is_correct"] == 0]
                         correct_list = [r for r in all_results if r["is_correct"] == 1]
 
-                       # 틀린 문제 카드 섹션
-                        if incorrect_list:
-                            st.markdown(f"### ❌ 틀린 문제 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
+                       # 1. 전체 문항별 결과 및 다시 풀기 검토 카드 섹션
+                        st.markdown(f"### 📝 전체 문항별 결과 및 다시 풀기 검토 ({len(all_results)}개)")
+                        
+                        if "master_dir_input" not in st.session_state:
+                            st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
                             
-                            if "master_dir_input" not in st.session_state:
-                                st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
-                                
-                            with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
-                                st.session_state["master_dir_input"] = st.text_input(
-                                    "master_answer 폴더의 실제 경로를 입력하세요:",
-                                    value=st.session_state["master_dir_input"]
+                        with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
+                            st.session_state["master_dir_input"] = st.text_input(
+                                "master_dir_input 폴더의 실제 경로를 입력하세요:",
+                                value=st.session_state["master_dir_input"]
+                            )
+
+                        # 전체 문항(맞은 것 + 틀린 것 모두)을 순회하며 각 카드마다 O/X 및 토글 정답 배치
+                        for res in all_results:
+                            v_url, _ = get_problem_link_info(res["full_code"])
+                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
+                            
+                            u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
+                            r_ans = res["real_ans"]
+                            is_cor = res["is_correct"]
+                            ox_mark = "O" if is_cor else "X"
+                            ox_color = "#10B981" if is_cor else "#EF4444"
+                            
+                            # 이미지 정답인 경우 URL 조합 준비
+                            f_code = str(res.get("full_code", "")).strip()
+                            u_part = f_code[:4] if len(f_code) > 4 else "A114"
+                            num_part = f_code[4:] if len(f_code) > 4 else f_code
+                            n_digits = "".join(filter(str.isdigit, num_part))
+                            project_id = "qfpclacalaaxbhhheosw"
+                            target_filename = f"{u_part}_ans_({n_digits}).png"
+                            img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
+                            
+                            # 정답이 텍스트인지 이미지인지에 따른 표시 방식 분기
+                            if r_ans and r_ans != "-":
+                                ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
+                            else:
+                                ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
+
+                            # 각 문제 카드별로 O/X, 해설영상 버튼, 그리고 평소에는 닫혀 있는 정답 토글 배치
+                            with st.container(border=True):
+                                st.markdown(
+                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
+                                    f"  <div>"
+                                    f"    <b style='color: #374151;'>{res['order']}번 문제</b> "
+                                    f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
+                                    f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
+                                    f"  </div>"
+                                    f"  <div>{link_btn}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
                                 )
-
-                            for res in incorrect_list:
-                                v_url, _ = get_problem_link_info(res["full_code"])
-                                link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
                                 
-                                u_ans_str = res["user_ans"] if res["user_ans"] else "미입력"
-                                r_ans = res["real_ans"]
-                                
-                                # 이미지 정답인 경우 URL 조합 준비
-                                f_code = str(res.get("full_code", "")).strip()
-                                u_part = f_code[:4] if len(f_code) > 4 else "A114"
-                                num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                n_digits = "".join(filter(str.isdigit, num_part))
-                                project_id = "qfpclacalaaxbhhheosw"
-                                target_filename = f"{u_part}_ans_({n_digits}).png"
-                                img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
-                                
-                                # 정답이 텍스트인지 이미지인지에 따른 표시 방식 분기
-                                if r_ans and r_ans != "-":
-                                    ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
-                                else:
-                                    ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
-
-                                # 🌟 평소에는 닫혀 있다가 클릭(터치)해야만 정답/내답이 열리는 콤팩트 카드
-                                with st.container(border=True):
-                                    # 상단 요약 줄 (문제 번호, 코드, 맞춤 여부, 해설 영상 버튼만 먼저 깔끔하게 표시)
+                                # 평소에는 닫혀 있다가 클릭(터치)해야만 정답/내답이 열리는 토글 박스
+                                with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
-                                        f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin: 0; padding: 2px 0;'>"
-                                        f"  <div>"
-                                        f"    <b style='color: #EF4444;'>{res['order']}번문제</b> "
-                                        f"    <span style='color: #6B7280; font-size: 11px;'>(`{res['full_code']}`)</span> "
-                                        f"    <span style='color: #EF4444; font-weight: bold;'>({ 'O' if res['is_correct'] else 'X' })</span>"
-                                        f"  </div>"
-                                        f"  <div>{link_btn}</div>"
+                                        f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
+                                        f"정답: {ans_display} &nbsp;|&nbsp; "
+                                        f"내 답: <b style='color: #374151;'>{u_ans_str}</b>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
-                                    
-                                    # 🔒 터치(클릭) 전에는 가려져 있는 정답/내답 토글 박스
-                                    with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
-                                        st.markdown(
-                                            f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
-                                            f"정답: {ans_display} &nbsp;|&nbsp; "
-                                            f"내 답: <b style='color: #374151;'>{u_ans_str}</b>"
-                                            f"</div>",
-                                            unsafe_allow_html=True
-                                        )
-                                            
-                        # 맞은 문제 카드 섹션 (접었다 펼칠 수 있도록 처리)
+
+                        # 정답/오답 상세 분리 (하단 요약용)
+                        incorrect_list = [r for r in all_results if r["is_correct"] == 0]
+                        correct_list = [r for r in all_results if r["is_correct"] == 1]
+
+                        # 2. 하단 틀린 문제 요약 섹션
+                        if incorrect_list:
+                            st.markdown(f"### ❌ 틀린 문제 요약 ({len(incorrect_list)}개) — 오답노트에 자동 등록되었습니다")
+                            for res in incorrect_list:
+                                st.markdown(f"""
+                                <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
+                                    <b>{res['order']}번 문제</b> (`{res['full_code']}`) — 내 답: <b style="color: #EF4444;">{res['user_ans'] or '미입력'}</b> (오답)
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                        # 3. 하단 맞은 문제 모아보기 섹션
                         if correct_list:
                             with st.expander(f"🟢 맞은 문제 모아보기 ({len(correct_list)}개)", expanded=False):
                                 for res in correct_list:
