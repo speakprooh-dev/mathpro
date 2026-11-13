@@ -1554,7 +1554,7 @@ if not st.session_state["teacher_authenticated"]:
                     raw_items = c_test.fetchall()
         
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64, f_name in raw_items:
+                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:  # <-- 변수 6개만 정확히 맞춤
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -1571,8 +1571,7 @@ if not st.session_state["teacher_authenticated"]:
                             "unit_code": u_code or "TEST",
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
-                            "img_bytes": decoded_img,
-                            "file_name": f_name or ""  # 파일명 저장
+                            "img_bytes": decoded_img
                         })
                     st.session_state[cache_key_items] = problem_list
         
@@ -1770,8 +1769,7 @@ if not st.session_state["teacher_authenticated"]:
         
                                 raw_ans_db = str(prob["answer"]).strip()
 
-                                # 💡 핵심: 정답 글자에 '번'이 포함되어 있거나 '@'가 있는 경우만 객관식! 
-                                # (주관식 정답인 숫자 '1' 등에는 '번'이나 '@'가 없으므로 절대 객관식으로 오인되지 않습니다)
+                                # 💡 정답에 '번'이나 '@'가 포함된 경우만 객관식 (숫자 '1' 등 주관식과 완벽 분리)
                                 is_multiple_choice = "번" in raw_ans_db or "@" in raw_ans_db
                                 
                                 real_ans_clean = raw_ans_db.replace("@", "").replace("번", "").strip()
