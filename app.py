@@ -1738,11 +1738,16 @@ if not st.session_state["teacher_authenticated"]:
                                     st.markdown("📌 **정답:**")
                                     
                                     # 1. 텍스트 정답인 경우 (컴팩트하게 수정)
-                                    # 1. 텍스트 정답인 경우
+                                    # 1. 텍스트 정답인 경우 (내 답과 정답을 한 줄에 컴팩트하게 압축)
                                     if r_ans and r_ans != "-":
-                                        st.markdown(f"<div style='font-size: 13px; color: #10B981; font-weight: bold; line-height: 1.2; margin: 2px 0;'>📌 정답: {r_ans}</div>", unsafe_allow_html=True)
+                                        st.markdown(
+                                            f"<div style='font-size: 13px; color: #10B981; font-weight: bold; margin: 2px 0; line-height: 1.2;'>"
+                                            f"📌 정답: {r_ans}"
+                                            f"</div>", 
+                                            unsafe_allow_html=True
+                                        )
                                     else:
-                                        # 2. 이미지 정답인 경우 (크기를 대폭 줄이고 한 줄 배치 압축)
+                                        # 2. 이미지 정답인 경우 (중복 문구 제거 및 콤팩트 배치)
                                         f_code = str(res.get("full_code", "")).strip()
                                         u_part = f_code[:4] if len(f_code) > 4 else "A114"
                                         num_part = f_code[4:] if len(f_code) > 4 else f_code
@@ -1754,11 +1759,14 @@ if not st.session_state["teacher_authenticated"]:
                                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                                             
                                             if img_url:
-                                                # HTML 마크다운으로 '정답:'과 이미지를 아주 콤팩트하게 압축해서 렌더링
-                                                st.markdown("<div style='font-size: 12px; color: #9CA3AF; margin-bottom: 0px; line-height: 1;'>📌 정답:</div>", unsafe_allow_html=True)
-                                                st.image(img_url, width=90)  # 이미지 크기를 90px로 대폭 축소하여 공간 최소화
+                                                # 중복 문구 없이 깔끔하게 '정답:' 레이블과 이미지를 1~2줄 높이로 정렬
+                                                st.markdown(
+                                                    "<div style='font-size: 12px; color: #9CA3AF; margin: 2px 0 0 0; line-height: 1;'>📌 정답:</div>", 
+                                                    unsafe_allow_html=True
+                                                )
+                                                st.image(img_url, width=90)
                                             else:
-                                                st.markdown(f"<span style='font-size: 11px; color: #EF4444;'>❌ 이미지 주소 생성 실패</span>", unsafe_allow_html=True)
+                                                st.markdown("<span style='font-size: 11px; color: #EF4444;'>❌ 이미지 없음</span>", unsafe_allow_html=True)
                                                 
                                         except Exception as e:
                                             st.markdown(f"<span style='font-size: 11px; color: #EF4444;'>❌ 오류: {str(e)}</span>", unsafe_allow_html=True)
