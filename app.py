@@ -1747,14 +1747,13 @@ if not st.session_state["teacher_authenticated"]:
                                         img_url = None
                                         
                                         try:
-                                            # Supabase 스토리지에 있는 master_answer 버킷의 모든 파일 목록을 가져옵니다.
+                                            # 💡 아래의 'supabase' 대신, 선생님 프로젝트에서 쓰는 올바른 변수명(예: client 등)으로 바꿔주세요!
                                             files_list = supabase.storage.from_("master_answer").list()
                                             
                                             matched_filename = None
                                             if files_list:
                                                 for file_info in files_list:
                                                     fname = file_info.get("name", "")
-                                                    # 파일 이름 안에 추출한 숫자(예: 112)가 포함되어 있는지 확인합니다. (예: (112) 또는 _112 등)
                                                     if f"({n_digits})" in fname or f"_{n_digits}." in fname or f"_{n_digits}_" in fname:
                                                         matched_filename = fname
                                                         break
