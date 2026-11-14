@@ -2609,7 +2609,7 @@ else:
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
-                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!* (체크할 때 로딩 없이 즉시 반영됩니다)")
+                    st.markdown("💡 *삭제할 링크들을 체크하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
                     
                     if "select_all_links_flag" not in st.session_state:
                         st.session_state["select_all_links_flag"] = False
@@ -2630,7 +2630,7 @@ else:
                         if chk_key not in st.session_state:
                             st.session_state[chk_key] = st.session_state["select_all_links_flag"]
                         
-                        # 💡 속도 개선: 체크할 때 st.rerun이나 DB 접근 없이 메모리 상태만 빠르게 토글
+                        # 💡 체크할 때 불필요한 새로고침(rerun)이 일어나지 않도록 상태만 가볍게 바인딩
                         is_checked = st.checkbox(f"📌 [{f_code}] ({v_url})", key=chk_key)
                         if is_checked:
                             links_to_delete.append(l_id)
