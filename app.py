@@ -1318,9 +1318,7 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
-                                    # 💡 개념 해설 영상 바로 펼쳐보기 적용
-                                    with st.expander("🎥 개념해설 보기", expanded=False):
-                                        st.video(v_url)
+                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#EF4444; color:#FFFFFF; padding:6px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🎥 해설보기 ➔</a>', unsafe_allow_html=True)
             else:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
@@ -1494,10 +1492,11 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with col_c2:
                                 if v_url and v_url.strip():
-                                    # 💡 [핵심 수정] 새 창 이동 대신 그 자리에서 동영상을 바로 펼쳐서 보여주는 인라인 토글 버튼 적용!
-                                    btn_label = "🔥 새해설 보기" if is_new_alert else "🎥 해설 보기"
-                                    with st.expander(btn_label, expanded=False):
-                                        st.video(v_url)
+                                    # 💡 네이버 카페 해설 영상을 새 창으로 깔끔하게 띄워주는 세련된 버튼 적용
+                                    if is_new_alert:
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:5px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설 보기 ➔</a></div>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:5px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; background-color:#2563EB; color:white; border:1px solid #1D4ED8; display:inline-block; white-space: nowrap;'>🎥 해설 보기 ➔</a></div>", unsafe_allow_html=True)
                                 else:
                                     st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
@@ -1515,8 +1514,7 @@ if not st.session_state["teacher_authenticated"]:
                         matched_url, _ = get_problem_link_info(search_prob_input)
                         if matched_url:
                             st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                            with st.expander("🎥 풀이 영상 바로 재생하기", expanded=True):
-                                st.video(matched_url)
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설 영상 새 창으로 열기 ➔</a>', unsafe_allow_html=True)
                         else:
                             st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
                     else:
@@ -1524,8 +1522,7 @@ if not st.session_state["teacher_authenticated"]:
                         if unit_results:
                             st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
                             for f_code, v_url in unit_results:
-                                with st.expander(f"📌 {f_code} 해설 영상 보기", expanded=False):
-                                    st.video(v_url)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:8px 12px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7; font-weight:bold;">🎥 해설 영상 보기 ➔</span></a>', unsafe_allow_html=True)
                         else:
                             st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
@@ -1703,7 +1700,8 @@ if not st.session_state["teacher_authenticated"]:
                                 ox_color = "gray"
     
                             v_url, _ = get_problem_link_info(prob["full_code"])
-                            
+                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
+    
                             f_code = str(prob["full_code"]).strip()
                             u_part = f_code[:4] if len(f_code) > 4 else "A114"
                             num_part = f_code[4:] if len(f_code) > 4 else f_code
@@ -1732,15 +1730,11 @@ if not st.session_state["teacher_authenticated"]:
                                     f"    <span style='color: #9CA3AF; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
                                     f"  </div>"
+                                    f"  <div>{link_btn}</div>"
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
                                 
-                                # 💡 채점 결과 화면에서도 해설 영상 바로 펼쳐보기 추가
-                                if v_url and v_url.strip():
-                                    with st.expander("🎥 해설 영상 바로 보기", expanded=False):
-                                        st.video(v_url)
-
                                 with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
                                     if prob["img_bytes"]:
                                         st.image(prob["img_bytes"], use_container_width=True)
