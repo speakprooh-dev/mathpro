@@ -1783,14 +1783,6 @@ if not st.session_state["teacher_authenticated"]:
                             ans_str = str(prob.get("answer", "")).strip()
                             filename_str = str(prob.get("filename", "")).strip()
 
-                            # 💡 객관식 여부 판별 로직
-                            is_multiple_choice = (
-                                "@" in filename_str or 
-                                any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
-                            )
-
                             if matched_res:
                                 u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
                                 r_ans = matched_res["real_ans"]
@@ -1846,25 +1838,23 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                                     
-                                    # 💡 [핵심 수정] 주관식(서술형/단답형)에만 셀프 채점 스위치 노출, 객관식은 제외
-                                    if not is_multiple_choice:
-                                        current_self_val = 1 if is_cor == 1 else 0
-                                        self_review_choice = st.radio(
-                                            f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
-                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                            index=current_self_val,
-                                            key=f"self_review_{sess_id}_{prob['item_id']}",
-                                            horizontal=True
-                                        )
-                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                        if new_is_cor != is_cor:
-                                            matched_res["is_correct"] = new_is_cor
-                                            is_postgres = "psycopg2" in str(type(conn_test))
-                                            if is_postgres:
-                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            else:
-                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            conn_test.commit()
+                                    current_self_val = 1 if is_cor == 1 else 0
+                                    self_review_choice = st.radio(
+                                        f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
+                                        options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                        index=current_self_val,
+                                        key=f"self_review_{sess_id}_{prob['item_id']}",
+                                        horizontal=True
+                                    )
+                                    new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                    if new_is_cor != is_cor:
+                                        matched_res["is_correct"] = new_is_cor
+                                        is_postgres = "psycopg2" in str(type(conn_test))
+                                        if is_postgres:
+                                            c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        else:
+                                            q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        conn_test.commit()
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = False
@@ -1971,4 +1961,751 @@ if not st.session_state["teacher_authenticated"]:
 
                                 if is_self_check:
                                     st.markdown(
-                                        "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px
+                                        "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
+                                        "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
+                                        "최종 제출 후 정답 해설을 확인하면서 셀프 채점(O/X)을 진행하게 됩니다."
+                                        "</div>",
+                                        unsafe_allow_html=True
+                                    )
+                                    user_ans = "셀프채점시대기"
+                                else:
+                                    is_multiple_choice = (
+                                        "@" in filename_str or 
+                                        any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
+                                    )
+
+                                    if is_multiple_choice:
+                                        choice_options = ["잘 모름", "1번", "2번", "3번", "4번", "5번"]
+                                        selected_choice = st.radio(
+                                            f"{idx + 1}번 정답 선택 (객관식):",
+                                            options=choice_options,
+                                            index=0,
+                                            key=f"radio_{p_key}",
+                                            horizontal=True
+                                        )
+                                        user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
+                                    else:
+                                        user_ans = st.text_input(
+                                            f"{idx + 1}번 정답 입력 (주관식 단답형):",
+                                            value="",
+                                            key=f"text_{p_key}",
+                                            placeholder="정답을 입력하세요 (예: 제4사분면 또는 4사분면)"
+                                        ).strip()
+        
+                                form_answers[p_key] = user_ans
+                                st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
+        
+                            submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
+        
+                        if submitted:
+                            now_str = get_korean_now_str()
+                            correct_count = 0
+                            all_results = []
+        
+                            for prob in problem_list:
+                                p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                                ans_str = str(prob.get("answer", "")).strip()
+                                filename_str = str(prob.get("filename", "")).strip()
+                                
+                                is_difficulty_empty = False
+                                if "난이도" in filename_str:
+                                    parts_diff = filename_str.split("난이도")
+                                    if len(parts_diff) > 1:
+                                        after_diff = parts_diff[1]
+                                        if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                            is_difficulty_empty = True
+
+                                is_self_check = (ans_str == "-" or is_difficulty_empty)
+                                u_ans = form_answers.get(p_key, "")
+
+                                if is_self_check:
+                                    is_correct = 0
+                                    real_ans = "-"
+                                else:
+                                    real_ans = ans_str.replace("@", "").replace("번", "").strip()
+                                    is_correct = 1 if (real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
+
+                                if is_correct:
+                                    correct_count += 1
+        
+                                all_results.append({
+                                    "order": prob["order"],
+                                    "full_code": prob["full_code"],
+                                    "unit_code": prob["unit_code"],
+                                    "prob_num": prob["prob_num"],
+                                    "user_ans": u_ans,
+                                    "real_ans": real_ans,
+                                    "is_correct": is_correct,
+                                })
+        
+                            try:
+                                is_postgres = "psycopg2" in str(type(conn_test))
+                                for res in all_results:
+                                    if is_postgres:
+                                        c_test.execute(
+                                            "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                                            (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str)
+                                        )
+                                    else:
+                                        q(c_test,
+                                          "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                          (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
+        
+                                q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
+                                conn_test.commit()
+                                st.cache_data.clear()
+        
+                            except Exception as db_err:
+                                st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
+        
+                            st.session_state[f"submitted_{selected_session_id}"] = True
+                            st.session_state[f"all_results_{selected_session_id}"] = all_results
+                            st.session_state[f"correct_count_{selected_session_id}"] = correct_count
+                            if f"force_retest_{selected_session_id}" in st.session_state:
+                                del st.session_state[f"force_retest_{selected_session_id}"]
+                            st.balloons()
+                            st.rerun()
+
+# ====================================================
+# 2. [선생님 전용 관리 모드]
+# ====================================================
+else:
+    with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
+        col_s2, col_s3 = st.columns(2)
+        with col_s2:
+            with st.form("add_student_inline_form"):
+                new_s_name = st.text_input("새 학생 이름")
+                if st.form_submit_button("➕ 학생 등록", type="primary"):
+                    if new_s_name.strip() and add_student(new_s_name.strip()):
+                        st.success("등록 완료!")
+                        st.rerun()
+        with col_s3:
+            if student_list:
+                del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
+                if st.button("🗑️ 선택 학생 삭제"):
+                    delete_student(del_target_student)
+                    st.success("삭제되었습니다!")
+                    st.rerun()
+
+        if student_list:
+            st.divider()
+            base_url = get_base_url()
+            for s in student_list:
+                personal_link = f"{base_url}/?student={s}"
+                with st.container(border=True):
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.code(personal_link, language="text")
+
+    st.divider()
+    st.markdown("### ⚙️ 통합 관리 대시보드")
+
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests = st.tabs([
+        "👤 1. [개별] 학생 진도 관리", 
+        "📢 2. 공지사항 관리",
+        "📅 3. 개별 과제 관리", 
+        "📚 4. 커리큘럼 진도 배정", 
+        "🔍 5. 오답노트 모아보기",
+        "📊 6. 전체 숙제 매트릭스",
+        "🎥 7. 해설 링크 관리",
+        "📈 8. 실시간 학습 참여 현황",
+        "📋 9. 학생 제출물 및 풀이 검사"
+    ])
+
+    with t_cfg_student:
+        st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
+        if student_list:
+            selected_student = st.selectbox("조회할 학생 선택", student_list, key="tab1_stu_sel")
+            s_milestones = get_student_milestones(selected_student)
+            s_m_progress = get_milestone_progress(selected_student)
+
+            if s_milestones:
+                def parse_type_sort_key_teacher(item):
+                    t_name = item[3]
+                    match = re.search(r'(\d+)', t_name)
+                    num = int(match.group(1)) if match else 999
+                    return (item[1], item[2], num, t_name)
+
+                sorted_s_milestones = sorted(s_milestones, key=parse_type_sort_key_teacher)
+
+                grouped_t_milestones = {}
+                for m_id, sub, ch, t_name, v_url in sorted_s_milestones:
+                    grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
+                
+                def parse_chapter_sort_key_teacher(sub_ch_tuple):
+                    sub, ch = sub_ch_tuple
+                    match = re.search(r'(\d+)', ch)
+                    num = int(match.group(1)) if match else 999
+                    return (sub, num, ch)
+
+                sorted_t_grouped_keys = sorted(grouped_t_milestones.keys(), key=parse_chapter_sort_key_teacher)
+
+                for (sub, ch) in sorted_t_grouped_keys:
+                    items = grouped_t_milestones[(sub, ch)]
+                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
+                    with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
+                        for idx, (m_id, t_name, v_url) in enumerate(items):
+                            is_done = s_m_progress.get(m_id, False)
+                            chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
+                            if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
+                                save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
+                                st.rerun()
+            else:
+                st.info("해당 학생에게 배정된 단원이 없습니다.")
+
+    with t_cfg_notice:
+        st.markdown("#### 📢 전체 또는 학생별 공지사항 등록")
+        with st.form("add_notice_form"):
+            notice_target_type = st.radio("공지 대상 선택", ["🌐 전체 공지", "👤 특정 학생 지정 공지"], horizontal=True)
+            target_student_name = st.selectbox("대상 학생 선택", student_list, key="notice_target_student") if notice_target_type == "👤 특정 학생 지정 공지" and student_list else ""
+            notice_title = st.text_input("공지사항 제목", placeholder="예: 보충 수업 안내")
+            notice_content = st.text_area("공지사항 내용", placeholder="상세 내용을 입력하세요...")
+            if st.form_submit_button("📢 공지사항 등록하기", type="primary"):
+                if notice_title.strip() and notice_content.strip():
+                    add_notice(target_student_name if notice_target_type == "👤 특정 학생 지정 공지" else "", notice_title.strip(), notice_content.strip())
+                    st.success("등록되었습니다!")
+                    st.rerun()
+
+        st.markdown("---")
+        all_notices = get_all_notices()
+        if all_notices:
+            for n_id, n_target, n_title, n_content, n_date in all_notices:
+                with st.container(border=True):
+                    badge_str = "🌐 [전체 공지]" if not n_target else f"👤 [{n_target} 학생 맞춤]"
+                    col_n_info, col_n_del = st.columns([5, 1])
+                    with col_n_info:
+                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:gray;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
+                        st.caption(n_content)
+                    with col_n_del:
+                        if st.button("🗑️ 삭제", key=f"del_notice_{n_id}"):
+                            delete_notice(n_id)
+                            st.success("삭제되었습니다!")
+                            st.rerun()
+
+    with t_cfg_hw:
+        st.markdown("#### 📅 학생 개별 과제 및 매일 루틴 과제 관리")
+        if student_list:
+            selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
+            
+            with st.expander("🔥 학생별 [매일 반복 루틴 과제] 설정", expanded=False):
+                with st.form("add_teacher_routine_form"):
+                    new_routine_txt = st.text_area("루틴 과제 항목 입력", placeholder="- 오답노트 정리\n- 영어 단어 암기")
+                    if st.form_submit_button("➕ 루틴 일괄 등록", type="primary"):
+                        if new_routine_txt.strip():
+                            bulk_insert_daily_routines(selected_hw_student, new_routine_txt)
+                            st.success("등록되었습니다!")
+                            st.rerun()
+                
+                current_routines = get_student_daily_routines(selected_hw_student)
+                if current_routines:
+                    routines_to_delete = []
+                    for r_id, r_title in current_routines:
+                        if st.checkbox(f"📌 {r_title}", key=f"chk_del_routine_{r_id}"):
+                            routines_to_delete.append(r_id)
+                    if st.button("🗑️ 선택한 루틴 삭제하기", type="primary"):
+                        if routines_to_delete:
+                            for r_id in routines_to_delete:
+                                delete_daily_routine(r_id)
+                            st.success("삭제되었습니다!")
+                            st.rerun()
+
+            existing_hw_dates = get_student_homework_dates(selected_hw_student)
+            if existing_hw_dates:
+                with st.expander("✏️ 날짜별 숙제 수정 및 삭제", expanded=False):
+                    chosen_edit_date = st.selectbox("숙제 날짜 선택", existing_hw_dates, format_func=lambda d: f"{d} ({get_weekday_kr(d)})", key="select_date_to_edit_bulk")
+                    date_hws = get_student_homework_by_date(selected_hw_student, chosen_edit_date)
+                    initial_text_val = "\n".join([h[1] for h in date_hws])
+                    with st.form(f"bulk_edit_hw_form_{chosen_edit_date}"):
+                        new_bulk_text = st.text_area("숙제 내용 편집", value=initial_text_val, height=150)
+                        col_be1, col_be2 = st.columns(2)
+                        with col_be1:
+                            if st.form_submit_button("💾 수정 저장", type="primary"):
+                                update_student_homework_by_date(selected_hw_student, chosen_edit_date, new_bulk_text.strip())
+                                st.success("수정되었습니다!")
+                                st.rerun()
+                        with col_be2:
+                            if st.form_submit_button("🗑️ 전체 삭제"):
+                                delete_student_homework_date(selected_hw_student, chosen_edit_date)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
+
+            templates = get_homework_templates()
+            if templates:
+                st.markdown("📌 **템플릿 불러오기**")
+                selected_template_to_load = st.selectbox(
+                    "불러올 템플릿 선택", 
+                    ["-- 템플릿 선택 --"] + [t[1] for t in templates], 
+                    key="select_hw_template_box"
+                )
+                if st.button("📥 선택한 템플릿 내용 적용하기", type="secondary"):
+                    if selected_template_to_load and selected_template_to_load != "-- 템플릿 선택 --":
+                        current_hw_area = st.session_state.get("hw_text_area_input", "")
+                        st.session_state["hw_text_area_input"] = (current_hw_area + "\n" + selected_template_to_load) if current_hw_area.strip() else selected_template_to_load
+                        st.success("템플릿 내용이 아래 과제 입력란에 추가되었습니다!")
+                        st.rerun()
+
+            with st.form("add_student_hw_form"):
+                hw_date_input = st.date_input("과제 등록일(날짜)", value=get_korean_today())
+                teacher_msg_input = st.text_input("💬 선생님 한마디 (선택)")
+                
+                hw_text_area = st.text_area(
+                    "과제 내용 (문장 끝에 26/11/15 적으면 개별 마감일 자동 지정)", 
+                    value=st.session_state.get("hw_text_area_input", ""),
+                    key="hw_text_area_input", 
+                    height=150, 
+                    placeholder="예시:\n교과서 10쪽 풀기\n단원 평가 오답노트 작성 26/11/15"
+                )
+                
+                col_sub1, col_sub2 = st.columns(2)
+                with col_sub1:
+                    if st.form_submit_button("과제 등록", type="primary"):
+                        if hw_text_area.strip():
+                            bulk_insert_student_homework(selected_hw_student, str(hw_date_input), hw_text_area, teacher_msg_input)
+                            st.success("등록되었습니다!")
+                            st.rerun()
+                with col_sub2:
+                    if st.form_submit_button("💾 템플릿으로 저장"):
+                        if hw_text_area.strip():
+                            add_homework_template(hw_text_area.strip())
+                            st.success("템플릿 저장 완료!")
+                            st.rerun()
+
+    with t_cfg_curriculum:
+        st.markdown("#### 📚 과목 / 단원 / 세부 유형 관리")
+        with st.form("unified_sub_form"):
+            new_sub_input = st.text_input("새 과목 추가")
+            if st.form_submit_button("과목 등록", type="primary"):
+                if new_sub_input.strip() and add_subject(new_sub_input.strip()):
+                    st.success("등록되었습니다!")
+                    st.rerun()
+        
+        subjects_data = get_subjects()
+        if subjects_data:
+            with st.form("add_chapter_and_type_form"):
+                target_subject = st.selectbox("과목 선택", [s[1] for s in subjects_data], key="manage_chapter_sub_sel")
+                new_ch_name = st.text_input("단원 이름 (예: 6. 함수)")
+                new_types_txt = st.text_area("세부 유형 (줄바꿈 입력)", placeholder="- 개념 정리\n- 대표 유형")
+                if st.form_submit_button("➕ 단원 및 유형 등록", type="primary"):
+                    if new_ch_name.strip():
+                        conn, _ = get_db_connection()
+                        c = conn.cursor()
+                        q(c, "INSERT INTO chapters (subject, name) VALUES (?, ?)", (target_subject, new_ch_name.strip()))
+                        ch_id = c.lastrowid
+                        types_list = [t.strip() for t in new_types_txt.split('\n') if t.strip()] or ["단원 기본 학습"]
+                        for t_name in types_list:
+                            clean_t_name = t_name.lstrip('-•*└\t ').strip()
+                            if clean_t_name:
+                                q(c, "INSERT INTO chapter_types (chapter_id, name, video_url) VALUES (?, ?, ?)", (ch_id, clean_t_name, ""))
+                        conn.commit()
+                        st.cache_data.clear()
+                        st.success("등록되었습니다!")
+                        st.rerun()
+
+            selected_manage_sub = st.selectbox("관리할 과목 선택", [s[1] for s in subjects_data], key="manage_edit_sub_sel")
+            sub_chapters = [ch for ch in get_chapters() if ch[1] == selected_manage_sub]
+            if sub_chapters:
+                ch_options = {ch[0]: ch[2] for ch in sub_chapters}
+                selected_ch_id = st.selectbox("관리할 단원 선택", options=list(ch_options.keys()), format_func=lambda x: ch_options[x], key="manage_edit_ch_sel")
+                if selected_ch_id:
+                    types_rows = get_chapter_types(selected_ch_id)
+                    if types_rows:
+                        with st.expander("📌 세부 유형 및 해설 링크 설정", expanded=False):
+                            for t_id, t_name, t_vurl in types_rows:
+                                with st.container(border=True):
+                                    with st.form(f"edit_type_form_{t_id}"):
+                                        col_t1, col_t2 = st.columns([2, 3])
+                                        with col_t1: edited_t_name = st.text_input("유형 이름", value=t_name, key=f"t_name_{t_id}")
+                                        with col_t2: edited_t_url = st.text_input("링크", value=t_vurl, key=f"t_url_{t_id}")
+                                        if st.form_submit_button("💾 수정", type="primary"):
+                                            conn, _ = get_db_connection()
+                                            c = conn.cursor()
+                                            q(c, "UPDATE chapter_types SET name = ?, video_url = ? WHERE id = ?", (edited_t_name.strip(), edited_t_url.strip(), t_id))
+                                            conn.commit()
+                                            st.cache_data.clear()
+                                            st.success("수정 완료!")
+                                            st.rerun()
+
+        if subjects_data and student_list:
+            st.divider()
+            selected_assign_student = st.selectbox("진도를 배정할 학생 선택", student_list, key="tab4_stu_sel")
+            all_chapters = get_chapters()
+            assigned_chapters = {m[2] for m in get_student_milestones(selected_assign_student)}
+            with st.form("assign_chapters_form"):
+                selected_ch_ids = []
+                for sub_id, sub_name in subjects_data:
+                    sub_chapters = [ch for ch in all_chapters if ch[1] == sub_name]
+                    if sub_chapters:
+                        with st.expander(f"📚 [{sub_name}] 단원 목록"):
+                            for ch_id, ch_sub, ch_name in sub_chapters:
+                                if st.checkbox(f"{ch_name}", value=ch_name in assigned_chapters, key=f"assign_ch_chk_{selected_assign_student}_{ch_id}"):
+                                    selected_ch_ids.append(ch_id)
+                if st.form_submit_button("선택 단원 일괄 배정", type="primary"):
+                    if selected_ch_ids:
+                        assign_chapters_to_student(selected_assign_student, selected_ch_ids)
+                        st.success("배정 완료!")
+                        st.rerun()
+
+    with t_cfg_wrong:
+        st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
+        if student_list:
+            chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
+            wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
+            
+            conn, db_type = get_db_connection()
+            c = conn.cursor()
+            target_rows = []
+            
+            if wrong_view_mode == "📂 단원별 보기":
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                target_rows = c.fetchall()
+
+            elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
+                @st.cache_data(ttl=30, show_spinner=False)
+                def get_cached_wrong_logs(student_name_filter):
+                    conn_c, db_t = get_db_connection()
+                    cursor = conn_c.cursor()
+                    if student_name_filter == "전체 학생 (모두 보기)":
+                        q(cursor, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
+                    else:
+                        q(cursor, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (student_name_filter,))
+                    return cursor.fetchall()
+
+                log_rows = get_cached_wrong_logs(chk_student_choice)
+
+                if log_rows:
+                    if wrong_view_mode == "📅 날짜별 보기":
+                        available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
+                        selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates)
+                        filtered_logs = log_rows if selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                        
+                        grouped_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
+                        
+                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
+                    else:
+                        def get_week_range_str(date_str):
+                            try:
+                                d = date.fromisoformat(date_str)
+                                start_week = d - timedelta(days=d.weekday())
+                                end_week = start_week + timedelta(days=6)
+                                return f"{start_week} ~ {end_week} (월~일)"
+                            except Exception:
+                                return "날짜 미상 주간"
+                        
+                        weeks_dict = {}
+                        for s_name, u_code, p_num, reg_date in log_rows:
+                            weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                        
+                        sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
+                        selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
+                        filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
+
+                        grouped_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
+                        
+                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
+            else:
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                all_raw_rows = c.fetchall()
+                
+                all_check_codes = []
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    for n in parse_numbers(nums_txt):
+                        all_check_codes.append(f"{u_code}{n:03d}".upper())
+                batch_link_map = get_batch_problem_link_info(all_check_codes)
+                
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    missing_nums = []
+                    for n in parsed_s:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, _ = batch_link_map.get(f_code, ("", ""))
+                        if not v_url or not v_url.strip():
+                            missing_nums.append(n)
+                    if missing_nums:
+                        target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
+
+            if target_rows:
+                summary_student_counts = {}
+                all_target_full_codes = []
+                
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
+                        for n in parsed_s:
+                            all_target_full_codes.append(f"{u_code}{n:03d}".upper())
+                
+                unique_codes = list(set(all_target_full_codes))
+                batch_link_cache = get_batch_problem_link_info(unique_codes)
+                search_missing_total = sum(1 for f_code in unique_codes if not batch_link_cache.get(f_code, ("", ""))[0])
+
+                with st.container(border=True):
+                    total_sum_all = sum(summary_student_counts.values())
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
+                        <div style="font-size: 13px; margin-bottom: 8px;">
+                            🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
+                            📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    if summary_student_counts:
+                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
+                        st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
+                st.markdown("---")
+
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        with st.container(border=True):
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
+                            
+                            colored_num_tags = []
+                            for n in sorted(list(parsed_s)):
+                                f_code = f"{u_code}{n:03d}".upper()
+                                v_url, _ = batch_link_cache.get(f_code, ("", ""))
+                                if v_url and v_url.strip():
+                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
+                                else:
+                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+            else:
+                st.info("조건에 일치하는 오답노트 기록이 없습니다.")
+        else:
+            st.warning("등록된 학생이 없습니다.")
+
+    with t_cfg_matrix:
+        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, "SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
+        all_hw_dates = [r[0] for r in c.fetchall()]
+        
+        if all_hw_dates and student_list:
+            selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
+            all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
+            entire_hw_prog = get_entire_homework_progress_map()
+            active_hw_students = [s_name for s_name in student_list if all_students_hw_map.get(s_name)]
+
+            if active_hw_students:
+                for s_idx_main, s_name in enumerate(active_hw_students):
+                    hws = all_students_hw_map.get(s_name, [])
+                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
+                        initial_mat_text = "\n".join([hw[1] for hw in hws])
+                        for h_idx, hw_tuple in enumerate(hws):
+                            h_id = hw_tuple[0]
+                            title = hw_tuple[1]
+                            due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
+
+                            if title.startswith("💬 [선생님 메시지]:"):
+                                st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
+                            else:
+                                is_done = entire_hw_prog.get((s_name, h_id), False)
+                                chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
+                                
+                                date_suffix = ""
+                                if due_date and due_date.strip():
+                                    short_wday = get_weekday_short_kr(due_date)
+                                    wday_str = f" ({short_wday})" if short_wday else ""
+                                    date_suffix = f" (마감: {due_date}{wday_str})"
+
+                                if st.checkbox(f"📌 {title}{date_suffix}", value=is_done, key=chk_key) != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                    st.rerun()
+                        with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
+                            with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
+                                edited_bulk_hw_text = st.text_area("숙제 내용 편집", value=initial_mat_text, height=120)
+                                if st.form_submit_button("💾 수정 저장", type="primary"):
+                                    update_student_homework_by_date(s_name, selected_matrix_date, edited_bulk_hw_text.strip())
+                                    st.success("수정 완료!")
+                                    st.rerun()
+            else:
+                st.info("해당 날짜에 배정된 숙제가 없습니다.")
+
+    with t_cfg_links:
+        st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
+        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 단원별 드롭다운 및 검색 관리"])
+        
+        with col_link_tab1:
+            with st.form("add_problem_link_form"):
+                col_pl1, col_pl2 = st.columns([1, 2])
+                with col_pl1: f_code_in = st.text_input("문제 번호 (예: B1353015)")
+                with col_pl2: v_url_in = st.text_input("네이버 카페 URL")
+                if st.form_submit_button("➕ 개별 등록", type="primary"):
+                    if f_code_in.strip() and v_url_in.strip():
+                        if save_problem_link(f_code_in.strip(), v_url_in.strip()):
+                            st.toast("🎥 해설 링크가 안전하게 등록되었습니다!", icon="✅")
+                            st.success("저장되었습니다!")
+                            st.rerun()
+                        else:
+                            st.error("등록 실패: 문제 번호가 4자리 이상인지 확인해 주세요.")
+                    else:
+                        st.warning("모두 입력해 주세요.")
+            
+            with st.form("bulk_problem_link_form"):
+                bulk_txt = st.text_area("일괄 등록 (줄바꿈 입력)", placeholder="B1353015 https://cafe.naver.com/.../123")
+                if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
+                    if bulk_txt.strip():
+                        s_cnt, f_cnt = bulk_save_problem_links(bulk_txt)
+                        st.toast(f"🎥 성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)", icon="✅")
+                        st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
+                        st.rerun()
+
+        with col_link_tab2:
+            st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
+            unit_summaries = get_unit_code_summary_list()
+            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
+            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
+            
+            col_dd, col_sc = st.columns(2)
+            with col_dd:
+                selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
+            with col_sc:
+                search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
+            
+            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
+
+            if target_filter:
+                searched_links, search_cnt = get_all_problem_links_searched(target_filter)
+                st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
+                
+                if searched_links:
+                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                    
+                    if "select_all_links_flag" not in st.session_state:
+                        st.session_state["select_all_links_flag"] = False
+
+                    col_btn1, col_btn2 = st.columns([1, 1])
+                    with col_btn1:
+                        if st.button("☑️ 전체 선택 / 해제 반전", use_container_width=True):
+                            st.session_state["select_all_links_flag"] = not st.session_state["select_all_links_flag"]
+                            for l_id, _, _, _ in searched_links:
+                                st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
+                            st.rerun()
+                    
+                    st.markdown("---")
+
+                    links_to_delete = []
+                    for l_id, f_code, v_url, u_code in searched_links:
+                        if f"chk_link_del_{l_id}" not in st.session_state:
+                            st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
+                        
+                        chk_label = f"📌 [{f_code}] ({v_url})"
+                        is_checked = st.checkbox(chk_label, key=f"chk_link_del_{l_id}")
+                        if is_checked:
+                            links_to_delete.append(l_id)
+                    
+                    st.markdown("---")
+                    if st.button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True):
+                        if links_to_delete:
+                            conn, _ = get_db_connection()
+                            c = conn.cursor()
+                            for l_id in links_to_delete:
+                                q(c, "DELETE FROM problem_links WHERE id = ?", (l_id,))
+                            conn.commit()
+                            st.cache_data.clear()
+                            
+                            st.session_state["select_all_links_flag"] = False
+                            for l_id in links_to_delete:
+                                session_key = f"chk_link_del_{l_id}"
+                                if session_key in st.session_state:
+                                    del st.session_state[session_key]
+                                    
+                            st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
+                            st.rerun()
+                        else:
+                            st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
+                else:
+                    st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
+            else:
+                st.info("💡 단원을 선택하시거나 검색어를 입력해 주세요.")
+
+    with t_cfg_stats:
+        st.markdown("#### 📈 실시간 학습 참여 현황")
+        today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
+        col_st1, col_st2 = st.columns(2)
+        with col_st1: st.metric(label="📌 오늘 접속 학생 현황", value=f"{today_active_cnt}명")
+        with col_st2: st.metric(label="📈 누적 방문 횟수", value=f"{total_visits}회")
+        st.markdown("---")
+        if s_summary:
+            for s_name, last_time, v_count in s_summary:
+                with st.container(border=True):
+                    st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
+
+    with t_cfg_tests:
+        st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회 (테스트별 요약)")
+        
+        conn_sub, _ = get_db_connection()
+        c_sub = conn_sub.cursor()
+        try:
+            q(c_sub, """
+                SELECT 
+                    student_name, 
+                    test_title, 
+                    MAX(submitted_at) AS submitted_at, 
+                    COUNT(*) AS total_cnt, 
+                    SUM(COALESCE(is_checked, 0)) AS correct_cnt
+                FROM student_test_submissions
+                GROUP BY student_name, test_title
+                ORDER BY MAX(submitted_at) DESC
+            """)
+            summary_rows = c_sub.fetchall()
+        except Exception:
+            summary_rows = []
+
+        if summary_rows:
+            filter_stu = st.selectbox("학생별 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
+            filtered_summaries = summary_rows if filter_stu == "전체 학생 보기" else [r for r in summary_rows if r[0] == filter_stu]
+
+            st.markdown(f"**총 응시 테스트 내역: {len(filtered_summaries)}건**")
+            st.markdown("---")
+
+            for idx, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(filtered_summaries):
+                correct_cnt = int(correct_cnt) if correct_cnt is not None else 0
+                wrong_cnt = total_cnt - correct_cnt
+                score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
+
+                with st.container(border=True):
+                    st.markdown(f"👤 **학생**: `{s_name}` &nbsp;|&nbsp; 📝 **테스트명**: **{t_title}**")
+                    st.markdown(
+                        f"📊 **채점 결과**: 총 **{total_cnt}문항** 중 "
+                        f"<span style='color:#10B981; font-weight:bold;'>정답 {correct_cnt}개</span> / "
+                        f"<span style='color:#EF4444; font-weight:bold;'>오답 {wrong_cnt}개</span> "
+                        f"(`{score_pct}%`) &nbsp;|&nbsp; 🕒 **제출일시**: {sub_at}",
+                        unsafe_allow_html=True
+                    )
+
+                    with st.expander(f"🔍 문항별 상세 답안 보기 ({total_cnt}문항)", expanded=False):
+                        q(c_sub, """
+                            SELECT problem_id, student_answer, is_checked 
+                            FROM student_test_submissions 
+                            WHERE student_name = ? AND test_title = ?
+                            ORDER BY id ASC
+                        """, (s_name, t_title))
+                        detail_items = c_sub.fetchall()
+
+                        for p_id, s_ans, is_corr in detail_items:
+                            corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
+                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
+                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
+        else:
+            st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
