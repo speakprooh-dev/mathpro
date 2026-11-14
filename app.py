@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일
+# 💡 카드 외곽선 강화 및 학생 페이지 상단 탭(Tabs) 메뉴를 눈에 띄게 꾸미는 CSS 스타일
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
@@ -21,6 +21,41 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     padding: 16px !important;
     margin-bottom: 14px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 🌟 학생 페이지 상단 탭(Tabs) 메뉴 눈에 띄게 꾸미기 */
+div[data-testid="stTabs"] {
+    background-color: rgba(35, 35, 42, 0.6);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(2, 132, 199, 0.3);
+}
+
+/* 비활성화된 탭 스타일 */
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #9CA3AF !important;
+    border-radius: 8px !important;
+    padding: 8px 16px !important;
+    font-weight: 600 !important;
+    margin-right: 6px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    transition: all 0.2s ease-in-out;
+}
+
+/* 마우스 올렸을 때 (Hover) */
+div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
+    background-color: rgba(2, 132, 199, 0.2) !important;
+    color: #FFFFFF !important;
+}
+
+/* 🟢 선택된(Active) 탭 스타일 (시원한 파란색 포인트) */
+div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #0284C7 !important;
+    color: #FFFFFF !important;
+    font-weight: bold !important;
+    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.4) !important;
+    border: 1px solid #38BDF8 !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
@@ -1850,7 +1885,7 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
-                                # 💡 수정된 부분: expanded=False 로 변경하여 처음에는 접혀 있도록 설정
+                                # 💡 처음부터 접혀있도록 expanded=False로 설정된 정답 및 채점 확인 영역
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
                                         f"<div style='margin-bottom: 10px; font-size: 13px;'>"
