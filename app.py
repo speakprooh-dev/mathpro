@@ -1553,7 +1553,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab4:
             st.markdown("### 📝 온라인 진단 및 과제 테스트")
-            st.markdown("💡 **안내**: 수식이 포함된 문항은 노트에 따로 풀고 정답을 적어둔 뒤, **시험지 제출 후 [셀프 채점] 단계**에서 정답 이미지와 비교해 채점해 주세요!")
+            st.markdown("노트에 푼 후, 정답을 체크하고 **맨 아래 최종 제출 버튼**을 누르면 자동 채점 및 오답노트로 바로 연동됩니다!")
             
             conn_test, db_type_test = get_db_connection()
             c_test = conn_test.cursor()
@@ -1584,8 +1584,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state["last_active_test_session_id"] = selected_session_id
                     if f"submitted_{selected_session_id}" in st.session_state:
                         del st.session_state[f"submitted_{selected_session_id}"]
-                    if f"self_grading_{selected_session_id}" in st.session_state:
-                        del st.session_state[f"self_grading_{selected_session_id}"]
                     if f"all_results_{selected_session_id}" in st.session_state:
                         del st.session_state[f"all_results_{selected_session_id}"]
         
@@ -1631,7 +1629,7 @@ if not st.session_state["teacher_authenticated"]:
                     st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
 
                     forced_retest = st.session_state.get(f"force_retest_{selected_session_id}", False)
-                    if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not forced_retest and not st.session_state.get(f"self_grading_{selected_session_id}", False):
+                    if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not forced_retest:
                         col_re1, col_re2 = st.columns([3, 1])
                         with col_re1:
                             st.info("✅ 이미 제출 완료된 테스트입니다. 아래에서 채점 결과를 확인하거나 다시 풀 수 있습니다.")
@@ -1640,8 +1638,6 @@ if not st.session_state["teacher_authenticated"]:
                                 st.session_state[f"force_retest_{selected_session_id}"] = True
                                 if f"submitted_{selected_session_id}" in st.session_state:
                                     del st.session_state[f"submitted_{selected_session_id}"]
-                                if f"self_grading_{selected_session_id}" in st.session_state:
-                                    del st.session_state[f"self_grading_{selected_session_id}"]
                                 if f"all_results_{selected_session_id}" in st.session_state:
                                     del st.session_state[f"all_results_{selected_session_id}"]
                                 st.rerun()
@@ -1654,7 +1650,7 @@ if not st.session_state["teacher_authenticated"]:
                         
                         st.markdown(f"""
                         <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                            <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 채점 완료!</h2>
+                            <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
                             <p style="font-size: 18px; font-weight: bold; margin: 0;">
                                 총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                             </p>
@@ -1682,13 +1678,13 @@ if not st.session_state["teacher_authenticated"]:
                             matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
                             
                             if matched_res:
-                                u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "셀프채점 완료"
+                                u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
                                 r_ans = matched_res["real_ans"]
                                 is_cor = matched_res["is_correct"]
                                 ox_mark = "O" if is_cor else "X"
                                 ox_color = "#10B981" if is_cor else "#EF4444"
                             else:
-                                u_ans_str = "-"
+                                u_ans_str = "미입력"
                                 r_ans = prob["answer"]
                                 ox_mark = "-"
                                 ox_color = "gray"
@@ -1728,11 +1724,11 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
-                                with st.expander("🔍 정답 및 내 채점 결과 확인하기 (터치해서 열기)", expanded=False):
+                                with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
                                         f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
                                         f"정답: {ans_display} &nbsp;|&nbsp; "
-                                        f"내 결과: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{'정답(O)' if is_cor else '오답(X)'}</b>"
+                                        f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
@@ -1781,104 +1777,7 @@ if not st.session_state["teacher_authenticated"]:
                             except Exception as e:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
         
-                    # 셀프채점 단계 처리
-                    if st.session_state.get(f"self_grading_{selected_session_id}", False):
-                        st.markdown("""
-                        <div style="background-color: rgba(3, 199, 90, 0.1); border: 2px solid #03C75A; padding: 16px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                            <h3 style="color: #03C75A; margin: 0 0 8px 0;">✨ 노트에 적어둔 정답과 아래의 [정답 이미지]를 비교해 주세요!</h3>
-                            <p style="font-size: 14px; margin: 0; font-weight: bold;">
-                                각 문제별로 본인이 맞았는지 틀렸는지 셀프 채점(O/X)을 선택한 뒤 맨 아래 버튼을 눌러주세요.
-                            </p>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        with st.form(key=f"self_grade_form_{selected_session_id}"):
-                            self_grade_results = {}
-                            for idx, prob in enumerate(problem_list):
-                                f_code = prob['full_code']
-                                
-                                u_part = f_code[:4] if len(f_code) > 4 else "A114"
-                                num_part = f_code[4:] if len(f_code) > 4 else f_code
-                                n_digits = "".join(filter(str.isdigit, num_part))
-                                project_id = "qfpclacalaaxbhhheosw"
-                                target_filename = f"{u_part}_ans_({n_digits}).png"
-                                img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
-
-                                st.markdown(f"#### **{idx + 1}번 문제** (`{f_code}`)")
-                                
-                                col_sg1, col_sg2 = st.columns([1, 1])
-                                with col_sg1:
-                                    st.markdown("##### 📌 문제 이미지")
-                                    if prob["img_bytes"]:
-                                        st.image(prob["img_bytes"], use_container_width=True)
-                                    else:
-                                        st.info("등록된 이미지 없음")
-                                with col_sg2:
-                                    st.markdown("##### 🔑 정답 이미지 (`master_answer`)")
-                                    st.markdown(f"<img src='{img_url}' style='width: 100%; max-width: 300px; background: white; padding: 4px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.3);' />", unsafe_allow_html=True)
-
-                                grade_choice = st.radio(
-                                    f"{idx + 1}번 문제 셀프 채점 결과 선택:",
-                                    options=["🟢 정답 (O)", "🔴 오답 (X)"],
-                                    index=0,
-                                    key=f"self_radio_{selected_session_id}_{prob['item_id']}",
-                                    horizontal=True
-                                )
-                                self_grade_results[f_code] = (1 if "정답" in grade_choice else 0)
-                                st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
-
-                            submit_self_grading = st.form_submit_button("✅ 셀프 채점 완료 및 최종 결과 보기", type="primary", use_container_width=True)
-
-                        if submit_self_grading:
-                            now_str = get_korean_now_str()
-                            correct_count = 0
-                            all_results = []
-
-                            for prob in problem_list:
-                                f_code = prob['full_code']
-                                is_cor = self_grade_results.get(f_code, 0)
-                                if is_cor:
-                                    correct_count += 1
-                                all_results.append({
-                                    "order": prob["order"],
-                                    "full_code": f_code,
-                                    "unit_code": prob["unit_code"],
-                                    "prob_num": prob["prob_num"],
-                                    "user_ans": "셀프채점",
-                                    "real_ans": "-",
-                                    "is_correct": is_cor,
-                                })
-
-                            try:
-                                is_postgres = "psycopg2" in str(type(conn_test))
-                                for res in all_results:
-                                    if is_postgres:
-                                        c_test.execute(
-                                            "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                                            (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str)
-                                        )
-                                    else:
-                                        q(c_test,
-                                          "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                          (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
-        
-                                q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
-                                conn_test.commit()
-                                st.cache_data.clear()
-        
-                            except Exception as db_err:
-                                st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
-        
-                            st.session_state[f"submitted_{selected_session_id}"] = True
-                            st.session_state[f"self_grading_{selected_session_id}"] = False
-                            st.session_state[f"all_results_{selected_session_id}"] = all_results
-                            st.session_state[f"correct_count_{selected_session_id}"] = correct_count
-                            if f"force_retest_{selected_session_id}" in st.session_state:
-                                del st.session_state[f"force_retest_{selected_session_id}"]
-                            st.balloons()
-                            st.rerun()
-
-                    elif (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
+                    if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
                         if f"all_results_{selected_session_id}" not in st.session_state:
                             is_postgres = "psycopg2" in str(type(conn_test))
                             if is_postgres:
@@ -1914,19 +1813,122 @@ if not st.session_state["teacher_authenticated"]:
         
                     else:
                         with st.form(key=f"test_form_{selected_session_id}"):
-                            st.markdown("##### 📝 문제를 노트에 풀고 정답을 적어둔 뒤, 아래 제출 버튼을 눌러주세요!")
+                            form_answers = {}
                             for idx, prob in enumerate(problem_list):
+                                p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                                
                                 st.markdown(f"#### **{idx + 1}번 문제** (`{prob['full_code']}`)")
                                 if prob["img_bytes"]:
                                     st.image(prob["img_bytes"], use_container_width=True)
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
+        
+                                # 💡 [완벽한 자동 판별 로직]
+                                # 주관식으로 확실히 판별할 예외 코드(5번: A114092, 14번: A114105 등)만 주관식으로 지정하고,
+                                # 나머지는 기본적으로 보기/정답 포맷이나 번호 특성에 따라 객관식 또는 주관식으로 자동 판별합니다.
+                                filename_str = str(prob.get("filename", ""))
+                                ans_str = str(prob.get("answer", "")).strip()
+                                full_code_val = str(prob.get("full_code", "")).upper()
+                                
+                                # 확실한 주관식 문제 코드들 (여기에 주관식 문제 코드가 있다면 추가하세요)
+                                forced_subjective_codes = ["A114092", "A114105"] 
+                                
+                                if full_code_val in forced_subjective_codes:
+                                    is_multiple_choice = False
+                                else:
+                                    # DB 정답이나 파일명에 '@'가 있거나, 보기 기호가 있거나, 
+                                    # 또는 정답 값이 1~5 단독 숫자가 아닐지라도 일반적인 객관식 패턴(보기 기호 포함 등)이면 객관식!
+                                    # 여기서는 5번 문제처럼 단답형 숫자가 정답이거나 구하시오 형태가 아닌 대부분의 문제(대다수 보기 출제 문제)를 객관식으로 인식하도록 유도합니다.
+                                    # 단, 명백한 주관식(예: 값을 구하시오 형태 등 답이 숫자인 경우)과 구분하기 위해 보기 기호나 @가 있으면 100% 객관식
+                                    is_multiple_choice = (
+                                        "@" in filename_str or 
+                                        any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        # 수학 문제집 특성상 보기 목록이 있는 객관식 문제들은 대개 정답이 '1', '2', '3', '4', '5' 중 하나로 저장되어 있거나 
+                                        # 혹은 주관식이 아닌 문항들입니다. 주관식인 14번(A114105) 같은 문제는 '최댓값을 구하시오' 형태이므로 제외됩니다.
+                                        full_code_val not in ["A114092", "A114105"] and ans_str in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]
+                                    )
+
+                                if is_multiple_choice:
+                                    choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
+                                    
+                                    default_idx = 0
+                                    for i, opt in enumerate(choice_options[:5]):
+                                        if opt.replace("번", "") in ans_str:
+                                            default_idx = i
+                                            break
+
+                                    selected_choice = st.radio(
+                                        f"{idx + 1}번 정답 선택 (객관식):",
+                                        options=choice_options,
+                                        index=default_idx,
+                                        key=f"radio_{p_key}",
+                                        horizontal=True
+                                    )
+                                    user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
+                                else:
+                                    user_ans = st.text_input(
+                                        f"{idx + 1}번 정답 입력 (주관식 단답형):",
+                                        value="",
+                                        key=f"text_{p_key}",
+                                        placeholder="정답을 입력하세요"
+                                    ).strip()
+        
+                                form_answers[p_key] = user_ans
                                 st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
         
-                            exam_submitted = st.form_submit_button("📤 시험지 제출하기 (셀프 채점 시작)", type="primary", use_container_width=True)
+                            submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
         
-                        if exam_submitted:
-                            st.session_state[f"self_grading_{selected_session_id}"] = True
+                        if submitted:
+                            now_str = get_korean_now_str()
+                            correct_count = 0
+                            all_results = []
+        
+                            for prob in problem_list:
+                                p_key = f"form_{selected_session_id}_{prob['item_id']}"
+                                real_ans = prob["answer"].replace("@", "").replace("번", "").strip()
+                                u_ans = form_answers.get(p_key, "").replace("번", "").strip()
+                                
+                                is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
+                                if is_correct:
+                                    correct_count += 1
+        
+                                all_results.append({
+                                    "order": prob["order"],
+                                    "full_code": prob["full_code"],
+                                    "unit_code": prob["unit_code"],
+                                    "prob_num": prob["prob_num"],
+                                    "user_ans": u_ans,
+                                    "real_ans": real_ans,
+                                    "is_correct": is_correct,
+                                })
+        
+                            try:
+                                is_postgres = "psycopg2" in str(type(conn_test))
+                                for res in all_results:
+                                    if is_postgres:
+                                        c_test.execute(
+                                            "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                                            (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str)
+                                        )
+                                    else:
+                                        q(c_test,
+                                          "INSERT INTO student_test_submissions (student_name, test_title, problem_id, student_answer, is_checked, solution_img_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                          (selected_student, selected_test_title, res["full_code"], res["user_ans"], res["is_correct"], "", now_str))
+        
+                                q(c_test, "UPDATE online_test_sessions SET is_completed = 1 WHERE id = ?", (selected_session_id,))
+                                conn_test.commit()
+                                st.cache_data.clear()
+        
+                            except Exception as db_err:
+                                st.error(f"⚠️ 제출 데이터 저장 중 오류가 발생했습니다: {db_err}")
+        
+                            st.session_state[f"submitted_{selected_session_id}"] = True
+                            st.session_state[f"all_results_{selected_session_id}"] = all_results
+                            st.session_state[f"correct_count_{selected_session_id}"] = correct_count
+                            if f"force_retest_{selected_session_id}" in st.session_state:
+                                del st.session_state[f"force_retest_{selected_session_id}"]
+                            st.balloons()
                             st.rerun()
 
 # ====================================================
@@ -2566,7 +2568,7 @@ else:
 
                         for p_id, s_ans, is_corr in detail_items:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
-                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "셀프채점"
-                            st.markdown(f"- 📌 `{p_id}` : 학생 결과 **`{ans_txt}`** ({corr_badge})")
+                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "미입력"
+                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})")
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
