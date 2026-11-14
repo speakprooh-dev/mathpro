@@ -1824,20 +1824,24 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 # 💡 [완벽한 최종 주관식/객관식 판별 로직]
-                                # 주관식으로 확실히 판별할 예외 코드(5번: A114092)는 무조건 주관식으로 고정!
+                                # 확실한 주관식 문제 코드들 (예: 5번 A114092 등)은 무조건 주관식으로 고정!
                                 filename_str = str(prob.get("filename", ""))
                                 ans_str = str(prob.get("answer", "")).strip()
                                 full_code_val = str(prob.get("full_code", "")).upper()
                                 
-                                if full_code_val == "A114092":
+                                forced_subjective_codes = ["A114092"]  # 주관식인 문제 코드를 여기에 추가
+                                forced_multiple_choices = ["A114016", "A114015", "A114086", "A114191"]  # 객관식인 문제 코드를 여기에 추가
+                                
+                                if full_code_val in forced_subjective_codes:
                                     is_multiple_choice = False
+                                elif full_code_val in forced_multiple_choices:
+                                    is_multiple_choice = True
                                 else:
-                                    # 나머지는 '@' 문자가 있거나, 보기 기호(①~⑤)가 포함된 경우만 객관식으로 판별
+                                    # 나머지는 '@' 문자가 있거나, 보기 기호(①~⑤)가 포함된 경우 객관식으로 판별
                                     is_multiple_choice = (
                                         "@" in filename_str or 
                                         any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        full_code_val in ["A114086", "A114191"]  # 4번, 6번 등 명백한 객관식 코드 추가 보장
+                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"])
                                     )
 
                                 if is_multiple_choice:
