@@ -1823,15 +1823,14 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [수정] 정답(answer) 또는 파일명에 '@'가 포함되어 있거나, 정답 숫자가 1~5 사이의 한 자리 숫자/번호 형태인 경우 객관식으로 확실하게 판별
+                                # 💡 [스마트 판별] 정답 데이터나 파일명에 '@'가 포함되어 있거나, 정답 값이 정확히 1~5인 경우에만 객관식(라디오)으로 판별!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
-                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or ans_str in ["1", "2", "3", "4", "5"] or ans_str in ["1번", "2번", "3번", "4번", "5번"]
+                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or (ans_str in ["1", "2", "3", "4", "5"]) or (ans_str in ["1번", "2번", "3번", "4번", "5번"])
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     
-                                    # DB에 저장된 실제 정답 값에 맞춰 기본 선택 인덱스 설정
                                     default_idx = 0
                                     for i, opt in enumerate(choice_options[:5]):
                                         if opt.replace("번", "") == ans_str.replace("번", "").replace("@", "").strip():
