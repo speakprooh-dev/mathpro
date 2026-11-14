@@ -1767,8 +1767,13 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                real_ans_clean = prob["answer"].replace("번", "").strip()
-                                is_multiple_choice = real_ans_clean in ["1", "2", "3", "4", "5"]
+                                raw_ans_db = str(prob["answer"]).strip()
+                                file_name_val = str(prob.get("file_name", ""))
+                                
+                                # 💡 수정: 주관식 정답('1', '2' 등)이 객관식으로 오인되지 않도록, 
+                                # 정답에 '번'이 포함되어 있거나 명확한 객관식 표기가 있는 경우에만 객관식(radio)으로 처리합니다.
+                                real_ans_clean = raw_ans_db.replace("번", "").strip()
+                                is_multiple_choice = "번" in raw_ans_db or real_ans_clean in ["1번", "2번", "3번", "4번", "5번"] or "@" in file_name_val
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
