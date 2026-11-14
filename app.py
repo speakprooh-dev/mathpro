@@ -162,6 +162,23 @@ def get_korean_now_str():
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+def get_visitor_stats():
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        today_str = str(get_korean_today())
+        q(c, "SELECT COUNT(DISTINCT student_name) FROM visitor_logs WHERE visit_date = ?", (today_str,))
+        today_active_cnt = c.fetchone()[0]
+        q(c, "SELECT COUNT(*) FROM visitor_logs", ())
+        total_visits = c.fetchone()[0]
+        q(c, "SELECT student_name, MAX(visit_time), COUNT(*) FROM visitor_logs GROUP BY student_name ORDER BY MAX(visit_time) DESC", ())
+        s_summary = c.fetchall()
+        q(c, "SELECT visit_date, COUNT(DISTINCT student_name), COUNT(*) FROM visitor_logs GROUP BY visit_date ORDER BY visit_date DESC LIMIT 7", ())
+        daily_logs = c.fetchall()
+        return today_active_cnt, total_visits, s_summary, daily_logs
+    except Exception:
+        return 0, 0, [], []
+
 def create_excel_backup():
     try:
         conn, db_type = get_db_connection()
@@ -810,6 +827,16 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     get_routine_completion_rate.clear()
     get_student_routine_streak.clear()
 
+def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    for routine_id_str, val in routine_checked_dict.items():
+        q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date, int(val), int(val)))
+    conn.commit()
+    get_student_daily_logs_by_date.clear()
+    get_routine_completion_rate.clear()
+    get_student_routine_streak.clear()
+
 @st.cache_data(ttl=60)
 def get_homework_templates():
     conn, _ = get_db_connection()
@@ -821,6 +848,12 @@ def add_homework_template(title):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "INSERT INTO homework_templates (title) VALUES (?)", (title,))
+    conn.commit()
+
+def delete_homework_template(t_id):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "DELETE FROM homework_templates WHERE id = ?", (t_id,))
     conn.commit()
 
 @st.cache_data(ttl=30)
@@ -882,6 +915,83 @@ def get_student_homework_by_date(student_name, hw_date):
         else:
             q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
         return c.fetchall()
+
+@st.cache_data(ttl=30)
+def get_all_students_homework_map(hw_date):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = %s ORDER BY student_name, id", (hw_date,))
+        else:
+            q(c, "SELECT id, student_name, title, COALESCE(due_date, '') FROM student_homework WHERE hw_date = ? ORDER BY student_name, id", (hw_date,))
+        rows = c.fetchall()
+        hw_map = {}
+        for row in rows:
+            h_id, s_name, title = row[0], row[1], row[2]
+            d_date = row[3] if len(row) > 3 else ""
+            hw_map.setdefault(s_name, []).append((h_id, title, d_date))
+        return hw_map
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=30)
+def get_all_student_homework(student_name):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "SELECT id, hw_date, title FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC, id DESC", (student_name,))
+    return c.fetchall()
+
+def parse_inline_due_date(line_text):
+    match = re.search(r'\b(\d{2})/(\d{2})/(\d{2})\b$', line_text.strip())
+    if match:
+        yy, mm, dd = match.groups()
+        full_year = f"20{yy}"
+        try:
+            parsed_d = date(int(full_year), int(mm), int(dd))
+            clean_title = line_text[:match.start()].strip()
+            return clean_title, str(parsed_d)
+        except Exception:
+            pass
+    return line_text.strip(), ""
+
+def bulk_insert_student_homework(student_name, hw_date, text_data, message_text=""):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    if message_text.strip():
+        if db_type == "sqlite":
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, '')", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}"))
+        else:
+            q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, '')", (student_name, hw_date, f"💬 [선생님 메시지]: {message_text.strip()}"))
+    
+    lines = text_data.strip().split('\n')
+    for line in lines:
+        line_str = line.strip()
+        if line_str:
+            clean_title, inline_due = parse_inline_due_date(line_str)
+            
+            if db_type == "sqlite":
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (?, ?, ?, NULL, ?)", (student_name, hw_date, clean_title, inline_due))
+            else:
+                q(c, "INSERT INTO student_homework (student_name, hw_date, title, parent_id, due_date) VALUES (%s, %s, %s, NULL, %s)", (student_name, hw_date, clean_title, inline_due))
+    conn.commit()
+    st.cache_data.clear()
+
+def update_student_homework_by_date(student_name, hw_date, text_data):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
+    q(c, "DELETE FROM student_homework_progress WHERE student_hw_id NOT IN (SELECT id FROM student_homework)")
+    conn.commit()
+    bulk_insert_student_homework(student_name, hw_date, text_data)
+    st.cache_data.clear()
+
+def delete_student_homework_date(student_name, hw_date):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    q(c, "DELETE FROM student_homework WHERE student_name = ? AND hw_date = ?", (student_name, hw_date))
+    conn.commit()
+    st.cache_data.clear()
 
 @st.cache_data(ttl=30)
 def get_milestone_progress(student_name):
@@ -1318,7 +1428,7 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; background-color:#EF4444; color:#FFFFFF; padding:6px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; text-align:center; margin-top:4px;">🎥 해설보기 ➔</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
             else:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
@@ -1492,11 +1602,10 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with col_c2:
                                 if v_url and v_url.strip():
-                                    # 💡 네이버 카페 해설 영상을 새 창으로 깔끔하게 띄워주는 세련된 버튼 적용
                                     if is_new_alert:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:5px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설 보기 ➔</a></div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:5px 10px; border-radius:6px; font-size:12px; text-decoration:none; font-weight:bold; background-color:#2563EB; color:white; border:1px solid #1D4ED8; display:inline-block; white-space: nowrap;'>🎥 해설 보기 ➔</a></div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                 else:
                                     st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
@@ -1514,7 +1623,7 @@ if not st.session_state["teacher_authenticated"]:
                         matched_url, _ = get_problem_link_info(search_prob_input)
                         if matched_url:
                             st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; background-color:#2563EB; color:#FFFFFF; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center;">🎥 해설 영상 새 창으로 열기 ➔</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                         else:
                             st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
                     else:
@@ -1522,7 +1631,7 @@ if not st.session_state["teacher_authenticated"]:
                         if unit_results:
                             st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
                             for f_code, v_url in unit_results:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:8px 12px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7; font-weight:bold;">🎥 해설 영상 보기 ➔</span></a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
                         else:
                             st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
@@ -1700,7 +1809,7 @@ if not st.session_state["teacher_authenticated"]:
                                 ox_color = "gray"
     
                             v_url, _ = get_problem_link_info(prob["full_code"])
-                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
+                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
     
                             f_code = str(prob["full_code"]).strip()
                             u_part = f_code[:4] if len(f_code) > 4 else "A114"
@@ -2462,7 +2571,7 @@ else:
             with st.form("add_problem_link_form"):
                 col_pl1, col_pl2 = st.columns([1, 2])
                 with col_pl1: f_code_in = st.text_input("문제 번호 (예: B1353015)")
-                with col_pl2: v_url_in = st.text_input("네이버 카페 URL 또는 동영상 링크")
+                with col_pl2: v_url_in = st.text_input("네이버 카페 URL")
                 if st.form_submit_button("➕ 개별 등록", type="primary"):
                     if f_code_in.strip() and v_url_in.strip():
                         if save_problem_link(f_code_in.strip(), v_url_in.strip()):
@@ -2589,6 +2698,7 @@ else:
             filter_stu = st.selectbox("학생별 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
             filtered_summaries = summary_rows if filter_stu == "전체 학생 보기" else [r for r in summary_rows if r[0] == filter_stu]
 
+            # 💡 주간별 / 날짜별 보기 필터 추가
             test_view_mode = st.radio("조회 방식 선택", ["📂 전체 목록 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 보기"], horizontal=True, key="test_view_mode_radio")
 
             processed_summaries = []
@@ -2643,6 +2753,7 @@ else:
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
                             st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
 
+                    # 💡 제출 내역 삭제 버튼 (학생 페이지와 실시간 연동)
                     if st.button(f"🗑️ 이 제출 내역 삭제하기 ({s_name} - {t_title})", key=f"btn_del_sub_{s_name}_{t_title}_{idx}", use_container_width=True):
                         try:
                             is_postgres_sub = "psycopg2" in str(type(conn_sub))
