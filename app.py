@@ -154,7 +154,7 @@ def create_excel_backup():
             "homework_progress", "student_homework_progress", "student_wrong_entries", 
             "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs",
-            "student_test_submissions"
+            "student_test_submissions", "online_test_sessions", "online_test_items"
         ]
         success_count = 0
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -189,7 +189,7 @@ def restore_from_excel(uploaded_file):
             "homework_progress", "student_homework_progress", "student_wrong_entries", 
             "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs",
-            "student_test_submissions"
+            "student_test_submissions", "online_test_sessions", "online_test_items"
         ]
         existing_sheets = [s.strip().lower() for s in excel_file.sheet_names]
         sorted_sheets = [t for t in tables_order if t in existing_sheets] + [s for s in existing_sheets if s not in tables_order]
@@ -274,6 +274,15 @@ def get_weekday_short_kr(date_str):
     except Exception:
         return ""
 
+def get_week_range_str(date_str):
+    try:
+        d = date.fromisoformat(date_str[:10])
+        start_week = d - timedelta(days=d.weekday())
+        end_week = start_week + timedelta(days=6)
+        return f"{start_week} ~ {end_week} (월~일)"
+    except Exception:
+        return "주간 미상"
+
 def init_db():
     try:
         os.makedirs("submissions", exist_ok=True)
@@ -320,6 +329,16 @@ def init_db():
                     is_checked INTEGER DEFAULT 0,
                     solution_img_path TEXT,
                     submitted_at TEXT NOT NULL
+                );
+            ''')
+
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS online_test_sessions (
+                    id SERIAL PRIMARY KEY,
+                    student_name TEXT NOT NULL,
+                    test_title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    is_completed INTEGER DEFAULT 0
                 );
             ''')
 
@@ -377,6 +396,16 @@ def init_db():
                     is_checked INTEGER DEFAULT 0,
                     solution_img_path TEXT,
                     submitted_at TEXT NOT NULL
+                );
+            ''')
+
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS online_test_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_name TEXT NOT NULL,
+                    test_title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    is_completed INTEGER DEFAULT 0
                 );
             ''')
 
@@ -478,6 +507,7 @@ def delete_student(name):
     q(c, "DELETE FROM notices WHERE student_name = ?", (name,))
     q(c, "DELETE FROM visitor_logs WHERE student_name = ?", (name,))
     q(c, "DELETE FROM student_test_submissions WHERE student_name = ?", (name,))
+    q(c, "DELETE FROM online_test_sessions WHERE student_name = ?", (name,))
     conn.commit()
     st.cache_data.clear()
 
@@ -1051,9 +1081,7 @@ def check_subjective_answer(user_ans, real_ans):
     def normalize_text(t):
         t = str(t).strip().lower()
         t = t.replace("번", "")
-        # 공백 모두 제거
         t = re.sub(r'\s+', '', t)
-        # '제' 제거 (예: 제4사분면 -> 4사분면)
         t = t.replace("제", "")
         return t
 
@@ -1590,16 +1618,41 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                session_options = {
-                    s[0]: f"{'🆕 [미완료]' if s[3] == 0 else '✅ [제출완료]'} {s[1]} ({s[2]})"
-                    for s in sessions_list
-                }
-                selected_session_id = st.selectbox(
-                    "진행할 테스트 선택",
-                    options=list(session_options.keys()),
-                    format_func=lambda x: session_options[x],
-                    key=f"sel_online_test_{selected_student}"
-                )
+                # 📆 [개선] 주 단위(월~일)로 테스트 그룹화
+                st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
+                
+                sessions_by_week = {}
+                for s in sessions_list:
+                    s_id, s_title, s_created, s_completed = s
+                    week_key = get_week_range_str(s_created) if s_created else "기타 주간"
+                    sessions_by_week.setdefault(week_key, []).append(s)
+
+                sorted_weeks = sorted(sessions_by_week.keys(), reverse=True)
+                
+                selected_session_id = None
+                
+                for w_key in sorted_weeks:
+                    week_sessions = sessions_by_week[w_key]
+                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=(w_key == sorted_weeks[0])):
+                        for s_id, s_title, s_created, s_completed in week_sessions:
+                            status_badge = "✅ [제출완료]" if s_completed == 1 else "🆕 [미완료]"
+                            col_t_btn, col_t_stat = st.columns([3, 1])
+                            with col_t_btn:
+                                if st.button(f"{status_badge} {s_title}", key=f"btn_sess_{s_id}", use_container_width=True):
+                                    st.session_state[f"active_sess_{selected_student}"] = s_id
+                            with col_t_stat:
+                                day_str = s_created[:10] if s_created else ""
+                                short_wd = get_weekday_short_kr(day_str)
+                                wday_label = f"({short_wd})" if short_wd else ""
+                                st.markdown(f"<div style='text-align:right; font-size:12px; color:gray; margin-top:8px;'>{day_str} {wday_label}</div>", unsafe_allow_html=True)
+
+                if f"active_sess_{selected_student}" not in st.session_state and sessions_list:
+                    st.session_state[f"active_sess_{selected_student}"] = sessions_list[0][0]
+                
+                selected_session_id = st.session_state.get(f"active_sess_{selected_student}", sessions_list[0][0])
+                
+                current_active_info = next((s for s in sessions_list if s[0] == selected_session_id), sessions_list[0])
+                st.markdown(f"<div style='background-color:var(--secondary-background-color); padding:10px 14px; border-radius:8px; margin: 10px 0 15px 0; font-size:14px; font-weight:bold;'>🎯 현재 선택된 테스트: <span style='color:#0284C7;'>{current_active_info[1]}</span> ({current_active_info[2]})</div>", unsafe_allow_html=True)
 
                 last_selected_sess = st.session_state.get("last_active_test_session_id", None)
                 if last_selected_sess != selected_session_id:
@@ -1640,16 +1693,12 @@ if not st.session_state["teacher_authenticated"]:
                     st.session_state[cache_key_items] = problem_list
         
                 problem_list = st.session_state.get(cache_key_items, [])
-                selected_test_title = [s[1] for s in sessions_list if s[0] == selected_session_id][0]
-                
-                current_session_info = next((s for s in sessions_list if s[0] == selected_session_id), None)
-                is_db_completed = (current_session_info[3] == 1) if current_session_info else False
+                selected_test_title = current_active_info[1]
+                is_db_completed = (current_active_info[3] == 1)
         
                 if not problem_list:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
                 else:
-                    st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
-
                     forced_retest = st.session_state.get(f"force_retest_{selected_session_id}", False)
                     if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not forced_retest:
                         col_re1, col_re2 = st.columns([3, 1])
@@ -1759,7 +1808,6 @@ if not st.session_state["teacher_authenticated"]:
     
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
                                     if is_self_check:
-                                        # 셀프 채점 문제(서술형 등)인 경우에만 기존대로 셀프 채점(O/X) 유지
                                         st.markdown(
                                             f"<div style='margin-bottom: 10px; font-size: 13px;'>"
                                             f"📌 <b>정답 확인:</b> {ans_display}"
@@ -1784,7 +1832,6 @@ if not st.session_state["teacher_authenticated"]:
                                                 q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
                                             conn_test.commit()
                                     else:
-                                        # 객관식 및 주관식 자동 채점 문제: 셀프 채점 버튼 제거하고 채점 결과 고정 노출
                                         st.markdown(
                                             f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
                                             f"정답: {ans_display} &nbsp;|&nbsp; "
@@ -1794,8 +1841,6 @@ if not st.session_state["teacher_authenticated"]:
                                         )
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                
-                                # 요청하신 대로 틀린 문제든 맞은 문제든 오답노트 담기 체크박스 기본값을 미체크(False)로 설정
                                 is_checked_default = False
     
                                 if is_item_saved:
@@ -1964,7 +2009,6 @@ if not st.session_state["teacher_authenticated"]:
                                     real_ans = "-"
                                 else:
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
-                                    # 주관식 유연 채점 함수 적용 (공백 무시 및 '제' 탈락 보정)
                                     is_correct = 1 if (real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
 
                                 if is_correct:
