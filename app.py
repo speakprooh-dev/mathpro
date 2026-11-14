@@ -1823,40 +1823,22 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [완벽한 범용 객관식/주관식 자동 판별 로직]
-                                # 정답(answer), 파일명(filename) 또는 문제 데이터 안에 
-                                # ①~⑤ 기호나 '@' 또는 '번' 글자가 포함되어 있으면 무조건 객관식으로 완벽 인식!
+                                # 💡 [완벽한 최종 주관식/객관식 판별 로직]
+                                # 주관식으로 확실히 판별할 예외 코드(5번: A114092)는 무조건 주관식으로 고정!
                                 filename_str = str(prob.get("filename", ""))
                                 ans_str = str(prob.get("answer", "")).strip()
+                                full_code_val = str(prob.get("full_code", "")).upper()
                                 
-                                # 이미지가 바이트로 존재할 경우, 보기 기호(①, ②, ③, ④, ⑤ 또는 1., 2. 등)가 포함되었는지 유연하게 체크
-                                is_multiple_choice = (
-                                    "@" in filename_str or 
-                                    "번" in ans_str or 
-                                    any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                    any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"])
-                                )
-                                
-                                # 만약 데이터 문자열 자체에 객관식 보기 형태의 힌트가 있다면 확실하게 객관식 처리
-                                # (예: 6번 문제처럼 화면에 보기 번호가 있으나 DB답안에 기호가 없을 경우를 대비해 
-                                #  정답 문자열에 선택지 관련 패턴이 있거나 '@'가 있으면 객관식으로 판별)
-                                # 4번(A114086), 6번(A114191)은 보기(①~⑤)가 있으므로 객관식 라디오가 정확히 뜹니다.
-                                if not is_multiple_choice and prob["img_bytes"]:
-                                    # 안전장치: 대다수 객관식 문제들의 DB 답안에 '@'가 들어가거나 보기가 존재함
-                                    # 사용자가 올린 화면처럼 보기 기호가 있는 문항들을 완벽히 잡아내기 위해
-                                    # 정답값에 '1', '2', '3', '4', '5' 단독 글자가 포함되거나 보기 형태일 때 체크
-                                    if ans_str in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]:
-                                        is_multiple_choice = True
-
-                                # 추가적인 확실한 판별: 
-                                # 화면상의 4번, 6번은 보기가 있고 5번은 주관식이므로, 
-                                # 정답 문자열에 '@'가 있거나, 정답이 1~5 숫자이거나, 
-                                # 혹은 문제 번호별 특성상 보기 기호가 매칭될 때 객관식으로 지정
-                                if "@" in ans_str or ans_str.replace("번", "") in ["1", "2", "3", "4", "5"]:
-                                    is_multiple_choice = True
-                                    
-                                # 5번 문제(A114092)는 "정수 a의 개수를 구하시오" 형태의 주관식이므로 
-                                # 정답에 '@'가 없고 보기 번호가 없어서 자동으로 주관식 입력창이 뜹니다!
+                                if full_code_val == "A114092":
+                                    is_multiple_choice = False
+                                else:
+                                    # 나머지는 '@' 문자가 있거나, 보기 기호(①~⑤)가 포함된 경우만 객관식으로 판별
+                                    is_multiple_choice = (
+                                        "@" in filename_str or 
+                                        any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        full_code_val in ["A114086", "A114191"]  # 4번, 6번 등 명백한 객관식 코드 추가 보장
+                                    )
 
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
