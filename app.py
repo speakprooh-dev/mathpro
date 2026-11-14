@@ -98,7 +98,6 @@ def q(c, query, params=None):
         c.execute(query)
     return c
 
-# 💡 속도 개선: 캐시 유지 시간을 늘려 불필요한 DB 접근 최소화
 @st.cache_data(ttl=300)
 def get_all_problem_link_set():
     conn, _ = get_db_connection()
@@ -2610,7 +2609,7 @@ else:
                 st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
                 
                 if searched_links:
-                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
+                    st.markdown("💡 *삭제할 링크들을 선택하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!* (체크할 때 로딩 없이 즉시 반영됩니다)")
                     
                     if "select_all_links_flag" not in st.session_state:
                         st.session_state["select_all_links_flag"] = False
@@ -2627,11 +2626,12 @@ else:
 
                     links_to_delete = []
                     for l_id, f_code, v_url, u_code in searched_links:
-                        if f"chk_link_del_{l_id}" not in st.session_state:
-                            st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
+                        chk_key = f"chk_link_del_{l_id}"
+                        if chk_key not in st.session_state:
+                            st.session_state[chk_key] = st.session_state["select_all_links_flag"]
                         
-                        chk_label = f"📌 [{f_code}] ({v_url})"
-                        is_checked = st.checkbox(chk_label, key=f"chk_link_del_{l_id}")
+                        # 💡 속도 개선: 체크할 때 st.rerun이나 DB 접근 없이 메모리 상태만 빠르게 토글
+                        is_checked = st.checkbox(f"📌 [{f_code}] ({v_url})", key=chk_key)
                         if is_checked:
                             links_to_delete.append(l_id)
                     
