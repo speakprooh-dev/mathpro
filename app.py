@@ -1620,7 +1620,7 @@ if not st.session_state["teacher_authenticated"]:
                         st.session_state["master_dir_input"] = st.text_input(
                             "master_dir_input 폴더의 실제 경로를 입력하세요:",
                             value=st.session_state["master_dir_input"],
-                            key=f"master_dir_{sess_id}"
+                            key=f"master_dir_{selected_session_id}"  # <-- selected_session_id로 변경
                         )
 
                     st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(prob_list)}개)")
