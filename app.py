@@ -1737,7 +1737,6 @@ if not st.session_state["teacher_authenticated"]:
     
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
                                     if is_self_check:
-                                        # 셀프 채점 문제인 경우 정답 이미지(또는 텍스트)를 먼저 보여주고 O/X 선택 제공
                                         st.markdown(
                                             f"<div style='margin-bottom: 10px; font-size: 13px;'>"
                                             f"📌 <b>정답 확인:</b> {ans_display}"
@@ -1755,7 +1754,6 @@ if not st.session_state["teacher_authenticated"]:
                                         new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
                                         if new_is_cor != is_cor:
                                             matched_res["is_correct"] = new_is_cor
-                                            # DB에도 즉시 반영
                                             is_postgres = "psycopg2" in str(type(conn_test))
                                             if is_postgres:
                                                 c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
@@ -1875,7 +1873,6 @@ if not st.session_state["teacher_authenticated"]:
                                 is_self_check = (ans_str == "-" or is_difficulty_empty)
 
                                 if is_self_check:
-                                    # 풀이 화면에서는 O/X 선택 없이 노트 풀이 안내 문구만 깔끔하게 노출
                                     st.markdown(
                                         "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
                                         "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
@@ -1937,7 +1934,6 @@ if not st.session_state["teacher_authenticated"]:
                                 u_ans = form_answers.get(p_key, "")
 
                                 if is_self_check:
-                                    # 셀프 채점 문제는 기본적으로 오답(0점) 상태로 시작하여 결과 화면에서 학생이 직접 O/X를 고르게 함
                                     is_correct = 0
                                     real_ans = "-"
                                 else:
@@ -2624,6 +2620,13 @@ else:
                         for p_id, s_ans, is_corr in detail_items:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
-                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})")
+                            
+                            # 선생님 검사 탭에서 원래 오답이었는데 정답으로 바뀐 경우를 직관적으로 파악할 수 있도록 마크 표시
+                            note_extra = ""
+                            if is_corr == 1 and ans_txt not in ["셀프채점시대기", "미입력"]:
+                                # 실제 정답과 비교하거나 셀프 채점 여부를 추정 가능
+                                note_extra = " <span style='background-color:#FEF3C7; color:#D97706; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;'>셀프정답인정</span>"
+
+                            st.markdown(f"- 📌 `{p_id}` : 학생 원본 답안 **`{ans_txt}`** ({corr_badge}){note_extra}", unsafe_allow_html=True)
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
