@@ -1760,7 +1760,8 @@ if not st.session_state["teacher_authenticated"]:
         
                     @st.fragment
                     def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
-                        correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
+                        correct_cnt = sum(1 for r in res_list if r.get("is_correct") == 1)
+                        st.session_state[f"correct_count_{sess_id}"] = correct_cnt
                         
                         st.markdown(f"""
                         <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
@@ -1798,11 +1799,12 @@ if not st.session_state["teacher_authenticated"]:
                                 u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
                                 r_ans = matched_res["real_ans"]
                                 is_cor = matched_res["is_correct"]
-                                ox_mark = "O" if is_cor else "X"
-                                ox_color = "#10B981" if is_cor else "#EF4444"
+                                ox_mark = "O" if is_cor == 1 else "X"
+                                ox_color = "#10B981" if is_cor == 1 else "#EF4444"
                             else:
                                 u_ans_str = "미입력"
                                 r_ans = prob["answer"]
+                                is_cor = 0
                                 ox_mark = "-"
                                 ox_color = "gray"
     
@@ -1833,8 +1835,8 @@ if not st.session_state["teacher_authenticated"]:
                                 st.markdown(
                                     f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
                                     f"  <div>"
-                                    f"    <b style='color: #374151;'>{prob['order']}번 문제</b> "
-                                    f"    <span style='color: #6B7280; font-size: 11px;'>(`{prob['full_code']}`)</span> "
+                                    f"    <b style='color: #E5E7EB;'>{prob['order']}번 문제</b> "
+                                    f"    <span style='color: #9CA3AF; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
                                     f"  </div>"
                                     f"  <div>{link_btn}</div>"
@@ -1851,12 +1853,12 @@ if not st.session_state["teacher_authenticated"]:
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
                                     st.markdown(
                                         f"<div style='margin-bottom: 10px; font-size: 13px;'>"
-                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
+                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor == 1 else '#EF4444'};'>{u_ans_str}</b>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
                                     
-                                    if not is_multiple_choice_item:
+                                    if not is_multiple_choice_item and matched_res is not None:
                                         current_self_val = 1 if is_cor == 1 else 0
                                         self_review_choice = st.radio(
                                             f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
@@ -1874,6 +1876,7 @@ if not st.session_state["teacher_authenticated"]:
                                             else:
                                                 q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
                                             conn_test.commit()
+                                            st.rerun(scope="fragment")
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = False
