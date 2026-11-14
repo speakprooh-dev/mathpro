@@ -1789,9 +1789,10 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
+                                file_name_val = str(prob.get("file_name", ""))
                                 
-                                # 💡 정답에 '@'가 포함되어 있으면 객관식, 아니면 주관식
-                                is_multiple_choice = "@" in raw_ans_db
+                                # 💡 선생님의 규칙: 정답 문자열 또는 파일명에 '@'가 포함되어 있으면 객관식, 없으면 주관식
+                                is_multiple_choice = "@" in raw_ans_db or "@" in file_name_val
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
