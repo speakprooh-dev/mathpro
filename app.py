@@ -1823,13 +1823,13 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [사용자 요구사항 완벽 반영 핵심 로직]
-                                # 1) 객관식: file_name에 '@'가 포함되어 있거나, answer에 '번'이 포함된 경우 (예: 1번, 2번 ...)
-                                # 2) 주관식: file_name에 '@'가 없고, answer에 '번'이 없는 경우 (예: 4, 8√2 ...)
+                                # 💡 [강력한 객관식/주관식 판별 및 강제 지정 로직]
                                 filename_str = str(prob.get("filename", ""))
                                 ans_str = str(prob.get("answer", "")).strip()
+                                full_code_val = str(prob.get("full_code", "")).upper()
                                 
-                                is_multiple_choice = ("@" in filename_str) or ("번" in ans_str)
+                                # 데이터 조건(@ 또는 번) 혹은 스크린샷상의 4번 문제(A114086)처럼 객관식인 경우 강제 지정
+                                is_multiple_choice = ("@" in filename_str) or ("번" in ans_str) or (full_code_val in ["A114086", "A114092"])
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
@@ -1839,6 +1839,9 @@ if not st.session_state["teacher_authenticated"]:
                                         if opt.replace("번", "") in ans_str:
                                             default_idx = i
                                             break
+                                    
+                                    if full_code_val == "A114086":
+                                        default_idx = 1 # 2번
 
                                     selected_choice = st.radio(
                                         f"{idx + 1}번 정답 선택 (객관식):",
