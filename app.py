@@ -1794,7 +1794,7 @@ if not st.session_state["teacher_authenticated"]:
                             filename_str = str(prob.get("filename", "")).strip()
 
                             if matched_res:
-                                u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
+                                u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력 (잘 모름)"
                                 r_ans = matched_res["real_ans"]
                                 is_cor = matched_res["is_correct"]
                                 ox_mark = "O" if is_cor == 1 else "X"
@@ -1952,7 +1952,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
         
                         all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
-                        render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
+                        render_problem_review_list(problem_list, all_results, selected_session_id, selected_session_id, selected_test_title)
         
                     else:
                         with st.form(key=f"test_form_{selected_session_id}"):
@@ -1997,12 +1997,12 @@ if not st.session_state["teacher_authenticated"]:
                                     )
 
                                     if is_multiple_choice:
-                                        # 💡 '잘 모름'을 맨 마지막으로 배치
+                                        # 💡 '잘 모름'을 맨 마지막에 두고 기본 선택을 '잘 모름'으로 지정하여 아무것도 안 누르고 넘어가는 오류 방지
                                         choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                         selected_choice = st.radio(
                                             f"{idx + 1}번 정답 선택 (객관식):",
                                             options=choice_options,
-                                            index=0,
+                                            index=5,  # '잘 모름'을 기본 선택으로 지정
                                             key=f"radio_{p_key}",
                                             horizontal=True
                                         )
@@ -2046,7 +2046,8 @@ if not st.session_state["teacher_authenticated"]:
                                     real_ans = "-"
                                 else:
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
-                                    is_correct = 1 if (real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
+                                    # u_ans가 빈 값이면(잘 모름 선택 시) 무조건 오답 처리
+                                    is_correct = 1 if (u_ans != "" and real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
 
                                 if is_correct:
                                     correct_count += 1
