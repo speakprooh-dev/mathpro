@@ -1794,7 +1794,9 @@ if not st.session_state["teacher_authenticated"]:
                                         )
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                is_checked_default = (is_cor == 0)
+                                
+                                # 요청하신 대로 틀린 문제든 맞은 문제든 오답노트 담기 체크박스 기본값을 미체크(False)로 설정
+                                is_checked_default = False
     
                                 if is_item_saved:
                                     st.checkbox(
