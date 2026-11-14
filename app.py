@@ -323,7 +323,6 @@ def init_db():
                 );
             ''')
 
-            # 💡 online_test_items 테이블 자동 생성 및 solution_img_path 컬럼 누락 방지 안전장치
             c.execute('''
                 CREATE TABLE IF NOT EXISTS online_test_items (
                     id SERIAL PRIMARY KEY,
@@ -1592,7 +1591,6 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    # 💡 파일명 정보를 포함하여 조회 (solution_img_path 등)
                     q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
         
@@ -1615,7 +1613,7 @@ if not st.session_state["teacher_authenticated"]:
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
                             "img_bytes": decoded_img,
-                            "filename": str(sol_path) if sol_path else ""  # 💡 파일명(경로) 정보 추가
+                            "filename": str(sol_path) if sol_path else ""
                         })
                     st.session_state[cache_key_items] = problem_list
         
@@ -1825,16 +1823,25 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 파일명(경로) 또는 정답에 '@'가 포함되어 있으면 객관식으로 판별
+                                # 💡 [수정] 정답(answer) 또는 파일명에 '@'가 포함되어 있거나, 정답 숫자가 1~5 사이의 한 자리 숫자/번호 형태인 경우 객관식으로 확실하게 판별
+                                ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
-                                is_multiple_choice = ("@" in filename_str) or ("@" in str(prob.get("answer", "")))
+                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or ans_str in ["1", "2", "3", "4", "5"] or ans_str in ["1번", "2번", "3번", "4번", "5번"]
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
+                                    
+                                    # DB에 저장된 실제 정답 값에 맞춰 기본 선택 인덱스 설정
+                                    default_idx = 0
+                                    for i, opt in enumerate(choice_options[:5]):
+                                        if opt.replace("번", "") == ans_str.replace("번", "").replace("@", "").strip():
+                                            default_idx = i
+                                            break
+
                                     selected_choice = st.radio(
                                         f"{idx + 1}번 정답 선택 (객관식):",
                                         options=choice_options,
-                                        index=0,
+                                        index=default_idx,
                                         key=f"radio_{p_key}",
                                         horizontal=True
                                     )
