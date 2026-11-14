@@ -1545,7 +1545,6 @@ if not st.session_state["teacher_authenticated"]:
                     key=f"sel_online_test_{selected_student}"
                 )
 
-                # 💡 다른 테스트를 선택하거나 새로 진입했을 때 이전 제출 상태가 꼬이지 않도록 세션 전환 감지 및 초기화
                 last_selected_sess = st.session_state.get("last_active_test_session_id", None)
                 if last_selected_sess != selected_session_id:
                     st.session_state["last_active_test_session_id"] = selected_session_id
@@ -1554,7 +1553,6 @@ if not st.session_state["teacher_authenticated"]:
                     if f"all_results_{selected_session_id}" in st.session_state:
                         del st.session_state[f"all_results_{selected_session_id}"]
         
-                # 해당 테스트 문항들 불러오기 (캐싱)
                 cache_key_items = f"cached_items_form_{selected_session_id}"
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
@@ -1611,7 +1609,6 @@ if not st.session_state["teacher_authenticated"]:
 
                     st.markdown("---")
         
-                    # 🚀 [수동 선택형] fragment 함수 (개별 문항 비활성화 및 추가 등록 지원)
                     @st.fragment
                     def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                         correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
@@ -1653,7 +1650,7 @@ if not st.session_state["teacher_authenticated"]:
                                 ox_color = "#10B981" if is_cor else "#EF4444"
                             else:
                                 u_ans_str = "미입력"
-                                r_ans = prob["answer"].replace("번", "").strip()
+                                r_ans = prob["answer"].replace("@", "").replace("번", "").strip()
                                 ox_mark = "-"
                                 ox_color = "gray"
     
@@ -1760,7 +1757,7 @@ if not st.session_state["teacher_authenticated"]:
                             for idx, prob in enumerate(problem_list):
                                 f_code = prob['full_code']
                                 info = sub_dict.get(f_code, {"user_ans": "", "is_correct": 0})
-                                real_ans = prob["answer"].replace("번", "").strip()
+                                real_ans = prob["answer"].replace("@", "").replace("번", "").strip()
                                 is_cor = info["is_correct"]
                                 if is_cor:
                                     restored_correct_cnt += 1
@@ -1793,10 +1790,8 @@ if not st.session_state["teacher_authenticated"]:
         
                                 raw_ans_db = str(prob["answer"]).strip()
                                 
-                                # 💡 수정된 완벽한 객관식/주관식 판별 원리:
-                                # 정답 문자열 또는 문제 파일명 등에 "@"가 포함되어 있으면 객관식으로 판단
-                                # (사용자분 설명: "정답에는 @가 붙어있으면 객관식, 그렇지 않으면 주관식")
-                                is_multiple_choice = "@" in raw_ans_db or "@" in str(prob.get("file_name", ""))
+                                # 💡 정답에 '@'가 포함되어 있으면 객관식, 아니면 주관식
+                                is_multiple_choice = "@" in raw_ans_db
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
