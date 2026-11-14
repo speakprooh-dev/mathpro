@@ -1850,18 +1850,13 @@ if not st.session_state["teacher_authenticated"]:
                                     )
 
                                 if is_multiple_choice:
-                                    choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
+                                    # '잘 모름'을 맨 앞에 두고 인덱스를 0으로 지정하여 정답이 미리 체크되지 않도록 수정
+                                    choice_options = ["잘 모름", "1번", "2번", "3번", "4번", "5번"]
                                     
-                                    default_idx = 0
-                                    for i, opt in enumerate(choice_options[:5]):
-                                        if opt.replace("번", "") in ans_str:
-                                            default_idx = i
-                                            break
-
                                     selected_choice = st.radio(
                                         f"{idx + 1}번 정답 선택 (객관식):",
                                         options=choice_options,
-                                        index=default_idx,
+                                        index=0,  # 항상 '잘 모름(미선택)' 상태로 시작
                                         key=f"radio_{p_key}",
                                         horizontal=True
                                     )
