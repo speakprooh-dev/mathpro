@@ -1544,6 +1544,15 @@ if not st.session_state["teacher_authenticated"]:
                     format_func=lambda x: session_options[x],
                     key=f"sel_online_test_{selected_student}"
                 )
+
+                # 💡 다른 테스트를 선택하거나 새로 진입했을 때 이전 제출 상태가 꼬이지 않도록 세션 전환 감지 및 초기화
+                last_selected_sess = st.session_state.get("last_active_test_session_id", None)
+                if last_selected_sess != selected_session_id:
+                    st.session_state["last_active_test_session_id"] = selected_session_id
+                    if f"submitted_{selected_session_id}" in st.session_state:
+                        del st.session_state[f"submitted_{selected_session_id}"]
+                    if f"all_results_{selected_session_id}" in st.session_state:
+                        del st.session_state[f"all_results_{selected_session_id}"]
         
                 # 해당 테스트 문항들 불러오기 (캐싱)
                 cache_key_items = f"cached_items_form_{selected_session_id}"
@@ -1585,6 +1594,21 @@ if not st.session_state["teacher_authenticated"]:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
                 else:
                     st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
+
+                    forced_retest = st.session_state.get(f"force_retest_{selected_session_id}", False)
+                    if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not forced_retest:
+                        col_re1, col_re2 = st.columns([3, 1])
+                        with col_re1:
+                            st.info("✅ 이미 제출 완료된 테스트입니다. 아래에서 채점 결과를 확인하거나 다시 풀 수 있습니다.")
+                        with col_re2:
+                            if st.button("🔄 다시 풀기", use_container_width=True):
+                                st.session_state[f"force_retest_{selected_session_id}"] = True
+                                if f"submitted_{selected_session_id}" in st.session_state:
+                                    del st.session_state[f"submitted_{selected_session_id}"]
+                                if f"all_results_{selected_session_id}" in st.session_state:
+                                    del st.session_state[f"all_results_{selected_session_id}"]
+                                st.rerun()
+
                     st.markdown("---")
         
                     # 🚀 [수동 선택형] fragment 함수 (개별 문항 비활성화 및 추가 등록 지원)
@@ -1721,7 +1745,7 @@ if not st.session_state["teacher_authenticated"]:
                             except Exception as e:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
         
-                    if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
+                    if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
                         if f"all_results_{selected_session_id}" not in st.session_state:
                             is_postgres = "psycopg2" in str(type(conn_test))
                             if is_postgres:
@@ -1768,18 +1792,11 @@ if not st.session_state["teacher_authenticated"]:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
                                 raw_ans_db = str(prob["answer"]).strip()
-                                file_name_val = str(prob.get("file_name", ""))
                                 
-                                real_ans_clean = raw_ans_db.replace("번", "").strip()
-                                
-                                # 💡 수정: 정답이 '1~5' 사이의 숫자이거나, 
-                                # 문제 이미지 파일명 또는 정답 데이터에 객관식 특징이 있는 경우 모두 객관식으로 인식합니다.
-                                is_multiple_choice = (
-                                    "번" in raw_ans_db 
-                                    or real_ans_clean in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"] 
-                                    or "@" in file_name_val
-                                    or "choice" in file_name_val.lower()
-                                )
+                                # 💡 수정된 완벽한 객관식/주관식 판별 원리:
+                                # 정답 문자열 또는 문제 파일명 등에 "@"가 포함되어 있으면 객관식으로 판단
+                                # (사용자분 설명: "정답에는 @가 붙어있으면 객관식, 그렇지 않으면 주관식")
+                                is_multiple_choice = "@" in raw_ans_db or "@" in str(prob.get("file_name", ""))
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
@@ -1811,7 +1828,7 @@ if not st.session_state["teacher_authenticated"]:
         
                             for prob in problem_list:
                                 p_key = f"form_{selected_session_id}_{prob['item_id']}"
-                                real_ans = prob["answer"].replace("번", "").strip()
+                                real_ans = prob["answer"].replace("@", "").replace("번", "").strip()
                                 u_ans = form_answers.get(p_key, "").replace("번", "").strip()
                                 
                                 is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
@@ -1851,6 +1868,8 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"submitted_{selected_session_id}"] = True
                             st.session_state[f"all_results_{selected_session_id}"] = all_results
                             st.session_state[f"correct_count_{selected_session_id}"] = correct_count
+                            if f"force_retest_{selected_session_id}" in st.session_state:
+                                del st.session_state[f"force_retest_{selected_session_id}"]
                             st.balloons()
                             st.rerun()
 
