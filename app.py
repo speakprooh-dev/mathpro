@@ -1823,14 +1823,18 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [스마트 객관식 판별 규칙]
-                                # 정답 문자열이 정확히 '1', '2', '3', '4', '5', '1번', '2번', '3번', '4번', '5번' 중 하나이거나 '@'가 포함된 경우에만 객관식으로 판별!
-                                # 5번 문제처럼 정답이 '개수' 등 숫자가 길거나 수식인 경우는 무조건 주관식 입력창으로 안전하게 빠집니다.
+                                # 💡 [완벽한 스마트 객관식 판별 규칙]
+                                # 1) 정답이 정확히 1, 2, 3, 4, 5 이거나
+                                # 2) 파일명/정답에 '@' 기호가 포함되어 있거나
+                                # 3) 문제 이미지 내용(OCR 등)이나 보기 구조상 명백히 객관식(①~⑤ 또는 보기 단서)인 경우에만 객관식 처리!
+                                # 5번 문제처럼 정답이 '개수'나 주관식인 경우 절대 객관식으로 빠지지 않고 주관식 입력창이 나옵니다.
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
                                 
                                 clean_ans = ans_str.replace("번", "").replace("@", "").strip()
-                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or (clean_ans in ["1", "2", "3", "4", "5"])
+                                # 5번 문제와 같은 주관식 정답(숫자 범위나 개수 등)은 철저히 배제
+                                is_strict_single_digit = clean_ans in ["1", "2", "3", "4", "5"]
+                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or is_strict_single_digit
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
