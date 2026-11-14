@@ -1714,7 +1714,7 @@ if not st.session_state["teacher_authenticated"]:
                             if r_ans and r_ans != "-":
                                 ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
                             else:
-                                ans_display = f"<img src='{img_url}' style='height: 20px; width: auto; background: white; padding: 1px; border-radius: 2px; vertical-align: middle;' />"
+                                ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
     
                             with st.container(border=True):
                                 st.markdown(
@@ -1737,7 +1737,13 @@ if not st.session_state["teacher_authenticated"]:
     
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
                                     if is_self_check:
-                                        # 셀프 채점 문제인 경우 결과 확인 화면에서 직접 O/X 선택 제공
+                                        # 셀프 채점 문제인 경우 정답 이미지(또는 텍스트)를 먼저 보여주고 O/X 선택 제공
+                                        st.markdown(
+                                            f"<div style='margin-bottom: 10px; font-size: 13px;'>"
+                                            f"📌 <b>정답 확인:</b> {ans_display}"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                                         current_self_val = 1 if is_cor == 1 else 0
                                         self_review_choice = st.radio(
                                             f"{prob['order']}번 셀프 채점 (노트에 푼 풀이와 정답 비교 후 선택):",
@@ -1869,7 +1875,7 @@ if not st.session_state["teacher_authenticated"]:
                                 is_self_check = (ans_str == "-" or is_difficulty_empty)
 
                                 if is_self_check:
-                                    # 💡 풀이 화면에서는 O/X 선택 없이 노트 풀이 안내 문구만 깔끔하게 노출
+                                    # 풀이 화면에서는 O/X 선택 없이 노트 풀이 안내 문구만 깔끔하게 노출
                                     st.markdown(
                                         "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
                                         "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
@@ -2617,7 +2623,7 @@ else:
 
                         for p_id, s_ans, is_corr in detail_items:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
-                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "미입력"
+                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
                             st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})")
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
