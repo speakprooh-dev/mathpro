@@ -10,17 +10,26 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 버튼 텍스트를 왼쪽 정렬하기 위한 CSS 스타일 주입
+# 💡 [개선] 버튼 텍스트를 확실하게 왼쪽 정렬하기 위한 CSS 스타일
 st.markdown("""
 <style>
-/* Streamlit 버튼 내부 텍스트를 왼쪽 정렬로 변경 */
 div.stButton > button {
+    display: block !important;
     text-align: left !important;
     justify-content: flex-start !important;
+    align-items: center !important;
+    text-align-last: left !important;
 }
 div.stButton > button > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
     text-align: left !important;
-    width: 100%;
+    width: 100% !important;
+}
+div.stButton > button > div > p {
+    text-align: left !important;
+    width: 100% !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1632,7 +1641,7 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위 폴더 기본 접힘, 목록 버튼 문구 왼쪽 정렬 적용
+                # 📆 [개선] 주 단위 폴더 기본 접힘, 목록 버튼 문구 왼쪽 정렬 적용됨
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
