@@ -1823,51 +1823,61 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [완벽한 자동 판별 로직]
-                                # 주관식으로 확실히 판별할 예외 코드(5번: A114092, 14번: A114105 등)만 주관식으로 지정하고,
-                                # 나머지는 기본적으로 보기/정답 포맷이나 번호 특성에 따라 객관식 또는 주관식으로 자동 판별합니다.
-                                filename_str = str(prob.get("filename", ""))
+                                # 💡 [선생님이 주신 조건 기반 완벽한 판별 로직]
+                                # 1) answer가 "-" 인 경우
+                                # 2) file_name(filename)에서 난이도 뒤에 정보가 비어있는 경우 (예: "난이도A.png" 처럼 @나 정답 기호가 없는 경우)
+                                # 위 조건 중 하나라도 해당하면 셀프 채점(O/X 선택) 문제로 판별!
                                 ans_str = str(prob.get("answer", "")).strip()
-                                full_code_val = str(prob.get("full_code", "")).upper()
+                                filename_str = str(prob.get("filename", "")).strip()
                                 
-                                # 확실한 주관식 문제 코드들 (여기에 주관식 문제 코드가 있다면 추가하세요)
-                                forced_subjective_codes = ["A114092", "A114105"] 
-                                
-                                if full_code_val in forced_subjective_codes:
-                                    is_multiple_choice = False
+                                # 난이도 뒤가 비어있는지 확인 (예: '난이도A.png' 또는 '@'가 없는지)
+                                is_difficulty_empty = False
+                                if "난이도" in filename_str:
+                                    parts_diff = filename_str.split("난이도")
+                                    if len(parts_diff) > 1:
+                                        after_diff = parts_diff[1] # 예: "A.png" 또는 "A_@3.png"
+                                        # @ 기호가 없고 바로 .png로 끝나거나 숫자가 없으면 비어있는 것으로 판단
+                                        if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                            is_difficulty_empty = True
+
+                                is_self_check = (ans_str == "-" or is_difficulty_empty)
+
+                                if is_self_check:
+                                    # ⭕ 셀프 채점 모드 (맞음 / 틀림 선택)
+                                    self_choice = st.radio(
+                                        f"{idx + 1}번 채점 선택 (노트 풀이 후 선택):",
+                                        options=["미선택", "⭕ 정답 맞춤 (O)", "❌ 틀림 (X)"],
+                                        index=0,
+                                        key=f"self_{p_key}",
+                                        horizontal=True
+                                    )
+                                    user_ans = self_choice
                                 else:
-                                    # DB 정답이나 파일명에 '@'가 있거나, 보기 기호가 있거나, 
-                                    # 또는 정답 값이 1~5 단독 숫자가 아닐지라도 일반적인 객관식 패턴(보기 기호 포함 등)이면 객관식!
-                                    # 여기서는 5번 문제처럼 단답형 숫자가 정답이거나 구하시오 형태가 아닌 대부분의 문제(대다수 보기 출제 문제)를 객관식으로 인식하도록 유도합니다.
-                                    # 단, 명백한 주관식(예: 값을 구하시오 형태 등 답이 숫자인 경우)과 구분하기 위해 보기 기호나 @가 있으면 100% 객관식
+                                    # 객관식 또는 주관식 판별
                                     is_multiple_choice = (
                                         "@" in filename_str or 
                                         any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
                                         any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        # 수학 문제집 특성상 보기 목록이 있는 객관식 문제들은 대개 정답이 '1', '2', '3', '4', '5' 중 하나로 저장되어 있거나 
-                                        # 혹은 주관식이 아닌 문항들입니다. 주관식인 14번(A114105) 같은 문제는 '최댓값을 구하시오' 형태이므로 제외됩니다.
-                                        full_code_val not in ["A114092", "A114105"] and ans_str in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]
+                                        ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
                                     )
 
-                                if is_multiple_choice:
-                                    # '잘 모름'을 맨 앞에 두고 인덱스를 0으로 지정하여 정답이 미리 체크되지 않도록 수정
-                                    choice_options = ["잘 모름", "1번", "2번", "3번", "4번", "5번"]
-                                    
-                                    selected_choice = st.radio(
-                                        f"{idx + 1}번 정답 선택 (객관식):",
-                                        options=choice_options,
-                                        index=0,  # 항상 '잘 모름(미선택)' 상태로 시작
-                                        key=f"radio_{p_key}",
-                                        horizontal=True
-                                    )
-                                    user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
-                                else:
-                                    user_ans = st.text_input(
-                                        f"{idx + 1}번 정답 입력 (주관식 단답형):",
-                                        value="",
-                                        key=f"text_{p_key}",
-                                        placeholder="정답을 입력하세요"
-                                    ).strip()
+                                    if is_multiple_choice:
+                                        choice_options = ["잘 모름", "1번", "2번", "3번", "4번", "5번"]
+                                        selected_choice = st.radio(
+                                            f"{idx + 1}번 정답 선택 (객관식):",
+                                            options=choice_options,
+                                            index=0,
+                                            key=f"radio_{p_key}",
+                                            horizontal=True
+                                        )
+                                        user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
+                                    else:
+                                        user_ans = st.text_input(
+                                            f"{idx + 1}번 정답 입력 (주관식 단답형):",
+                                            value="",
+                                            key=f"text_{p_key}",
+                                            placeholder="정답을 입력하세요"
+                                        ).strip()
         
                                 form_answers[p_key] = user_ans
                                 st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
@@ -1881,10 +1891,29 @@ if not st.session_state["teacher_authenticated"]:
         
                             for prob in problem_list:
                                 p_key = f"form_{selected_session_id}_{prob['item_id']}"
-                                real_ans = prob["answer"].replace("@", "").replace("번", "").strip()
-                                u_ans = form_answers.get(p_key, "").replace("번", "").strip()
+                                ans_str = str(prob.get("answer", "")).strip()
+                                filename_str = str(prob.get("filename", "")).strip()
                                 
-                                is_correct = 1 if (real_ans != "" and u_ans == real_ans) else 0
+                                is_difficulty_empty = False
+                                if "난이도" in filename_str:
+                                    parts_diff = filename_str.split("난이도")
+                                    if len(parts_diff) > 1:
+                                        after_diff = parts_diff[1]
+                                        if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                            is_difficulty_empty = True
+
+                                is_self_check = (ans_str == "-" or is_difficulty_empty)
+                                u_ans = form_answers.get(p_key, "")
+
+                                if is_self_check:
+                                    # 셀프 채점인 경우 사용자가 "⭕ 정답 맞춤 (O)"을 골랐으면 정답 처리
+                                    is_correct = 1 if "정답 맞춤" in u_ans else 0
+                                    real_ans = "-"
+                                else:
+                                    real_ans = ans_str.replace("@", "").replace("번", "").strip()
+                                    clean_u_ans = u_ans.replace("번", "").strip()
+                                    is_correct = 1 if (real_ans != "" and clean_u_ans == real_ans) else 0
+
                                 if is_correct:
                                     correct_count += 1
         
