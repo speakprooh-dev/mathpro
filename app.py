@@ -1850,7 +1850,8 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
-                                with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
+                                # 💡 수정된 부분: expanded=False 로 변경하여 처음에는 접혀 있도록 설정
+                                with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
                                         f"<div style='margin-bottom: 10px; font-size: 13px;'>"
                                         f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor == 1 else '#EF4444'};'>{u_ans_str}</b>"
