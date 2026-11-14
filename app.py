@@ -1811,6 +1811,14 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
     
+                            # 💡 객관식 여부 판별 (1~5번 정답이거나 파일명에 @가 있는 경우 객관식으로 판단)
+                            is_multiple_choice_item = (
+                                "@" in filename_str or 
+                                any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
+                            )
+
                             with st.container(border=True):
                                 st.markdown(
                                     f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
@@ -1838,23 +1846,25 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                                     
-                                    current_self_val = 1 if is_cor == 1 else 0
-                                    self_review_choice = st.radio(
-                                        f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
-                                        options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                        index=current_self_val,
-                                        key=f"self_review_{sess_id}_{prob['item_id']}",
-                                        horizontal=True
-                                    )
-                                    new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                    if new_is_cor != is_cor:
-                                        matched_res["is_correct"] = new_is_cor
-                                        is_postgres = "psycopg2" in str(type(conn_test))
-                                        if is_postgres:
-                                            c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                        else:
-                                            q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                        conn_test.commit()
+                                    # 💡 [핵심 수정] 객관식이 아닌 경우(주관식/셀프채점 문제)에만 셀프 채점(O/X) 라디오 버튼 스위치 제공
+                                    if not is_multiple_choice_item:
+                                        current_self_val = 1 if is_cor == 1 else 0
+                                        self_review_choice = st.radio(
+                                            f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
+                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                            index=current_self_val,
+                                            key=f"self_review_{sess_id}_{prob['item_id']}",
+                                            horizontal=True
+                                        )
+                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                        if new_is_cor != is_cor:
+                                            matched_res["is_correct"] = new_is_cor
+                                            is_postgres = "psycopg2" in str(type(conn_test))
+                                            if is_postgres:
+                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            else:
+                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            conn_test.commit()
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = False
