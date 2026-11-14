@@ -1043,6 +1043,28 @@ def parse_numbers(text):
         return set()
     return set(int(n) for n in re.findall(r'\d+', text))
 
+# 주관식 유연 채점 함수 (띄어쓰기 무시, '제' 글자 유무 무시)
+def check_subjective_answer(user_ans, real_ans):
+    if not user_ans or not real_ans:
+        return False
+    
+    def normalize_text(t):
+        t = str(t).strip().lower()
+        t = t.replace("번", "")
+        # 공백 모두 제거
+        t = re.sub(r'\s+', '', t)
+        # '제' 제거 (예: 제4사분면 -> 4사분면)
+        t = t.replace("제", "")
+        return t
+
+    u_norm = normalize_text(user_ans)
+    r_norm = normalize_text(real_ans)
+    
+    if u_norm == r_norm:
+        return True
+        
+    return False
+
 # ----------------------------------------------------
 # 🖼️ 메인 화면 상단 로고 및 헤더
 # ----------------------------------------------------
@@ -1655,7 +1677,7 @@ if not st.session_state["teacher_authenticated"]:
                                 총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                             </p>
                             <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
-                                ⚠️ 아래에서 정답을 확인하시고, 주관식 채점 결과가 다를 경우 <b>셀프 채점(O/X)</b>을 변경해 주세요! 오답노트에 담을 문제만 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 누르시면 됩니다.
+                                ⚠️ 아래에서 정답을 확인하시고, 오답노트에 담을 문제를 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 꼭 눌러주세요!
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1670,7 +1692,7 @@ if not st.session_state["teacher_authenticated"]:
                                 key=f"master_dir_{sess_id}"
                             )
     
-                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 셀프 채점 검토 ({len(prob_list)}개)")
+                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 검토 ({len(prob_list)}개)")
     
                         selected_wrong_notes = {}
     
@@ -1737,13 +1759,32 @@ if not st.session_state["teacher_authenticated"]:
     
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
                                     if is_self_check:
+                                        # 셀프 채점 문제(서술형 등)인 경우에만 기존대로 셀프 채점(O/X) 유지
                                         st.markdown(
                                             f"<div style='margin-bottom: 10px; font-size: 13px;'>"
                                             f"📌 <b>정답 확인:</b> {ans_display}"
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
+                                        current_self_val = 1 if is_cor == 1 else 0
+                                        self_review_choice = st.radio(
+                                            f"{prob['order']}번 셀프 채점 (노트에 푼 풀이와 정답 비교 후 선택):",
+                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                            index=current_self_val,
+                                            key=f"self_review_{sess_id}_{prob['item_id']}",
+                                            horizontal=True
+                                        )
+                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                        if new_is_cor != is_cor:
+                                            matched_res["is_correct"] = new_is_cor
+                                            is_postgres = "psycopg2" in str(type(conn_test))
+                                            if is_postgres:
+                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            else:
+                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            conn_test.commit()
                                     else:
+                                        # 객관식 및 주관식 자동 채점 문제: 셀프 채점 버튼 제거하고 채점 결과 고정 노출
                                         st.markdown(
                                             f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
                                             f"정답: {ans_display} &nbsp;|&nbsp; "
@@ -1751,29 +1792,9 @@ if not st.session_state["teacher_authenticated"]:
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
-                                    
-                                    # 주관식/객관식 상관없이 언제든지 셀프 채점(O/X)을 변경할 수 있도록 라디오 버튼 제공
-                                    current_self_val = 1 if is_cor == 1 else 0
-                                    self_review_choice = st.radio(
-                                        f"{prob['order']}번 채점 결과 확인 및 수정 (철자·띄어쓰기 차이 시 변경 가능):",
-                                        options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                        index=current_self_val,
-                                        key=f"self_review_{sess_id}_{prob['item_id']}",
-                                        horizontal=True
-                                    )
-                                    new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                    if new_is_cor != is_cor:
-                                        matched_res["is_correct"] = new_is_cor
-                                        is_postgres = "psycopg2" in str(type(conn_test))
-                                        if is_postgres:
-                                            c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                        else:
-                                            q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                        conn_test.commit()
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                # 요청하신 대로 기본값은 체크 안 된 상태(False)로 설정
-                                is_checked_default = False
+                                is_checked_default = (is_cor == 0)
     
                                 if is_item_saved:
                                     st.checkbox(
@@ -1784,7 +1805,7 @@ if not st.session_state["teacher_authenticated"]:
                                     )
                                 else:
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 {prob['order']}번 오답노트 담기 (필요한 경우에만 체크 후 맨 아래 등록 버튼을 누르세요)",
+                                        f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
                                         value=is_checked_default,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
@@ -1907,7 +1928,7 @@ if not st.session_state["teacher_authenticated"]:
                                             f"{idx + 1}번 정답 입력 (주관식 단답형):",
                                             value="",
                                             key=f"text_{p_key}",
-                                            placeholder="정답을 입력하세요"
+                                            placeholder="정답을 입력하세요 (예: 제4사분면 또는 4사분면)"
                                         ).strip()
         
                                 form_answers[p_key] = user_ans
@@ -1941,8 +1962,8 @@ if not st.session_state["teacher_authenticated"]:
                                     real_ans = "-"
                                 else:
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
-                                    clean_u_ans = u_ans.replace("번", "").strip()
-                                    is_correct = 1 if (real_ans != "" and clean_u_ans == real_ans) else 0
+                                    # 주관식 유연 채점 함수 적용 (공백 무시 및 '제' 탈락 보정)
+                                    is_correct = 1 if (real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
 
                                 if is_correct:
                                     correct_count += 1
@@ -2623,6 +2644,6 @@ else:
                         for p_id, s_ans, is_corr in detail_items:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
-                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})")
+                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
