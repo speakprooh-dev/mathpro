@@ -1823,14 +1823,16 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [초강력 주관식 강제 지정 로직]
-                                # 정답 문자열에 1~5 단일 숫자가 아니고, '@' 기호나 보기 기호가 없으면 무조건 주관식!
+                                # 💡 [올바른 객관식/주관식 정밀 판별 로직]
+                                # 정답 문자열이 1~5이거나, 파일명/정답에 '@' 기호가 포함된 경우에만 객관식 허용!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
                                 clean_ans = ans_str.replace("번", "").replace("@", "").strip()
                                 
-                                # 엄격한 객관식 조건: 정답이 정확히 1, 2, 3, 4, 5 중 하나이고, 파일명 등에 '@'가 포함되어 있을 때만 객관식 허용
-                                is_multiple_choice = clean_ans in ["1", "2", "3", "4", "5"] and (("@" in filename_str) or ("@" in ans_str))
+                                # 만약 '개수', '구하시오', '합', '모든', '값은', '정수' 등의 단답형 키워드가 있으면 무조건 주관식 강제!
+                                has_subjective_keyword = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수"])
+                                
+                                is_multiple_choice = (not has_subjective_keyword) and (clean_ans in ["1", "2", "3", "4", "5"] or "@" in filename_str or "@" in ans_str)
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
