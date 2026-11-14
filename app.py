@@ -1623,12 +1623,15 @@ if not st.session_state["teacher_authenticated"]:
                             key=f"master_dir_{selected_session_id}"  # <-- selected_session_id로 변경
                         )
 
-                    st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(prob_list)}개)")
+                    st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(problem_list)}개)")
 
                     selected_wrong_notes = {}
 
-                    for prob in prob_list:
-                        matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
+                    # 💡 이전 결과(all_results)나 제출된 데이터를 안전하게 가져오도록 처리
+                    current_res_list = st.session_state.get(f"all_results_{selected_session_id}", [])
+
+                    for prob in problem_list:
+                        matched_res = next((r for r in current_res_list if r['full_code'] == prob['full_code']), None)
                         
                         if matched_res:
                             u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
@@ -1686,21 +1689,21 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
 
-                            is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                            is_checked_default = (is_cor == 0)
+                            is_item_saved = st.session_state.get(f"item_saved_{selected_session_id}_{prob['full_code']}", False)
+                            is_checked_default = (is_cor == 0) if matched_res else False
 
                             if is_item_saved:
                                 st.checkbox(
                                     f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
                                     value=True,
                                     disabled=True,
-                                    key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
+                                    key=f"wrong_chk_disabled_{selected_session_id}_{prob['item_id']}"
                                 )
                             else:
                                 selected_wrong_notes[prob['full_code']] = st.checkbox(
                                     f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
                                     value=is_checked_default,
-                                    key=f"wrong_chk_{sess_id}_{prob['item_id']}"
+                                    key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
                                 )
 
                 if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
