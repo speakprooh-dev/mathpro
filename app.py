@@ -1798,7 +1798,7 @@ if not st.session_state["teacher_authenticated"]:
                                     restored_correct_cnt += 1
                                 restored_results.append({
                                     "order": prob["order"],
-                                "full_code": f_code,
+                                    "full_code": f_code,
                                     "unit_code": prob["unit_code"],
                                     "prob_num": prob["prob_num"],
                                     "user_ans": info["user_ans"],
@@ -1823,16 +1823,15 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [정교하고 완벽한 객관식/주관식 분기 판별 로직]
-                                # 1. '개수', '구하시오', '합', '모든', '값은', '정수' 등 서술형/주관식 단어가 들어가면 무조건 주관식!
-                                # 2. 정답 데이터가 정확히 1, 2, 3, 4, 5 중 하나이거나 파일명/정답에 '@' 기호가 포함된 경우에만 객관식 허용!
+                                # 💡 [최종 완벽 수정된 객관식/주관식 분기 판별 로직]
+                                # '개수', '구하시오', '합', '모든', '값은', '정수', '실수' 등 서술형/주관식 키워드가 조금이라도 포함되면 무조건 주관식 강제 지정!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
                                 clean_ans = ans_str.replace("번", "").replace("@", "").strip()
                                 
                                 has_subjective_keyword = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수", "실수"])
                                 
-                                # 객관식 판별 조건: 서술형 키워드가 없고, 정답이 1~5 단일 숫자이거나 '@' 기호가 포함된 경우
+                                # 객관식 판별: 서술형 키워드가 전혀 없으며, 정답이 1~5 단일 숫자이거나 '@'가 포함된 경우에만 허용
                                 is_multiple_choice = (not has_subjective_keyword) and (clean_ans in ["1", "2", "3", "4", "5"] or "@" in filename_str or "@" in ans_str)
         
                                 if is_multiple_choice:
