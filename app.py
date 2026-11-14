@@ -1823,19 +1823,21 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [완벽 개선] 정답 데이터에 '@' 기호가 포함되어 있거나, 명확한 객관식 포맷인 경우에만 객관식 라디오 출력!
+                                # 💡 [스마트 객관식 판별 규칙]
+                                # 정답 문자열이 정확히 '1', '2', '3', '4', '5', '1번', '2번', '3번', '4번', '5번' 중 하나이거나 '@'가 포함된 경우에만 객관식으로 판별!
+                                # 5번 문제처럼 정답이 '개수' 등 숫자가 길거나 수식인 경우는 무조건 주관식 입력창으로 안전하게 빠집니다.
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
                                 
-                                # 주관식 문제(예: 정수 개수 구하기, 서술형 등)는 절대 객관식으로 빠지지 않도록 '@'가 포함된 경우에만 객관식으로 처리
-                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str)
+                                clean_ans = ans_str.replace("번", "").replace("@", "").strip()
+                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or (clean_ans in ["1", "2", "3", "4", "5"])
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     
                                     default_idx = 0
                                     for i, opt in enumerate(choice_options[:5]):
-                                        if opt.replace("번", "") == ans_str.replace("번", "").replace("@", "").strip():
+                                        if opt.replace("번", "") == clean_ans:
                                             default_idx = i
                                             break
 
