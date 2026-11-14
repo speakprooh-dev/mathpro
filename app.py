@@ -10,75 +10,52 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 모든 다크 모드 가독성 완벽 개선 CSS (탭 이름 및 아코디언/컨테이너 내부 글씨 100% 선명하게 수정)
+# 💡 카드 외곽선 강화 및 학생 페이지 상단 탭(Tabs) 메뉴를 눈에 띄게 꾸미는 CSS 스타일
 st.markdown("""
 <style>
-/* st.container(border=True) 카드 외곽선과 배경 */
+/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-    border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    background-color: #1E1E24 !important;
+    border: 3px solid rgba(255, 255, 255, 0.75) !important;
+    background-color: rgba(35, 35, 42, 0.9) !important;
     border-radius: 14px !important;
     padding: 16px !important;
     margin-bottom: 14px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* 🌟 상단 탭 바 전체 영역 배경 및 가독성 확보 */
+/* 🌟 학생 페이지 상단 탭(Tabs) 메뉴 눈에 띄게 꾸미기 */
 div[data-testid="stTabs"] {
-    background-color: #1E1E24 !important;
-    padding: 10px !important;
-    border-radius: 12px !important;
-    border: 2px solid rgba(255, 255, 255, 0.2) !important;
+    background-color: rgba(35, 35, 42, 0.6);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(2, 132, 199, 0.3);
 }
 
-/* 탭 리스트 영역 여백 및 간격 설정 */
-div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 8px !important;
-}
-
-/* 모든 탭 버튼(선택되거나 비활성화된 탭 모두)의 글씨를 선명한 흰색(#FFFFFF)으로 강제 고정 */
+/* 비활성화된 탭 스타일 */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: rgba(255, 255, 255, 0.08) !important;
-    color: #FFFFFF !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #9CA3AF !important;
     border-radius: 8px !important;
-    padding: 8px 14px !important;
+    padding: 8px 16px !important;
     font-weight: 600 !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    margin-right: 6px !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
     transition: all 0.2s ease-in-out;
-}
-
-/* 탭 내부의 텍스트(span, p 등) 색상도 흰색으로 고정 */
-div[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important;
 }
 
 /* 마우스 올렸을 때 (Hover) */
 div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-    background-color: rgba(37, 99, 235, 0.3) !important;
-    border-color: rgba(37, 99, 235, 0.6) !important;
+    background-color: rgba(2, 132, 199, 0.2) !important;
+    color: #FFFFFF !important;
 }
 
-/* 🔵 선택된(Active) 탭 스타일 */
+/* 🟢 선택된(Active) 탭 스타일 (시원한 파란색 포인트) */
 div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
+    background-color: #0284C7 !important;
     color: #FFFFFF !important;
-    font-weight: 700 !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.6) !important;
-    border: 1px solid #93C5FD !important;
-}
-
-/* 📂 아코디언(Expander), 컨테이너 내부의 모든 제목·텍스트 글씨가 안 보이던 문제 완벽 해결 (선명한 흰색) */
-div[data-testid="stExpander"] summary p, 
-div[data-testid="stExpander"] summary span, 
-div[data-testid="stExpander"] summary div,
-div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] p,
-div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] span,
-div[data-testid="stContainer"] h3,
-div[data-testid="stContainer"] h4,
-div[data-testid="stContainer"] h5,
-div[data-testid="stContainer"] p,
-div[data-testid="stContainer"] span {
-    color: #FFFFFF !important;
+    font-weight: bold !important;
+    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.4) !important;
+    border: 1px solid #38BDF8 !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
@@ -1311,9 +1288,9 @@ if not st.session_state["teacher_authenticated"]:
         selected_student = url_student
         
         st.markdown(
-            f'<div style="background-color:#1E1E24; border:1px solid rgba(255,255,255,0.2); padding:16px; border-radius:12px; margin-bottom:15px;">'
-            f'<div style="font-size:17px; font-weight:bold; color:#FFFFFF; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
-            f'<div style="font-size:13px; color:#D1D5DB; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
+            f'<div style="background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); padding:16px; border-radius:12px; margin-bottom:15px;">'
+            f'<div style="font-size:17px; font-weight:bold; margin-bottom:8px;">✨ 안녕하세요, <span style="color:#0284C7;">{selected_student}</span> 학생!</div>'
+            f'<div style="font-size:13px; margin-bottom:12px;">오늘도 MathPro와 함께 멋진 수학 학습을 시작해볼까요?</div>',
             unsafe_allow_html=True
         )
         
@@ -1334,8 +1311,8 @@ if not st.session_state["teacher_authenticated"]:
 
         if unchecked_count > 0:
             st.markdown(
-                f'<div style="background-color: rgba(239, 68, 68, 0.15); border-left: 4px solid #EF4444; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
-                f'<div style="font-size: 14px; font-weight: bold; color: #F87171;">🚨 오늘 아직 완료하지 않은 루틴 과제가 <u>{unchecked_count}개</u> 있습니다!</div>'
+                f'<div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 12px; border-radius: 8px; margin-bottom: 15px;">'
+                f'<div style="font-size: 14px; font-weight: bold; color: #EF4444;">🚨 오늘 아직 완료하지 않은 루틴 과제가 <u>{unchecked_count}개</u> 있습니다!</div>'
                 f'</div>',
                 unsafe_allow_html=True
             )
@@ -1346,10 +1323,10 @@ if not st.session_state["teacher_authenticated"]:
                 for n_id, n_title, n_content, n_date, n_target in student_notices:
                     target_badge = "🌐 전체" if not n_target else f"👤 {n_target}"
                     st.markdown(
-                        f'<div style="background-color: #1E1E24; border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
-                        f'<div style="font-size: 12px; color: #9CA3AF;">{target_badge} | {n_date}</div>'
-                        f'<div style="font-size: 14px; font-weight: bold; color: #FFFFFF;">📌 {n_title}</div>'
-                        f'<div style="font-size: 13px; color: #D1D5DB; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
+                        f'<div style="background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px;">'
+                        f'<div style="font-size: 12px;">{target_badge} | {n_date}</div>'
+                        f'<div style="font-size: 14px; font-weight: bold;">📌 {n_title}</div>'
+                        f'<div style="font-size: 13px; white-space: pre-wrap; margin-top: 4px;">{n_content}</div>'
                         f'</div>',
                         unsafe_allow_html=True
                     )
@@ -1405,7 +1382,7 @@ if not st.session_state["teacher_authenticated"]:
         if unsolved_total_count > 0:
             st.markdown(
                 f'''
-                <div style="background-color: rgba(239, 68, 68, 0.15); border-left: 4px solid #EF4444; padding: 12px 14px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="background-color: rgba(239, 68, 68, 0.1); border-left: 4px solid #EF4444; padding: 12px 14px; border-radius: 8px; margin-bottom: 15px;">
                     <div style="font-size: 13.5px; color: #F87171; font-weight: bold;">
                         🔥 미복습 오답: <span style="color: #FFF;">{unsolved_total_count}개</span> (새해설 대기: <span style="color: #FBBF24;">{new_video_count}개</span>)
                     </div>
@@ -1420,25 +1397,25 @@ if not st.session_state["teacher_authenticated"]:
             cols_m = st.columns([4, 1])
             safe_m_progress = max(0.0, min(1.0, (m_percent / 100) if total_m > 0 else 0.0))
             with cols_m[0]: st.progress(safe_m_progress)
-            with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#38BDF8;'>{m_percent}%</div>", unsafe_allow_html=True)
+            with cols_m[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{m_percent}%</div>", unsafe_allow_html=True)
             
             recent_3_label = " (최근 3일)" if recent_3_dates else ""
             st.markdown(f"📚 **숙제 진도 완료 현황{recent_3_label}** ({completed_h} / {total_h}개 완료)")
             cols_h = st.columns([4, 1])
             safe_h_progress = max(0.0, min(1.0, (h_percent / 100) if total_h > 0 else 0.0))
             with cols_h[0]: st.progress(safe_h_progress)
-            with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#38BDF8;'>{h_percent}%</div>", unsafe_allow_html=True)
+            with cols_h[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#0284C7;'>{h_percent}%</div>", unsafe_allow_html=True)
 
             cols_rt_title, cols_rt_streak = st.columns([2.2, 1.8])
             with cols_rt_title:
                 st.markdown("🔥 **루틴 과제 달성률 (최근 7일)**")
             with cols_rt_streak:
-                st.markdown(f"<div style='text-align:right; font-size:13px; color:#FBBF24; font-weight:bold; margin-top:4px;'>⭐ Streak: {current_streak}일 연속!</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:right; font-size:13px; color:#F59E0B; font-weight:bold; margin-top:4px;'>⭐ Streak: {current_streak}일 연속!</div>", unsafe_allow_html=True)
 
             cols_r = st.columns([4, 1])
             safe_routine_progress = max(0.0, min(1.0, (routine_rate / 100) if routine_rate > 0 else 0.0))
             with cols_r[0]: st.progress(safe_routine_progress)
-            with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#FBBF24;'>{routine_rate}%</div>", unsafe_allow_html=True)
+            with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
 
         tab1, tab2, tab3, tab4 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리", "📝 온라인 테스트"])
 
@@ -1486,7 +1463,7 @@ if not st.session_state["teacher_authenticated"]:
                                 )
                             with cols[1]:
                                 if v_url and v_url.strip() != "":
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(255,255,255,0.3); color:#FFFFFF;">🎥 개념해설</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
             else:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
@@ -1501,7 +1478,7 @@ if not st.session_state["teacher_authenticated"]:
 
             st.markdown("### 🔥 매일 반복 루틴 체크")
             st.markdown(f"💡 **루틴 진행 상황**: 총 **{total_routines_cnt}개** 중 **{completed_routines_cnt}개** 완료")
-            st.markdown("<p style='color: #38BDF8; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
             
             if daily_routines_list:
                 with st.container(border=True):
@@ -1525,7 +1502,7 @@ if not st.session_state["teacher_authenticated"]:
                 completed_sel_h = sum(1 for h_item in actual_sel_hws if h_progress.get(h_item[0], False))
 
                 st.markdown(f"💡 **선택 날짜 숙제 현황**: 총 **{total_sel_h}개** 중 **{completed_sel_h}개** 완료")
-                st.markdown("<p style='color: #38BDF8; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
 
                 with st.container(border=True):
                     for h_idx, hw_tuple in enumerate(hws):
@@ -1663,11 +1640,11 @@ if not st.session_state["teacher_authenticated"]:
                                     if is_new_alert:
                                         st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#2D2D38; border:1px solid rgba(255,255,255,0.3); color:#FFFFFF; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:#9CA3AF;'>준비중</div>", unsafe_allow_html=True)
+                                    st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
-                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(255,255,255,0.15);'>", unsafe_allow_html=True)
+                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
 
@@ -1681,7 +1658,7 @@ if not st.session_state["teacher_authenticated"]:
                         matched_url, _ = get_problem_link_info(search_prob_input)
                         if matched_url:
                             st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
-                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(255,255,255,0.3); color:#FFFFFF;">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                         else:
                             st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
                     else:
@@ -1689,7 +1666,7 @@ if not st.session_state["teacher_authenticated"]:
                         if unit_results:
                             st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
                             for f_code, v_url in unit_results:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(255,255,255,0.3); color:#FFFFFF;">📌 {f_code} &nbsp;&nbsp;<span style="color:#38BDF8;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
                         else:
                             st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
@@ -1753,7 +1730,7 @@ if not st.session_state["teacher_authenticated"]:
                 selected_session_id = st.session_state.get(f"active_sess_{selected_student}", sessions_list[0][0])
                 
                 current_active_info = next((s for s in sessions_list if s[0] == selected_session_id), sessions_list[0])
-                st.markdown(f"<div style='background-color:#1E1E24; padding:10px 14px; border-radius:8px; margin: 15px 0 15px 0; font-size:14px; font-weight:bold; color:#FFFFFF;'>🎯 현재 선택된 테스트: <span style='color:#38BDF8;'>{current_active_info[1]}</span> ({current_active_info[2]})</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color:var(--secondary-background-color); padding:10px 14px; border-radius:8px; margin: 15px 0 15px 0; font-size:14px; font-weight:bold;'>🎯 현재 선택된 테스트: <span style='color:#0284C7;'>{current_active_info[1]}</span> ({current_active_info[2]})</div>", unsafe_allow_html=True)
 
                 last_selected_sess = st.session_state.get("last_active_test_session_id", None)
                 if last_selected_sess != selected_session_id:
@@ -1822,12 +1799,12 @@ if not st.session_state["teacher_authenticated"]:
                         st.session_state[f"correct_count_{sess_id}"] = correct_cnt
                         
                         st.markdown(f"""
-                        <div style="background-color: #1E1E24; border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                            <h2 style="color: #38BDF8; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
-                            <p style="font-size: 18px; font-weight: bold; margin: 0; color: #FFFFFF;">
+                        <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
+                            <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
+                            <p style="font-size: 18px; font-weight: bold; margin: 0;">
                                 총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                             </p>
-                            <p style="font-size: 14px; color: #F87171; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.15); padding: 8px; border-radius: 6px;">
+                            <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
                                 ⚠️ 아래에서 정답을 확인하시고, 오답노트에 담을 문제를 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 꼭 눌러주세요!
                             </p>
                         </div>
@@ -1858,7 +1835,7 @@ if not st.session_state["teacher_authenticated"]:
                                 r_ans = matched_res["real_ans"]
                                 is_cor = matched_res["is_correct"]
                                 ox_mark = "O" if is_cor == 1 else "X"
-                                ox_color = "#34D399" if is_cor == 1 else "#F87171"
+                                ox_color = "#10B981" if is_cor == 1 else "#EF4444"
                             else:
                                 u_ans_str = "미입력"
                                 r_ans = prob["answer"]
@@ -1867,7 +1844,7 @@ if not st.session_state["teacher_authenticated"]:
                                 ox_color = "gray"
     
                             v_url, _ = get_problem_link_info(prob["full_code"])
-                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:#9CA3AF; font-size:11px;">해설 준비중</span>'
+                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
     
                             f_code = str(prob["full_code"]).strip()
                             u_part = f_code[:4] if len(f_code) > 4 else "A114"
@@ -1878,7 +1855,7 @@ if not st.session_state["teacher_authenticated"]:
                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                             
                             if r_ans and r_ans != "-":
-                                ans_display = f"<b style='color: #34D399;'>{r_ans}</b>"
+                                ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
     
@@ -1891,9 +1868,9 @@ if not st.session_state["teacher_authenticated"]:
 
                             with st.container(border=True):
                                 st.markdown(
-                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: #1E1E24; border-radius: 6px;'>"
+                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
                                     f"  <div>"
-                                    f"    <b style='color: #FFFFFF;'>{prob['order']}번 문제</b> "
+                                    f"    <b style='color: #E5E7EB;'>{prob['order']}번 문제</b> "
                                     f"    <span style='color: #9CA3AF; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
                                     f"  </div>"
@@ -1908,10 +1885,11 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
+                                # 💡 처음부터 접혀있도록 expanded=False로 설정된 정답 및 채점 확인 영역
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
-                                        f"<div style='margin-bottom: 10px; font-size: 13px; color: #FFFFFF;'>"
-                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#34D399' if is_cor == 1 else '#F87171'};'>{u_ans_str}</b>"
+                                        f"<div style='margin-bottom: 10px; font-size: 13px;'>"
+                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor == 1 else '#EF4444'};'>{u_ans_str}</b>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
@@ -2041,7 +2019,7 @@ if not st.session_state["teacher_authenticated"]:
 
                                 if is_self_check:
                                     st.markdown(
-                                        "<div style='background-color: #1E1E24; border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #38BDF8; margin-bottom: 10px;'>"
+                                        "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
                                         "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
                                         "최종 제출 후 정답 해설을 확인하면서 셀프 채점(O/X)을 진행하게 됩니다."
                                         "</div>",
@@ -2075,7 +2053,7 @@ if not st.session_state["teacher_authenticated"]:
                                         ).strip()
         
                                 form_answers[p_key] = user_ans
-                                st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(255,255,255,0.2);'>", unsafe_allow_html=True)
+                                st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
         
                             submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
         
@@ -2175,7 +2153,7 @@ else:
             for s in student_list:
                 personal_link = f"{base_url}/?student={s}"
                 with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#38BDF8; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
                     st.code(personal_link, language="text")
 
     st.divider()
@@ -2255,7 +2233,7 @@ else:
                     badge_str = "🌐 [전체 공지]" if not n_target else f"👤 [{n_target} 학생 맞춤]"
                     col_n_info, col_n_del = st.columns([5, 1])
                     with col_n_info:
-                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:#9CA3AF;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
+                        st.markdown(f"**{badge_str} {n_title}** <span style='font-size:12px; color:gray;'>(작성일: {n_date})</span>", unsafe_allow_html=True)
                         st.caption(n_content)
                     with col_n_del:
                         if st.button("🗑️ 삭제", key=f"del_notice_{n_id}"):
@@ -2539,16 +2517,16 @@ else:
                     total_sum_all = sum(summary_student_counts.values())
                     st.markdown(
                         f"""
-                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px; color:#FFFFFF;">📈 현재 검색 조건 통계 요약</div>
-                        <div style="font-size: 13px; margin-bottom: 8px; color:#D1D5DB;">
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
+                        <div style="font-size: 13px; margin-bottom: 8px;">
                             🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
-                            📚 전체 오답 문제: <b style="color: #38BDF8;">{total_sum_all}개</b>
+                            📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
                     if summary_student_counts:
-                        st.markdown("<div style='font-size: 12px; color: #9CA3AF; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
+                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
                         st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
                 st.markdown("---")
 
@@ -2556,18 +2534,18 @@ else:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
                         with st.container(border=True):
-                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:#9CA3AF;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
                             
                             colored_num_tags = []
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}".upper()
                                 v_url, _ = batch_link_cache.get(f_code, ("", ""))
                                 if v_url and v_url.strip():
-                                    colored_num_tags.append(f"<span style='color: #38BDF8; font-weight: bold;'>{n:03d}</span>")
+                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
                                 else:
-                                    colored_num_tags.append(f"<span style='color: #F87171; font-weight: bold;'>{n:03d}</span>")
+                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
 
-                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(255,255,255,0.2); color:#FFFFFF;'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("조건에 일치하는 오답노트 기록이 없습니다.")
         else:
@@ -2768,8 +2746,8 @@ else:
                     st.markdown(f"👤 **학생**: `{s_name}` &nbsp;|&nbsp; 📝 **테스트명**: **{t_title}**")
                     st.markdown(
                         f"📊 **채점 결과**: 총 **{total_cnt}문항** 중 "
-                        f"<span style='color:#34D399; font-weight:bold;'>정답 {correct_cnt}개</span> / "
-                        f"<span style='color:#F87171; font-weight:bold;'>오답 {wrong_cnt}개</span> "
+                        f"<span style='color:#10B981; font-weight:bold;'>정답 {correct_cnt}개</span> / "
+                        f"<span style='color:#EF4444; font-weight:bold;'>오답 {wrong_cnt}개</span> "
                         f"(`{score_pct}%`) &nbsp;|&nbsp; 🕒 **제출일시**: {sub_at}",
                         unsafe_allow_html=True
                     )
