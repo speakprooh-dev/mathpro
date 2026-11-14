@@ -10,10 +10,10 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선 강화 및 세련되고 시인성 높은 학생 페이지 상단 탭(Tabs) 메뉴 CSS 스타일
+# 💡 상단 탭 바 배경을 뚜렷하게 수정하고 선택된 탭을 강조하는 CSS 스타일
 st.markdown("""
 <style>
-/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
+/* st.container(border=True) 카드 외곽선과 배경 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
     border: 3px solid rgba(255, 255, 255, 0.75) !important;
     background-color: rgba(35, 35, 42, 0.9) !important;
@@ -23,45 +23,45 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* 🌟 세련되고 직관적인 학생 페이지 상단 탭(Tabs) 메뉴 디자인 */
+/* 🌟 상단 탭 바 전체 영역 (배경을 확실하게 밝은 톤으로 잡아 글씨가 잘 보이도록 수정) */
 div[data-testid="stTabs"] {
-    background-color: #1E1E24;
-    padding: 8px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    background-color: #2D2D38 !important;
+    padding: 10px !important;
+    border-radius: 12px !important;
+    border: 2px solid rgba(255, 255, 255, 0.25) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 탭 리스트 영역 여백 및 간격 설정 */
 div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 6px;
+    gap: 8px !important;
 }
 
 /* 비활성화된 탭 기본 스타일 */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: rgba(255, 255, 255, 0.04) !important;
-    color: #9CA3AF !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #E5E7EB !important;
     border-radius: 8px !important;
     padding: 8px 14px !important;
-    font-weight: 500 !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
     transition: all 0.2s ease-in-out;
 }
 
 /* 마우스 올렸을 때 (Hover) */
 div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-    background-color: rgba(37, 99, 235, 0.15) !important;
-    color: #E5E7EB !important;
-    border-color: rgba(37, 99, 235, 0.3) !important;
+    background-color: rgba(37, 99, 235, 0.25) !important;
+    color: #FFFFFF !important;
+    border-color: rgba(37, 99, 235, 0.5) !important;
 }
 
-/* 🔵 선택된(Active) 탭 스타일 (시인성 높은 블루 그라데이션 포인트) */
+/* 🔵 선택된(Active) 탭 스타일 (선명한 블루 그라데이션 포인트) */
 div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
     background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
     color: #FFFFFF !important;
     font-weight: 700 !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5) !important;
-    border: 1px solid #60A5FA !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.6) !important;
+    border: 1px solid #93C5FD !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
