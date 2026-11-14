@@ -10,17 +10,17 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일
+# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일 (외곽선 두께 4px, 밝은 네온/화이트 톤)
 st.markdown("""
 <style>
-/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
+/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 (두께 4px 및 세련된 그림자) */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-    border: 3px solid rgba(255, 255, 255, 0.75) !important;
-    background-color: rgba(35, 35, 42, 0.9) !important;
-    border-radius: 14px !important;
-    padding: 16px !important;
-    margin-bottom: 14px !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    border: 4px solid rgba(56, 189, 248, 0.8) !important;
+    background-color: rgba(30, 35, 45, 0.95) !important;
+    border-radius: 16px !important;
+    padding: 18px !important;
+    margin-bottom: 16px !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
@@ -1850,7 +1850,6 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
-                                # 💡 수정된 부분: expanded=False 로 변경하여 처음에는 접혀 있도록 설정
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=False):
                                     st.markdown(
                                         f"<div style='margin-bottom: 10px; font-size: 13px;'>"
