@@ -10,6 +10,21 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
+# 💡 버튼 텍스트를 왼쪽 정렬하기 위한 CSS 스타일 주입
+st.markdown("""
+<style>
+/* Streamlit 버튼 내부 텍스트를 왼쪽 정렬로 변경 */
+div.stButton > button {
+    text-align: left !important;
+    justify-content: flex-start !important;
+}
+div.stButton > button > div {
+    text-align: left !important;
+    width: 100%;
+}
+</style>
+""", unsafe_allow_html=True)
+
 if "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
@@ -1617,7 +1632,7 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위 폴더는 기본 접힌 상태이며, 내부 테스트 목록 버튼은 한 줄로 깔끔하게 정돈
+                # 📆 [개선] 주 단위 폴더 기본 접힘, 목록 버튼 문구 왼쪽 정렬 적용
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
@@ -1637,7 +1652,6 @@ if not st.session_state["teacher_authenticated"]:
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
                             
-                            # 날짜 형식을 '11/14(토)' 형태로 짧고 간결하게 다듬어 한 줄로 유지
                             date_part = ""
                             if s_created and len(s_created) >= 10:
                                 try:
