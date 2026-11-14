@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선 강화 및 학생 페이지 상단 탭(Tabs) 메뉴를 눈에 띄게 꾸미는 CSS 스타일
+# 💡 카드 외곽선 강화 및 세련되고 시인성 높은 학생 페이지 상단 탭(Tabs) 메뉴 CSS 스타일
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
@@ -23,39 +23,45 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* 🌟 학생 페이지 상단 탭(Tabs) 메뉴 눈에 띄게 꾸미기 */
+/* 🌟 세련되고 직관적인 학생 페이지 상단 탭(Tabs) 메뉴 디자인 */
 div[data-testid="stTabs"] {
-    background-color: rgba(35, 35, 42, 0.6);
-    padding: 10px;
+    background-color: #1E1E24;
+    padding: 8px;
     border-radius: 12px;
-    border: 1px solid rgba(2, 132, 199, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* 비활성화된 탭 스타일 */
+/* 탭 리스트 영역 여백 및 간격 설정 */
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    gap: 6px;
+}
+
+/* 비활성화된 탭 기본 스타일 */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: rgba(255, 255, 255, 0.05) !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
     color: #9CA3AF !important;
     border-radius: 8px !important;
-    padding: 8px 16px !important;
-    font-weight: 600 !important;
-    margin-right: 6px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding: 8px 14px !important;
+    font-weight: 500 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
     transition: all 0.2s ease-in-out;
 }
 
 /* 마우스 올렸을 때 (Hover) */
 div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
-    background-color: rgba(2, 132, 199, 0.2) !important;
-    color: #FFFFFF !important;
+    background-color: rgba(37, 99, 235, 0.15) !important;
+    color: #E5E7EB !important;
+    border-color: rgba(37, 99, 235, 0.3) !important;
 }
 
-/* 🟢 선택된(Active) 탭 스타일 (시원한 파란색 포인트) */
+/* 🔵 선택된(Active) 탭 스타일 (시인성 높은 블루 그라데이션 포인트) */
 div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #0284C7 !important;
+    background: linear-gradient(135deg, #0284C7 0%, #2563EB 100%) !important;
     color: #FFFFFF !important;
-    font-weight: bold !important;
-    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.4) !important;
-    border: 1px solid #38BDF8 !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5) !important;
+    border: 1px solid #60A5FA !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
