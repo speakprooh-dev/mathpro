@@ -1823,17 +1823,20 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [오직 filename(파일명)에 '@'가 포함되어 있는지 여부만 확인!]
+                                # 💡 [요청하신 정확한 규칙 반영]
+                                # 객관식: file_name에 '@'가 포함되어 있거나, answer에 '번'이 포함된 경우 (예: 1번, 2번 ...)
+                                # 주관식: file_name에 '@'가 없고, answer에 '번'이 없는 경우 (예: 4, 8√2 ...)
                                 filename_str = str(prob.get("filename", ""))
-                                is_multiple_choice = "@" in filename_str
+                                ans_str = str(prob.get("answer", "")).strip()
+                                
+                                is_multiple_choice = ("@" in filename_str) or ("번" in ans_str)
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     
-                                    ans_str = str(prob.get("answer", "")).replace("번", "").replace("@", "").strip()
                                     default_idx = 0
                                     for i, opt in enumerate(choice_options[:5]):
-                                        if opt.replace("번", "") == ans_str:
+                                        if opt.replace("번", "") in ans_str:
                                             default_idx = i
                                             break
 
