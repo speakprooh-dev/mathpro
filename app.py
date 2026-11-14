@@ -1557,11 +1557,12 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                    # 💡 파일명 정보를 포함하여 조회 (solution_img_path 등)
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
         
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
+                    for item_id, p_order, u_code, p_num, ans, img_b64, sol_path in raw_items:
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -1578,7 +1579,8 @@ if not st.session_state["teacher_authenticated"]:
                             "unit_code": u_code or "TEST",
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
-                            "img_bytes": decoded_img
+                            "img_bytes": decoded_img,
+                            "filename": str(sol_path) if sol_path else ""  # 💡 파일명(경로) 정보 추가
                         })
                     st.session_state[cache_key_items] = problem_list
         
@@ -1788,43 +1790,9 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                f_code_chk = str(prob["full_code"]).strip()
-                                u_part_chk = f_code_chk[:4] if len(f_code_chk) > 4 else "A114"
-                                num_part_chk = f_code_chk[4:] if len(f_code_chk) > 4 else f_code_chk
-                                n_digits_chk = "".join(filter(str.isdigit, num_part_chk))
-                                
-                                # 💡 파일명 규칙에 '@'가 포함되어 있는지 여부 확인 (예: A114_ans_(@).png 등 가정, 혹은 윗단계에서 가져온 파일명 규칙)
-                                # 사용자가 명시한 "파일명에 @가 있는 경우" 판별을 위해, master_answer 파일명 패턴 혹은 저장된 파일명 메타데이터 활용
-                                # 여기서는 Supabase 스토리지 파일명 규칙이나 전송된 이미지 파일명에 '@'가 들어가는지 확인합니다.
-                                # 혹은 관리자 업로드 시 파일명에 '@'가 포함되었는지 판단하기 위해 아래와 같이 체크합니다.
-                                target_filename_chk = f"{u_part_chk}_ans_(@)_{n_digits_chk}.png" # 혹은 파일명 규칙
-                                
-                                # 💡 님께서 말씀하신 "파일명에 @가 있는 경우"를 정확히 판별하기 위해, 
-                                # 아래와 같이 해당 문제의 이미지 파일명 혹은 메타데이터에 '@'가 포함되어 있는지 확인합니다.
-                                # (만약 파일명 문자열 자체를 검사하려면 아래 조건을 사용하세요)
-                                # 예시: 원본 파일명이나 경로에 '@'가 포함된 경우
-                                is_multiple_choice = False
-                                
-                                # Supabase 스토리지나 파일명을 체크할 때 파일명에 '@'가 포함된 경우를 확인합니다.
-                                # 만약 db 등에서 파일명 정보를 가져온다면 그 값을 쓰시고, 
-                                # 여기서는 파일명 규칙(예: 파일명에 @가 포함된 경우)을 체크합니다.
-                                # 안전하게 파일명 변수나 별도 판별식을 적용합니다.
-                                # (예시: target_filename에 '@'가 들어가거나 정답 데이터에 '@'가 포함된 경우 모두 호환하도록 처리)
-                                # 사용자가 '파일명에 @가 있는경우가 객관식'이라 하셨으므로 파일명 체크 로직 반영:
-                                
-                                # 만약 파일명 문자열 체크를 원하신다면:
-                                # target_file_str = str(prob.get("filename", "")) # 파일명 필드가 있다면
-                                # 아래와 같이 파일명에 '@'가 포함되어 있는지 검사합니다.
-                                # 여기서는 보편적으로 파일명에 '@'가 들어가는 경우를 체크하기 위해 아래 조건식을 사용합니다.
-                                filename_contains_at = False 
-                                # (선생님께서 파일명을 관리하시는 방식을 고려해 파일명에 '@'가 포함되는지 검사하는 로직을 추가합니다)
-                                # 만약 별도 파일명 컬럼이 없다면 full_code나 answer 외에 파일명 데이터를 활용할 수 있습니다.
-                                # 여기서는 안전을 위해 파일명 검사식(`"@" in str(prob.get("filename", ""))`) 또는 파일명 규칙을 적용합니다.
-                                
-                                # 사용자 요청: "파일명에 @가 있는경우가 객관식"
-                                # 대다수 시스템에서 파일명이 직접 들어오므로 파일명 체크 로직을 아래와 같이 구현합니다.
-                                filename_str = str(prob.get("filename", "")) # 파일명
-                                is_multiple_choice = ("@" in filename_str) or ("@" in str(prob.get("answer", ""))) # 혹시 몰라 둘 다 호환
+                                # 💡 파일명(경로) 또는 정답에 '@'가 포함되어 있으면 객관식으로 판별
+                                filename_str = str(prob.get("filename", ""))
+                                is_multiple_choice = ("@" in filename_str) or ("@" in str(prob.get("answer", "")))
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
