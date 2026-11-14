@@ -10,9 +10,16 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 버튼 텍스트 왼쪽 정렬 CSS
+# 💡 버튼 텍스트 왼쪽 정렬 및 카드 외곽선(border) 더 선명하게 강조하는 CSS
 st.markdown("""
 <style>
+/* 카드(st.container border=True) 외곽선을 더 선명하게 스타일링 */
+div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
+}
+
 div.stButton > button {
     display: block !important;
     text-align: left !important;
@@ -1811,7 +1818,6 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
     
-                            # 💡 객관식 여부 판별 (1~5번 정답이거나 파일명에 @가 있는 경우 객관식으로 판단)
                             is_multiple_choice_item = (
                                 "@" in filename_str or 
                                 any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
@@ -1846,7 +1852,6 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                                     
-                                    # 💡 [핵심 수정] 객관식이 아닌 경우(주관식/셀프채점 문제)에만 셀프 채점(O/X) 라디오 버튼 스위치 제공
                                     if not is_multiple_choice_item:
                                         current_self_val = 1 if is_cor == 1 else 0
                                         self_review_choice = st.radio(
