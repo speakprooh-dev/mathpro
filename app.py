@@ -1617,7 +1617,7 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위(월~일)로 테스트 그룹화 및 내부 개별 테스트 접힌 상태 적용
+                # 📆 [개선] 주 단위 폴더는 기본 접힌 상태(expanded=False)로 출력하고, 내부 개별 테스트는 바로 누르면 풀 수 있도록 변경
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
@@ -1632,23 +1632,19 @@ if not st.session_state["teacher_authenticated"]:
                 
                 for w_idx, w_key in enumerate(sorted_weeks):
                     week_sessions = sessions_by_week[w_key]
-                    # 주간 상자는 최근 주차만 기본 펼침(True), 나머지는 접힘(False)
-                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=(w_idx == 0)):
+                    # 💡 주간 상자(expander)는 항상 기본 접힌 상태(expanded=False)로 설정
+                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅ [제출완료]" if s_completed == 1 else "🆕 [미완료]"
                             day_str = s_created[:10] if s_created else ""
                             short_wd = get_weekday_short_kr(day_str)
                             wday_label = f"({short_wd})" if short_wd else ""
                             
-                            # 💡 각 테스트 항목을 개별 접힌 상태(expander)로 감싸서 깔끔하게 정돈
-                            with st.expander(f"{status_badge} {s_title}  ({day_str} {wday_label})", expanded=False):
-                                col_t_desc, col_t_btn = st.columns([2, 1])
-                                with col_t_desc:
-                                    st.markdown(f"<div style='font-size:12px; color:gray; padding-top:6px;'>등록일: {s_created}</div>", unsafe_allow_html=True)
-                                with col_t_btn:
-                                    if st.button("👉 이 테스트 풀기", key=f"btn_sess_{s_id}", use_container_width=True):
-                                        st.session_state[f"active_sess_{selected_student}"] = s_id
-                                        st.rerun()
+                            # 💡 이전처럼 불필요한 안쪽 박스 없이 곧바로 버튼을 눌러 풀 수 있도록 배치
+                            btn_label = f"{status_badge} {s_title}  ({day_str} {wday_label})"
+                            if st.button(btn_label, key=f"btn_sess_list_{s_id}", use_container_width=True):
+                                st.session_state[f"active_sess_{selected_student}"] = s_id
+                                st.rerun()
 
                 if f"active_sess_{selected_student}" not in st.session_state and sessions_list:
                     st.session_state[f"active_sess_{selected_student}"] = sessions_list[0][0]
