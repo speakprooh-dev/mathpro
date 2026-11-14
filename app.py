@@ -1557,11 +1557,12 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                    # 💡 file_name 컬럼을 함께 조회하도록 쿼리 수정
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, file_name, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
                     raw_items = c_test.fetchall()
-        
+                    
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64 in raw_items:
+                    for item_id, p_order, u_code, p_num, ans, f_name, img_b64 in raw_items:
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -1578,6 +1579,7 @@ if not st.session_state["teacher_authenticated"]:
                             "unit_code": u_code or "TEST",
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
+                            "file_name": str(f_name).strip() if f_name else "", # 💡 이 줄 추가
                             "img_bytes": decoded_img
                         })
                     st.session_state[cache_key_items] = problem_list
