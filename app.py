@@ -1823,10 +1823,12 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [스마트 판별] 정답 데이터나 파일명에 '@'가 포함되어 있거나, 정답 값이 정확히 1~5인 경우에만 객관식(라디오)으로 판별!
+                                # 💡 [완벽 개선] 정답 데이터에 '@' 기호가 포함되어 있거나, 명확한 객관식 포맷인 경우에만 객관식 라디오 출력!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
-                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str) or (ans_str in ["1", "2", "3", "4", "5"]) or (ans_str in ["1번", "2번", "3번", "4번", "5번"])
+                                
+                                # 주관식 문제(예: 정수 개수 구하기, 서술형 등)는 절대 객관식으로 빠지지 않도록 '@'가 포함된 경우에만 객관식으로 처리
+                                is_multiple_choice = ("@" in filename_str) or ("@" in ans_str)
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
