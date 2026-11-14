@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 다크 모드 가독성 완벽 개선 CSS (탭 글씨 및 아코디언 내부 글씨 안 보이는 문제 해결)
+# 💡 모든 다크 모드 가독성 완벽 개선 CSS (탭 이름 및 아코디언/컨테이너 내부 글씨 100% 선명하게 수정)
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경 */
@@ -36,7 +36,7 @@ div[data-testid="stTabs"] [data-baseweb="tab-list"] {
     gap: 8px !important;
 }
 
-/* 비활성화된 탭 글씨를 선명한 흰색(#FFFFFF)으로 설정 */
+/* 모든 탭 버튼(선택되거나 비활성화된 탭 모두)의 글씨를 선명한 흰색(#FFFFFF)으로 강제 고정 */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
     background-color: rgba(255, 255, 255, 0.08) !important;
     color: #FFFFFF !important;
@@ -47,10 +47,14 @@ div[data-testid="stTabs"] button[data-baseweb="tab"] {
     transition: all 0.2s ease-in-out;
 }
 
+/* 탭 내부의 텍스트(span, p 등) 색상도 흰색으로 고정 */
+div[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important;
+}
+
 /* 마우스 올렸을 때 (Hover) */
 div[data-testid="stTabs"] button[data-baseweb="tab"]:hover {
     background-color: rgba(37, 99, 235, 0.3) !important;
-    color: #FFFFFF !important;
     border-color: rgba(37, 99, 235, 0.6) !important;
 }
 
@@ -63,12 +67,17 @@ div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
     border: 1px solid #93C5FD !important;
 }
 
-/* 📂 아코디언(Expander) 내부 텍스트 및 제목 글씨가 안 보이던 문제 완벽 해결 (선명한 흰색) */
+/* 📂 아코디언(Expander), 컨테이너 내부의 모든 제목·텍스트 글씨가 안 보이던 문제 완벽 해결 (선명한 흰색) */
 div[data-testid="stExpander"] summary p, 
 div[data-testid="stExpander"] summary span, 
 div[data-testid="stExpander"] summary div,
 div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] p,
-div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] span {
+div[data-testid="stExpander"] div[data-testid="stVerticalBlock"] span,
+div[data-testid="stContainer"] h3,
+div[data-testid="stContainer"] h4,
+div[data-testid="stContainer"] h5,
+div[data-testid="stContainer"] p,
+div[data-testid="stContainer"] span {
     color: #FFFFFF !important;
 }
 
