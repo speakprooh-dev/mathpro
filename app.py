@@ -1823,14 +1823,17 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [확정된 최종 룰: DB 데이터의 file_name에 '@'가 포함되어 있는지 여부만 확인!]
+                                # 💡 [최종 완벽 결합 판별 로직]
+                                # 1) filename에 '@'가 포함되어 있거나,
+                                # 2) answer에 '@'가 포함되어 있거나 정답이 1~5 단일 숫자인 경우 객관식으로 판별!
                                 filename_str = str(prob.get("filename", ""))
-                                is_multiple_choice = "@" in filename_str
+                                ans_str = str(prob.get("answer", "")).replace("번", "").replace("@", "").strip()
+                                
+                                is_multiple_choice = ("@" in filename_str) or ("@" in str(prob.get("answer", ""))) or (ans_str in ["1", "2", "3", "4", "5"])
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     
-                                    ans_str = str(prob.get("answer", "")).replace("번", "").replace("@", "").strip()
                                     default_idx = 0
                                     for i, opt in enumerate(choice_options[:5]):
                                         if opt.replace("번", "") == ans_str:
