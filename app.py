@@ -1550,7 +1550,7 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_n
+                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
         
                             submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
         
