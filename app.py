@@ -1655,7 +1655,7 @@ if not st.session_state["teacher_authenticated"]:
                                 총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                             </p>
                             <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
-                                ⚠️ 아래에서 정답을 확인하시고, <b>셀프 채점(O/X)</b> 및 오답노트에 담을 문제를 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 꼭 눌러주세요!
+                                ⚠️ 아래에서 정답을 확인하시고, 주관식 채점 결과가 다를 경우 <b>셀프 채점(O/X)</b>을 변경해 주세요! 오답노트에 담을 문제만 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 누르시면 됩니다.
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1743,23 +1743,6 @@ if not st.session_state["teacher_authenticated"]:
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
-                                        current_self_val = 1 if is_cor == 1 else 0
-                                        self_review_choice = st.radio(
-                                            f"{prob['order']}번 셀프 채점 (노트에 푼 풀이와 정답 비교 후 선택):",
-                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                            index=current_self_val,
-                                            key=f"self_review_{sess_id}_{prob['item_id']}",
-                                            horizontal=True
-                                        )
-                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                        if new_is_cor != is_cor:
-                                            matched_res["is_correct"] = new_is_cor
-                                            is_postgres = "psycopg2" in str(type(conn_test))
-                                            if is_postgres:
-                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            else:
-                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            conn_test.commit()
                                     else:
                                         st.markdown(
                                             f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
@@ -1768,9 +1751,29 @@ if not st.session_state["teacher_authenticated"]:
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
+                                    
+                                    # 주관식/객관식 상관없이 언제든지 셀프 채점(O/X)을 변경할 수 있도록 라디오 버튼 제공
+                                    current_self_val = 1 if is_cor == 1 else 0
+                                    self_review_choice = st.radio(
+                                        f"{prob['order']}번 채점 결과 확인 및 수정 (철자·띄어쓰기 차이 시 변경 가능):",
+                                        options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                        index=current_self_val,
+                                        key=f"self_review_{sess_id}_{prob['item_id']}",
+                                        horizontal=True
+                                    )
+                                    new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                    if new_is_cor != is_cor:
+                                        matched_res["is_correct"] = new_is_cor
+                                        is_postgres = "psycopg2" in str(type(conn_test))
+                                        if is_postgres:
+                                            c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        else:
+                                            q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        conn_test.commit()
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                is_checked_default = (is_cor == 0)
+                                # 요청하신 대로 기본값은 체크 안 된 상태(False)로 설정
+                                is_checked_default = False
     
                                 if is_item_saved:
                                     st.checkbox(
@@ -1781,7 +1784,7 @@ if not st.session_state["teacher_authenticated"]:
                                     )
                                 else:
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
+                                        f"📌 {prob['order']}번 오답노트 담기 (필요한 경우에만 체크 후 맨 아래 등록 버튼을 누르세요)",
                                         value=is_checked_default,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
@@ -2620,13 +2623,6 @@ else:
                         for p_id, s_ans, is_corr in detail_items:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
-                            
-                            # 선생님 검사 탭에서 원래 오답이었는데 정답으로 바뀐 경우를 직관적으로 파악할 수 있도록 마크 표시
-                            note_extra = ""
-                            if is_corr == 1 and ans_txt not in ["셀프채점시대기", "미입력"]:
-                                # 실제 정답과 비교하거나 셀프 채점 여부를 추정 가능
-                                note_extra = " <span style='background-color:#FEF3C7; color:#D97706; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;'>셀프정답인정</span>"
-
-                            st.markdown(f"- 📌 `{p_id}` : 학생 원본 답안 **`{ans_txt}`** ({corr_badge}){note_extra}", unsafe_allow_html=True)
+                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})")
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
