@@ -1073,7 +1073,6 @@ def parse_numbers(text):
         return set()
     return set(int(n) for n in re.findall(r'\d+', text))
 
-# 주관식 유연 채점 함수 (띄어쓰기 무시, '제' 글자 유무 무시)
 def check_subjective_answer(user_ans, real_ans):
     if not user_ans or not real_ans:
         return False
@@ -1618,7 +1617,7 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위(월~일)로 테스트 그룹화
+                # 📆 [개선] 주 단위(월~일)로 테스트 그룹화 및 내부 개별 테스트 접힌 상태 적용
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
@@ -1631,20 +1630,25 @@ if not st.session_state["teacher_authenticated"]:
                 
                 selected_session_id = None
                 
-                for w_key in sorted_weeks:
+                for w_idx, w_key in enumerate(sorted_weeks):
                     week_sessions = sessions_by_week[w_key]
-                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=(w_key == sorted_weeks[0])):
+                    # 주간 상자는 최근 주차만 기본 펼침(True), 나머지는 접힘(False)
+                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=(w_idx == 0)):
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅ [제출완료]" if s_completed == 1 else "🆕 [미완료]"
-                            col_t_btn, col_t_stat = st.columns([3, 1])
-                            with col_t_btn:
-                                if st.button(f"{status_badge} {s_title}", key=f"btn_sess_{s_id}", use_container_width=True):
-                                    st.session_state[f"active_sess_{selected_student}"] = s_id
-                            with col_t_stat:
-                                day_str = s_created[:10] if s_created else ""
-                                short_wd = get_weekday_short_kr(day_str)
-                                wday_label = f"({short_wd})" if short_wd else ""
-                                st.markdown(f"<div style='text-align:right; font-size:12px; color:gray; margin-top:8px;'>{day_str} {wday_label}</div>", unsafe_allow_html=True)
+                            day_str = s_created[:10] if s_created else ""
+                            short_wd = get_weekday_short_kr(day_str)
+                            wday_label = f"({short_wd})" if short_wd else ""
+                            
+                            # 💡 각 테스트 항목을 개별 접힌 상태(expander)로 감싸서 깔끔하게 정돈
+                            with st.expander(f"{status_badge} {s_title}  ({day_str} {wday_label})", expanded=False):
+                                col_t_desc, col_t_btn = st.columns([2, 1])
+                                with col_t_desc:
+                                    st.markdown(f"<div style='font-size:12px; color:gray; padding-top:6px;'>등록일: {s_created}</div>", unsafe_allow_html=True)
+                                with col_t_btn:
+                                    if st.button("👉 이 테스트 풀기", key=f"btn_sess_{s_id}", use_container_width=True):
+                                        st.session_state[f"active_sess_{selected_student}"] = s_id
+                                        st.rerun()
 
                 if f"active_sess_{selected_student}" not in st.session_state and sessions_list:
                     st.session_state[f"active_sess_{selected_student}"] = sessions_list[0][0]
@@ -1652,7 +1656,7 @@ if not st.session_state["teacher_authenticated"]:
                 selected_session_id = st.session_state.get(f"active_sess_{selected_student}", sessions_list[0][0])
                 
                 current_active_info = next((s for s in sessions_list if s[0] == selected_session_id), sessions_list[0])
-                st.markdown(f"<div style='background-color:var(--secondary-background-color); padding:10px 14px; border-radius:8px; margin: 10px 0 15px 0; font-size:14px; font-weight:bold;'>🎯 현재 선택된 테스트: <span style='color:#0284C7;'>{current_active_info[1]}</span> ({current_active_info[2]})</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background-color:var(--secondary-background-color); padding:10px 14px; border-radius:8px; margin: 15px 0 15px 0; font-size:14px; font-weight:bold;'>🎯 현재 선택된 테스트: <span style='color:#0284C7;'>{current_active_info[1]}</span> ({current_active_info[2]})</div>", unsafe_allow_html=True)
 
                 last_selected_sess = st.session_state.get("last_active_test_session_id", None)
                 if last_selected_sess != selected_session_id:
