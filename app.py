@@ -1823,9 +1823,9 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [요청하신 정확한 규칙 반영]
-                                # 객관식: file_name에 '@'가 포함되어 있거나, answer에 '번'이 포함된 경우 (예: 1번, 2번 ...)
-                                # 주관식: file_name에 '@'가 없고, answer에 '번'이 없는 경우 (예: 4, 8√2 ...)
+                                # 💡 [사용자 요구사항 완벽 반영 핵심 로직]
+                                # 1) 객관식: file_name에 '@'가 포함되어 있거나, answer에 '번'이 포함된 경우 (예: 1번, 2번 ...)
+                                # 2) 주관식: file_name에 '@'가 없고, answer에 '번'이 없는 경우 (예: 4, 8√2 ...)
                                 filename_str = str(prob.get("filename", ""))
                                 ans_str = str(prob.get("answer", "")).strip()
                                 
