@@ -1545,7 +1545,6 @@ if not st.session_state["teacher_authenticated"]:
                     key=f"sel_online_test_{selected_student}"
                 )
         
-                # 1. 해당 테스트 문항들 불러오기 (캐싱 및 DB 조회)
                 cache_key_items = f"cached_items_form_{selected_session_id}"
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
@@ -1596,8 +1595,6 @@ if not st.session_state["teacher_authenticated"]:
                     st.markdown(f"**📚 [{selected_test_title}]** — 총 {len(problem_list)}문항")
                     st.markdown("---")
         
-                    # 🚀 [수동 선택형] fragment 함수 (개별 문항 비활성화 및 추가 등록 지원)
-                    @st.fragment
                     def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                         correct_cnt = st.session_state.get(f"correct_count_{sess_id}", 0)
                         
@@ -1620,14 +1617,12 @@ if not st.session_state["teacher_authenticated"]:
                         st.session_state["master_dir_input"] = st.text_input(
                             "master_dir_input 폴더의 실제 경로를 입력하세요:",
                             value=st.session_state["master_dir_input"],
-                            key=f"master_dir_{selected_session_id}"  # <-- selected_session_id로 변경
+                            key=f"master_dir_{selected_session_id}"
                         )
 
                     st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(problem_list)}개)")
 
                     selected_wrong_notes = {}
-
-                    # 💡 이전 결과(all_results)나 제출된 데이터를 안전하게 가져오도록 처리
                     current_res_list = st.session_state.get(f"all_results_{selected_session_id}", [])
 
                     for prob in problem_list:
@@ -1684,7 +1679,7 @@ if not st.session_state["teacher_authenticated"]:
                                 st.markdown(
                                     f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
                                     f"정답: {ans_display} &nbsp;|&nbsp; "
-                                    f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
+                                    f"내 답: <b style='color: {'#10B981' if (matched_res and matched_res['is_correct']) else '#EF4444'};'>{u_ans_str}</b>"
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
@@ -1706,32 +1701,32 @@ if not st.session_state["teacher_authenticated"]:
                                     key=f"wrong_chk_{selected_session_id}_{prob['item_id']}"
                                 )
 
-                if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
-                    manual_wrong_units = {}
-                    current_checked_codes = []
-                    
-                    for prob in prob_list:
-                        if selected_wrong_notes.get(prob['full_code'], False):
-                            current_checked_codes.append(prob['full_code'])
-                            if prob["unit_code"] != "TEST":
-                                manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
-
-                    try:
-                        for u_code, num_set in manual_wrong_units.items():
-                            existing_txt = get_student_wrong_entry(s_name, u_code)
-                            pre_nums = parse_numbers(existing_txt)
-                            merged_nums = pre_nums | num_set
-                            merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                            save_student_wrong_entry(s_name, u_code, merged_txt)
+                    if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{selected_session_id}"):
+                        manual_wrong_units = {}
+                        current_checked_codes = []
                         
-                        for f_code in current_checked_codes:
-                            st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
+                        for prob in problem_list:
+                            if selected_wrong_notes.get(prob['full_code'], False):
+                                current_checked_codes.append(prob['full_code'])
+                                if prob["unit_code"] != "TEST":
+                                    manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
 
-                        st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
+                        try:
+                            for u_code, num_set in manual_wrong_units.items():
+                                existing_txt = get_student_wrong_entry(selected_student, u_code)
+                                pre_nums = parse_numbers(existing_txt)
+                                merged_nums = pre_nums | num_set
+                                merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                save_student_wrong_entry(selected_student, u_code, merged_txt)
+                            
+                            for f_code in current_checked_codes:
+                                st.session_state[f"item_saved_{selected_session_id}_{f_code}"] = True
+
+                            st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
             if is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False):
                 if f"all_results_{selected_session_id}" not in st.session_state:
