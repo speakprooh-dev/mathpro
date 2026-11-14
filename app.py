@@ -1655,7 +1655,7 @@ if not st.session_state["teacher_authenticated"]:
                                 총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
                             </p>
                             <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
-                                ⚠️ 오답노트에 담을 문제를 체크하신 후, <b>반드시 맨 아래의 [선택한 문제들을 오답노트에 등록하기] 버튼을 눌러주세요!</b>
+                                ⚠️ 아래에서 정답을 확인하시고, <b>셀프 채점(O/X)</b> 및 오답노트에 담을 문제를 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 꼭 눌러주세요!
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1670,13 +1670,24 @@ if not st.session_state["teacher_authenticated"]:
                                 key=f"master_dir_{sess_id}"
                             )
     
-                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 문제 검토 ({len(prob_list)}개)")
+                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 셀프 채점 검토 ({len(prob_list)}개)")
     
                         selected_wrong_notes = {}
     
                         for prob in prob_list:
                             matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
                             
+                            ans_str = str(prob.get("answer", "")).strip()
+                            filename_str = str(prob.get("filename", "")).strip()
+                            is_difficulty_empty = False
+                            if "난이도" in filename_str:
+                                parts_diff = filename_str.split("난이도")
+                                if len(parts_diff) > 1:
+                                    after_diff = parts_diff[1]
+                                    if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                        is_difficulty_empty = True
+                            is_self_check = (ans_str == "-" or is_difficulty_empty)
+
                             if matched_res:
                                 u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
                                 r_ans = matched_res["real_ans"]
@@ -1724,14 +1735,35 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
-                                with st.expander("🔍 정답 및 내 답 확인하기 (터치해서 열기)", expanded=False):
-                                    st.markdown(
-                                        f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
-                                        f"정답: {ans_display} &nbsp;|&nbsp; "
-                                        f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
-                                        f"</div>",
-                                        unsafe_allow_html=True
-                                    )
+                                with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
+                                    if is_self_check:
+                                        # 셀프 채점 문제인 경우 결과 확인 화면에서 직접 O/X 선택 제공
+                                        current_self_val = 1 if is_cor == 1 else 0
+                                        self_review_choice = st.radio(
+                                            f"{prob['order']}번 셀프 채점 (노트에 푼 풀이와 정답 비교 후 선택):",
+                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                            index=current_self_val,
+                                            key=f"self_review_{sess_id}_{prob['item_id']}",
+                                            horizontal=True
+                                        )
+                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                        if new_is_cor != is_cor:
+                                            matched_res["is_correct"] = new_is_cor
+                                            # DB에도 즉시 반영
+                                            is_postgres = "psycopg2" in str(type(conn_test))
+                                            if is_postgres:
+                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            else:
+                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                            conn_test.commit()
+                                    else:
+                                        st.markdown(
+                                            f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
+                                            f"정답: {ans_display} &nbsp;|&nbsp; "
+                                            f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = (is_cor == 0)
@@ -1785,15 +1817,15 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
                             submitted_rows = c_test.fetchall()
-                            sub_dict = {row[0]: {"user_ans": row[1], "is_correct": row[2]} for row in submitted_rows}
+                            sub_dict = {row[0]: {"user_ans": row[1], "is_checked": row[2]} for row in submitted_rows}
                             
                             restored_results = []
                             restored_correct_cnt = 0
                             for idx, prob in enumerate(problem_list):
                                 f_code = prob['full_code']
-                                info = sub_dict.get(f_code, {"user_ans": "", "is_correct": 0})
+                                info = sub_dict.get(f_code, {"user_ans": "", "is_checked": 0})
                                 real_ans = prob["answer"]
-                                is_cor = info["is_correct"]
+                                is_cor = info["is_checked"]
                                 if is_cor:
                                     restored_correct_cnt += 1
                                 restored_results.append({
@@ -1823,37 +1855,30 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [선생님이 주신 조건 기반 완벽한 판별 로직]
-                                # 1) answer가 "-" 인 경우
-                                # 2) file_name(filename)에서 난이도 뒤에 정보가 비어있는 경우 (예: "난이도A.png" 처럼 @나 정답 기호가 없는 경우)
-                                # 위 조건 중 하나라도 해당하면 셀프 채점(O/X 선택) 문제로 판별!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", "")).strip()
                                 
-                                # 난이도 뒤가 비어있는지 확인 (예: '난이도A.png' 또는 '@'가 없는지)
                                 is_difficulty_empty = False
                                 if "난이도" in filename_str:
                                     parts_diff = filename_str.split("난이도")
                                     if len(parts_diff) > 1:
-                                        after_diff = parts_diff[1] # 예: "A.png" 또는 "A_@3.png"
-                                        # @ 기호가 없고 바로 .png로 끝나거나 숫자가 없으면 비어있는 것으로 판단
+                                        after_diff = parts_diff[1]
                                         if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
                                             is_difficulty_empty = True
 
                                 is_self_check = (ans_str == "-" or is_difficulty_empty)
 
                                 if is_self_check:
-                                    # ⭕ 셀프 채점 모드 (맞음 / 틀림 선택)
-                                    self_choice = st.radio(
-                                        f"{idx + 1}번 채점 선택 (노트 풀이 후 선택):",
-                                        options=["미선택", "⭕ 정답 맞춤 (O)", "❌ 틀림 (X)"],
-                                        index=0,
-                                        key=f"self_{p_key}",
-                                        horizontal=True
+                                    # 💡 풀이 화면에서는 O/X 선택 없이 노트 풀이 안내 문구만 깔끔하게 노출
+                                    st.markdown(
+                                        "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
+                                        "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
+                                        "최종 제출 후 정답 해설을 확인하면서 셀프 채점(O/X)을 진행하게 됩니다."
+                                        "</div>",
+                                        unsafe_allow_html=True
                                     )
-                                    user_ans = self_choice
+                                    user_ans = "셀프채점시대기"
                                 else:
-                                    # 객관식 또는 주관식 판별
                                     is_multiple_choice = (
                                         "@" in filename_str or 
                                         any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
@@ -1906,8 +1931,8 @@ if not st.session_state["teacher_authenticated"]:
                                 u_ans = form_answers.get(p_key, "")
 
                                 if is_self_check:
-                                    # 셀프 채점인 경우 사용자가 "⭕ 정답 맞춤 (O)"을 골랐으면 정답 처리
-                                    is_correct = 1 if "정답 맞춤" in u_ans else 0
+                                    # 셀프 채점 문제는 기본적으로 오답(0점) 상태로 시작하여 결과 화면에서 학생이 직접 O/X를 고르게 함
+                                    is_correct = 0
                                     real_ans = "-"
                                 else:
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
