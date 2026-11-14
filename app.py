@@ -1823,19 +1823,16 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [철저한 주관식 보호 로직 추가]
-                                # 정답이나 파일명에 '개수', '구하시오', '합을' 등 주관식 서술형/단답형 키워드가 포함되어 있거나,
-                                # 정답이 숫자로 딱 떨어지지 않고 수식인 경우 무조건 주관식 입력창으로 고정합니다.
+                                # 💡 [철저한 주관식 보호 로직 추가 (강력형)]
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
-                                
                                 clean_ans = ans_str.replace("번", "").replace("@", "").strip()
                                 
-                                # 주관식 강제 지정 키워드 검사 (정수 a의 개수 등)
-                                is_subjective_keywords = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은"])
+                                # 문항의 정답 문자열이나 이미지 파일명 등에 '개수', '구하시오', '합', '모든' 등이 들어가면 강제 주관식!
+                                is_subjective_keywords = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수"])
                                 is_strict_single_digit = clean_ans in ["1", "2", "3", "4", "5"]
                                 
-                                # 오직 엄격한 조건일 때만 객관식 허용
+                                # 엄격한 객관식 조건: 주관식 키워드가 전혀 없으며, 파일명에 '@'가 있거나 정답이 1~5 단일 숫자일 때만 허용
                                 is_multiple_choice = not is_subjective_keywords and (("@" in filename_str) or ("@" in ans_str) or is_strict_single_digit)
         
                                 if is_multiple_choice:
