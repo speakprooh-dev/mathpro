@@ -323,6 +323,24 @@ def init_db():
                 );
             ''')
 
+            # 💡 online_test_items 테이블 자동 생성 및 solution_img_path 컬럼 누락 방지 안전장치
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS online_test_items (
+                    id SERIAL PRIMARY KEY,
+                    session_id INTEGER,
+                    problem_order INTEGER,
+                    unit_code TEXT,
+                    prob_num TEXT,
+                    answer TEXT,
+                    img_base64 TEXT,
+                    solution_img_path TEXT
+                );
+            ''')
+            try:
+                c.execute('ALTER TABLE online_test_items ADD COLUMN IF NOT EXISTS solution_img_path TEXT;')
+            except Exception:
+                pass
+
             try:
                 c.execute('ALTER TABLE student_homework ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT \'\';')
             except Exception:
@@ -362,6 +380,23 @@ def init_db():
                     submitted_at TEXT NOT NULL
                 );
             ''')
+
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS online_test_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER,
+                    problem_order INTEGER,
+                    unit_code TEXT,
+                    prob_num TEXT,
+                    answer TEXT,
+                    img_base64 TEXT,
+                    solution_img_path TEXT
+                );
+            ''')
+            try:
+                c.execute('ALTER TABLE online_test_items ADD COLUMN solution_img_path TEXT')
+            except Exception:
+                pass
 
             try:
                 c.execute('ALTER TABLE student_homework ADD COLUMN due_date TEXT DEFAULT \'\'')
