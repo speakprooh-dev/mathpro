@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 [개선] 버튼 텍스트를 확실하게 왼쪽 정렬하기 위한 CSS 스타일
+# 💡 버튼 텍스트 왼쪽 정렬 CSS
 st.markdown("""
 <style>
 div.stButton > button {
@@ -1641,7 +1641,6 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위 폴더 기본 접힘, 목록 버튼 문구 왼쪽 정렬 적용됨
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
@@ -1656,7 +1655,6 @@ if not st.session_state["teacher_authenticated"]:
                 
                 for w_idx, w_key in enumerate(sorted_weeks):
                     week_sessions = sessions_by_week[w_key]
-                    # 주간 상자는 기본 접힌 상태(expanded=False)
                     with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
@@ -1784,14 +1782,6 @@ if not st.session_state["teacher_authenticated"]:
                             
                             ans_str = str(prob.get("answer", "")).strip()
                             filename_str = str(prob.get("filename", "")).strip()
-                            is_difficulty_empty = False
-                            if "난이도" in filename_str:
-                                parts_diff = filename_str.split("난이도")
-                                if len(parts_diff) > 1:
-                                    after_diff = parts_diff[1]
-                                    if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
-                                        is_difficulty_empty = True
-                            is_self_check = (ans_str == "-" or is_difficulty_empty)
 
                             if matched_res:
                                 u_ans_str = matched_res["user_ans"] if matched_res["user_ans"] else "미입력"
@@ -1841,38 +1831,31 @@ if not st.session_state["teacher_authenticated"]:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
     
                                 with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=True):
-                                    if is_self_check:
-                                        st.markdown(
-                                            f"<div style='margin-bottom: 10px; font-size: 13px;'>"
-                                            f"📌 <b>정답 확인:</b> {ans_display}"
-                                            f"</div>",
-                                            unsafe_allow_html=True
-                                        )
-                                        current_self_val = 1 if is_cor == 1 else 0
-                                        self_review_choice = st.radio(
-                                            f"{prob['order']}번 셀프 채점 (노트에 푼 풀이와 정답 비교 후 선택):",
-                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                            index=current_self_val,
-                                            key=f"self_review_{sess_id}_{prob['item_id']}",
-                                            horizontal=True
-                                        )
-                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                        if new_is_cor != is_cor:
-                                            matched_res["is_correct"] = new_is_cor
-                                            is_postgres = "psycopg2" in str(type(conn_test))
-                                            if is_postgres:
-                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            else:
-                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            conn_test.commit()
-                                    else:
-                                        st.markdown(
-                                            f"<div style='font-size: 13px; margin: 0; padding: 0;'>"
-                                            f"정답: {ans_display} &nbsp;|&nbsp; "
-                                            f"내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
-                                            f"</div>",
-                                            unsafe_allow_html=True
-                                        )
+                                    st.markdown(
+                                        f"<div style='margin-bottom: 10px; font-size: 13px;'>"
+                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor else '#EF4444'};'>{u_ans_str}</b>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
+                                    
+                                    # 💡 [핵심 수정] 모든 주관식/객관식 문제에 셀프 채점(O/X) 라디오 버튼 스위치 제공
+                                    current_self_val = 1 if is_cor == 1 else 0
+                                    self_review_choice = st.radio(
+                                        f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
+                                        options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                        index=current_self_val,
+                                        key=f"self_review_{sess_id}_{prob['item_id']}",
+                                        horizontal=True
+                                    )
+                                    new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                    if new_is_cor != is_cor:
+                                        matched_res["is_correct"] = new_is_cor
+                                        is_postgres = "psycopg2" in str(type(conn_test))
+                                        if is_postgres:
+                                            c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        else:
+                                            q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                        conn_test.commit()
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = False
