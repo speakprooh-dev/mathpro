@@ -1823,16 +1823,17 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [올바른 객관식/주관식 정밀 판별 로직]
-                                # 정답 문자열이 1~5이거나, 파일명/정답에 '@' 기호가 포함된 경우에만 객관식 허용!
+                                # 💡 [초강력 객관식/주관식 분기 판별 로직]
+                                # 이미지 파일명이나 정답 데이터베이스에 '@' 기호가 확실히 포함되어 있거나 명확한 1~5 단일 숫자일 때만 객관식 허용!
                                 ans_str = str(prob.get("answer", "")).strip()
                                 filename_str = str(prob.get("filename", ""))
                                 clean_ans = ans_str.replace("번", "").replace("@", "").strip()
                                 
-                                # 만약 '개수', '구하시오', '합', '모든', '값은', '정수' 등의 단답형 키워드가 있으면 무조건 주관식 강제!
-                                has_subjective_keyword = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수"])
+                                # 5번 문제처럼 '개수', '구하시오', '합', '정수' 등의 서술형 키워드가 포함되어 있으면 무조건 주관식 강제 지정!
+                                # 또한 4번처럼 선택지 번호가 명확하지 않거나 데이터가 애매한 경우를 방지
+                                has_subjective_keyword = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수", "실수"])
                                 
-                                is_multiple_choice = (not has_subjective_keyword) and (clean_ans in ["1", "2", "3", "4", "5"] or "@" in filename_str or "@" in ans_str)
+                                is_multiple_choice = (not has_subjective_keyword) and (clean_ans in ["1", "2", "3", "4", "5"] and ("@" in filename_str or "@" in ans_str))
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
