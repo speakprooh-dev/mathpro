@@ -10,10 +10,10 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일 (외곽선 두께 4px, 밝은 네온/화이트 톤)
+# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일
 st.markdown("""
 <style>
-/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 (두께 4px 및 세련된 그림자) */
+/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
     border: 4px solid rgba(56, 189, 248, 0.8) !important;
     background-color: rgba(30, 35, 45, 0.95) !important;
@@ -2698,10 +2698,33 @@ else:
             filter_stu = st.selectbox("학생별 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
             filtered_summaries = summary_rows if filter_stu == "전체 학생 보기" else [r for r in summary_rows if r[0] == filter_stu]
 
-            st.markdown(f"**총 응시 테스트 내역: {len(filtered_summaries)}건**")
+            # 💡 주간별 / 날짜별 보기 필터 추가
+            test_view_mode = st.radio("조회 방식 선택", ["📂 전체 목록 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 보기"], horizontal=True, key="test_view_mode_radio")
+
+            processed_summaries = []
+            if test_view_mode == "📂 전체 목록 보기":
+                processed_summaries = filtered_summaries
+            elif test_view_mode == "📅 날짜별 보기":
+                available_test_dates = sorted(list(set(r[2][:10] for r in filtered_summaries if r[2])), reverse=True)
+                selected_test_date = st.selectbox("📅 확인하고 싶은 제출 날짜 선택", ["전체 날짜 보기"] + available_test_dates, key="sel_test_date")
+                if selected_test_date == "전체 날짜 보기":
+                    processed_summaries = filtered_summaries
+                else:
+                    processed_summaries = [r for r in filtered_summaries if r[2] and r[2][:10] == selected_test_date]
+            else:
+                weeks_test_dict = {}
+                for r in filtered_summaries:
+                    sub_at = r[2]
+                    w_str = get_week_range_str(sub_at) if sub_at else "날짜 미상 주간"
+                    weeks_test_dict.setdefault(w_str, []).append(r)
+                sorted_test_weeks = sorted(weeks_test_dict.keys(), reverse=True)
+                selected_test_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_test_weeks, key="sel_test_week")
+                processed_summaries = weeks_test_dict.get(selected_test_week, []) if selected_test_week else []
+
+            st.markdown(f"**총 응시 테스트 내역: {len(processed_summaries)}건**")
             st.markdown("---")
 
-            for idx, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(filtered_summaries):
+            for idx, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(processed_summaries):
                 correct_cnt = int(correct_cnt) if correct_cnt is not None else 0
                 wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
@@ -2729,5 +2752,22 @@ else:
                             corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
                             st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
+
+                    # 💡 제출 내역 삭제 버튼 (학생 페이지와 실시간 연동)
+                    if st.button(f"🗑️ 이 제출 내역 삭제하기 ({s_name} - {t_title})", key=f"btn_del_sub_{s_name}_{t_title}_{idx}", use_container_width=True):
+                        try:
+                            is_postgres_sub = "psycopg2" in str(type(conn_sub))
+                            if is_postgres_sub:
+                                c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                            else:
+                                q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                            conn_sub.commit()
+                            st.cache_data.clear()
+                            st.success(f"🎉 '{s_name}' 학생의 '{t_title}' 제출 내역이 삭제되었습니다! (학생 페이지와 연동 완료)")
+                            st.rerun()
+                        except Exception as del_err:
+                            st.error(f"⚠️ 삭제 중 오류 발생: {del_err}")
         else:
             st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
