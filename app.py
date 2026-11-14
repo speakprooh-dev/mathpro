@@ -1823,23 +1823,17 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [최종 완벽 수정된 객관식/주관식 분기 판별 로직]
-                                # '개수', '구하시오', '합', '모든', '값은', '정수', '실수' 등 서술형/주관식 키워드가 조금이라도 포함되면 무조건 주관식 강제 지정!
-                                ans_str = str(prob.get("answer", "")).strip()
+                                # 💡 [확정된 최종 룰: DB 데이터의 file_name에 '@'가 포함되어 있는지 여부만 확인!]
                                 filename_str = str(prob.get("filename", ""))
-                                clean_ans = ans_str.replace("번", "").replace("@", "").strip()
-                                
-                                has_subjective_keyword = any(k in ans_str for k in ["개수", "구하시오", "합", "모든", "값은", "정수", "실수"])
-                                
-                                # 객관식 판별: 서술형 키워드가 전혀 없으며, 정답이 1~5 단일 숫자이거나 '@'가 포함된 경우에만 허용
-                                is_multiple_choice = (not has_subjective_keyword) and (clean_ans in ["1", "2", "3", "4", "5"] or "@" in filename_str or "@" in ans_str)
+                                is_multiple_choice = "@" in filename_str
         
                                 if is_multiple_choice:
                                     choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                     
+                                    ans_str = str(prob.get("answer", "")).replace("번", "").replace("@", "").strip()
                                     default_idx = 0
                                     for i, opt in enumerate(choice_options[:5]):
-                                        if opt.replace("번", "") == clean_ans:
+                                        if opt.replace("번", "") == ans_str:
                                             default_idx = i
                                             break
 
