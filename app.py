@@ -1617,7 +1617,7 @@ if not st.session_state["teacher_authenticated"]:
             if not sessions_list:
                 st.info("📭 현재 출제된 온라인 테스트가 없습니다. 선생님께서 PC에서 과제를 생성하면 여기에 자동으로 나타납니다!")
             else:
-                # 📆 [개선] 주 단위 폴더는 기본 접힌 상태(expanded=False)로 출력하고, 내부 개별 테스트는 바로 누르면 풀 수 있도록 변경
+                # 📆 [개선] 주 단위 폴더는 기본 접힌 상태이며, 내부 테스트 목록 버튼은 한 줄로 깔끔하게 정돈
                 st.markdown("##### 📅 주간별 풀이할 테스트 목록 (월~일)")
                 
                 sessions_by_week = {}
@@ -1632,16 +1632,27 @@ if not st.session_state["teacher_authenticated"]:
                 
                 for w_idx, w_key in enumerate(sorted_weeks):
                     week_sessions = sessions_by_week[w_key]
-                    # 💡 주간 상자(expander)는 항상 기본 접힌 상태(expanded=False)로 설정
+                    # 주간 상자는 기본 접힌 상태(expanded=False)
                     with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
                         for s_id, s_title, s_created, s_completed in week_sessions:
-                            status_badge = "✅ [제출완료]" if s_completed == 1 else "🆕 [미완료]"
-                            day_str = s_created[:10] if s_created else ""
-                            short_wd = get_weekday_short_kr(day_str)
-                            wday_label = f"({short_wd})" if short_wd else ""
+                            status_badge = "✅" if s_completed == 1 else "🆕"
                             
-                            # 💡 이전처럼 불필요한 안쪽 박스 없이 곧바로 버튼을 눌러 풀 수 있도록 배치
-                            btn_label = f"{status_badge} {s_title}  ({day_str} {wday_label})"
+                            # 날짜 형식을 '11/14(토)' 형태로 짧고 간결하게 다듬어 한 줄로 유지
+                            date_part = ""
+                            if s_created and len(s_created) >= 10:
+                                try:
+                                    d_obj = date.fromisoformat(s_created[:10])
+                                    short_wd = get_weekday_short_kr(s_created[:10])
+                                    date_part = f"{d_obj.strftime('%m/%d')}({short_wd})"
+                                except Exception:
+                                    date_part = s_created[:10]
+
+                            display_title = s_title
+                            if len(display_title) > 16:
+                                display_title = display_title[:15] + "…"
+
+                            btn_label = f"{status_badge} {display_title} | {date_part}"
+                            
                             if st.button(btn_label, key=f"btn_sess_list_{s_id}", use_container_width=True):
                                 st.session_state[f"active_sess_{selected_student}"] = s_id
                                 st.rerun()
