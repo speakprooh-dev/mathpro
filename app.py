@@ -1823,25 +1823,30 @@ if not st.session_state["teacher_authenticated"]:
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
-                                # 💡 [완벽한 최종 주관식/객관식 판별 로직]
-                                # 확실한 주관식 문제 코드들 (예: 5번 A114092 등)은 무조건 주관식으로 고정!
+                                # 💡 [완벽한 자동 판별 로직]
+                                # 주관식으로 확실히 판별할 예외 코드(5번: A114092, 14번: A114105 등)만 주관식으로 지정하고,
+                                # 나머지는 기본적으로 보기/정답 포맷이나 번호 특성에 따라 객관식 또는 주관식으로 자동 판별합니다.
                                 filename_str = str(prob.get("filename", ""))
                                 ans_str = str(prob.get("answer", "")).strip()
                                 full_code_val = str(prob.get("full_code", "")).upper()
                                 
-                                forced_subjective_codes = ["A114092"]  # 주관식인 문제 코드를 여기에 추가
-                                forced_multiple_choices = ["A114016", "A114015", "A114086", "A114191"]  # 객관식인 문제 코드를 여기에 추가
+                                # 확실한 주관식 문제 코드들 (여기에 주관식 문제 코드가 있다면 추가하세요)
+                                forced_subjective_codes = ["A114092", "A114105"] 
                                 
                                 if full_code_val in forced_subjective_codes:
                                     is_multiple_choice = False
-                                elif full_code_val in forced_multiple_choices:
-                                    is_multiple_choice = True
                                 else:
-                                    # 나머지는 '@' 문자가 있거나, 보기 기호(①~⑤)가 포함된 경우 객관식으로 판별
+                                    # DB 정답이나 파일명에 '@'가 있거나, 보기 기호가 있거나, 
+                                    # 또는 정답 값이 1~5 단독 숫자가 아닐지라도 일반적인 객관식 패턴(보기 기호 포함 등)이면 객관식!
+                                    # 여기서는 5번 문제처럼 단답형 숫자가 정답이거나 구하시오 형태가 아닌 대부분의 문제(대다수 보기 출제 문제)를 객관식으로 인식하도록 유도합니다.
+                                    # 단, 명백한 주관식(예: 값을 구하시오 형태 등 답이 숫자인 경우)과 구분하기 위해 보기 기호나 @가 있으면 100% 객관식
                                     is_multiple_choice = (
                                         "@" in filename_str or 
                                         any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"])
+                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                        # 수학 문제집 특성상 보기 목록이 있는 객관식 문제들은 대개 정답이 '1', '2', '3', '4', '5' 중 하나로 저장되어 있거나 
+                                        # 혹은 주관식이 아닌 문항들입니다. 주관식인 14번(A114105) 같은 문제는 '최댓값을 구하시오' 형태이므로 제외됩니다.
+                                        full_code_val not in ["A114092", "A114105"] and ans_str in ["1", "2", "3", "4", "5", "1번", "2번", "3번", "4번", "5번"]
                                     )
 
                                 if is_multiple_choice:
