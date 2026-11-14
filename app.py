@@ -10,16 +10,19 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 버튼 텍스트 왼쪽 정렬 및 카드 외곽선(border) 더 선명하게 강조하는 CSS
+# 💡 카드 외곽선을 훨씬 진하고 선명하게 강조하는 강화된 CSS 스타일
 st.markdown("""
 <style>
-/* 카드(st.container border=True) 외곽선을 더 선명하게 스타일링 */
+/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-    border: 1px solid rgba(255, 255, 255, 0.25) !important;
-    border-radius: 10px !important;
-    padding: 12px !important;
+    border: 2px solid rgba(255, 255, 255, 0.45) !important;
+    background-color: rgba(30, 30, 35, 0.75) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    margin-bottom: 12px !important;
 }
 
+/* 버튼 텍스트 왼쪽 정렬 설정 */
 div.stButton > button {
     display: block !important;
     text-align: left !important;
