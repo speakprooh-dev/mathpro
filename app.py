@@ -1997,7 +1997,8 @@ if not st.session_state["teacher_authenticated"]:
                                     )
 
                                     if is_multiple_choice:
-                                        choice_options = ["잘 모름", "1번", "2번", "3번", "4번", "5번"]
+                                        # 💡 '잘 모름'을 맨 마지막으로 배치
+                                        choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                         selected_choice = st.radio(
                                             f"{idx + 1}번 정답 선택 (객관식):",
                                             options=choice_options,
@@ -2630,7 +2631,6 @@ else:
                         if chk_key not in st.session_state:
                             st.session_state[chk_key] = st.session_state["select_all_links_flag"]
                         
-                        # 💡 체크할 때 불필요한 새로고침(rerun)이 일어나지 않도록 상태만 가볍게 바인딩
                         is_checked = st.checkbox(f"📌 [{f_code}] ({v_url})", key=chk_key)
                         if is_checked:
                             links_to_delete.append(l_id)
