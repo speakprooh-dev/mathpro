@@ -1573,6 +1573,11 @@ if not st.session_state["teacher_authenticated"]:
                     parsed_nums = parsed_entry_dict.get(view_target_code, set())
                     if parsed_nums:
                         st.markdown("---")
+                        
+                        # 💡 [대안 1 적용] 오답 편집 모드 토글 버튼 추가
+                        edit_mode_key = f"wrong_edit_mode_{selected_student}_{view_target_code}"
+                        is_edit_mode = st.toggle("✏️ 오답 목록 편집 및 선택 삭제 모드 켜기", value=False, key=edit_mode_key)
+
                         st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
@@ -1589,6 +1594,8 @@ if not st.session_state["teacher_authenticated"]:
                         }
                         </style>
                         """, unsafe_allow_html=True)
+
+                        selected_to_delete_nums = []
 
                         for n in sorted(list(parsed_nums)):
                             full_code = f"{view_target_code}{n:03d}".upper()
@@ -1608,24 +1615,57 @@ if not st.session_state["teacher_authenticated"]:
                                 new_val = st.session_state[key]
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                            col_c1, col_c2 = st.columns([2.3, 1.7])
-                            with col_c1:
-                                st.checkbox(
-                                    f"복습 완료 ({full_code})", 
-                                    value=is_solved, 
-                                    key=f"s_wrong_chk_{selected_student}_{full_code}",
-                                    on_change=on_wrong_solved_change
-                                )
-                            with col_c2:
-                                if v_url and v_url.strip():
-                                    if is_new_alert:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                            if is_edit_mode:
+                                # 💡 편집 모드일 때: 삭제용 체크박스 + 복습 완료 체크박스 + 해설 버튼 분리 배치
+                                col_d1, col_c1, col_c2 = st.columns([1.5, 2.0, 1.5])
+                                with col_d1:
+                                    if st.checkbox(f"삭제 ({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
+                                        selected_to_delete_nums.append(n)
+                                with col_c1:
+                                    st.checkbox(
+                                        f"복습 완료", 
+                                        value=is_solved, 
+                                        key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                        on_change=on_wrong_solved_change
+                                    )
+                                with col_c2:
+                                    if v_url and v_url.strip():
+                                        if is_new_alert:
+                                            st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
-                                else:
-                                    st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                                        st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                            else:
+                                # 평소 모드: 기존과 완전히 동일한 UI 유지
+                                col_c1, col_c2 = st.columns([2.3, 1.7])
+                                with col_c1:
+                                    st.checkbox(
+                                        f"복습 완료 ({full_code})", 
+                                        value=is_solved, 
+                                        key=f"s_wrong_chk_{selected_student}_{full_code}",
+                                        on_change=on_wrong_solved_change
+                                    )
+                                with col_c2:
+                                    if v_url and v_url.strip():
+                                        if is_new_alert:
+                                            st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                                        else:
+                                            st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                                     
                             st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+
+                        if is_edit_mode and selected_to_delete_nums:
+                            st.markdown("")
+                            if st.button("🗑️ 선택한 오답 번호들 일괄 삭제하기", type="primary", use_container_width=True):
+                                current_nums = parse_numbers(get_student_wrong_entry(selected_student, view_target_code))
+                                updated_nums = current_nums - set(selected_to_delete_nums)
+                                new_nums_text = ", ".join(map(str, sorted(list(updated_nums))))
+                                save_student_wrong_entry(selected_student, view_target_code, new_nums_text)
+                                st.success("선택하신 오답 목록이 삭제되었습니다!")
+                                st.rerun()
                     else:
                         st.info("현재 등록된 오답이 없습니다.")
 
