@@ -10,10 +10,10 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선 및 체크박스-텍스트 완벽한 한 줄 정렬 CSS 스타일
+# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 CSS 스타일
 st.markdown("""
 <style>
-/* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
+/* st.container(border=True) 카드 외곽선과 배경 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
     border: 4px solid rgba(56, 189, 248, 0.8) !important;
     background-color: rgba(30, 35, 45, 0.95) !important;
@@ -23,11 +23,16 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* 체크박스 한 줄 정렬 및 간격 최적화 */
+/* 개념 진도 및 오답 목록 컬럼 간격 및 상하 여백 압축 (콤팩트 정렬) */
+div[data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+    gap: 0px !important;
+}
 div[data-testid="stCheckbox"] {
     display: flex !important;
     align-items: center !important;
-    margin-bottom: 6px !important;
+    margin-top: -6px !important;
+    margin-bottom: -6px !important;
 }
 div[data-testid="stCheckbox"] label {
     display: flex !important;
@@ -1427,19 +1432,6 @@ if not st.session_state["teacher_authenticated"]:
                     items = grouped_s_milestones[(sub, ch)]
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
-                        st.markdown("""
-                        <style>
-                        div[data-testid="stHorizontalBlock"] {
-                            align-items: center !important;
-                            gap: 0px !important;
-                        }
-                        div[data-testid="stCheckbox"] {
-                            margin-top: -6px !important;
-                            margin-bottom: -6px !important;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
                             
@@ -1597,19 +1589,6 @@ if not st.session_state["teacher_authenticated"]:
                         st.markdown(f"**📌 `{view_target_code}` 단원 오답 목록**")
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
-                        
-                        st.markdown("""
-                        <style>
-                        div[data-testid="stHorizontalBlock"] {
-                            align-items: center !important;
-                            gap: 0px !important;
-                        }
-                        div[data-testid="stCheckbox"] {
-                            margin-top: -6px !important;
-                            margin-bottom: -6px !important;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
 
                         # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지 및 전체선택/해제 기능 추가
                         @st.fragment
