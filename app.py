@@ -1616,18 +1616,11 @@ if not st.session_state["teacher_authenticated"]:
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
                             if is_edit_mode:
-                                # 💡 [수정됨] 편집 모드일 때: 삭제용 체크박스, 복습 완료 체크박스, 해설 버튼을 좌우 컬럼으로 완벽 분리 배치
-                                col_d1, col_c1, col_c2 = st.columns([1.5, 2.2, 1.3])
-                                with col_d1:
-                                    if st.checkbox(f"삭제({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
-                                        selected_to_delete_nums.append(n)
+                                # 💡 [수정됨] 스위치 켰을 때: 복습 완료 체크박스를 완전히 숨기고 삭제 체크박스와 해설 버튼만 나란히 배치
+                                col_c1, col_c2 = st.columns([2.3, 1.7])
                                 with col_c1:
-                                    st.checkbox(
-                                        f"복습 완료", 
-                                        value=is_solved, 
-                                        key=f"s_wrong_chk_{selected_student}_{full_code}",
-                                        on_change=on_wrong_solved_change
-                                    )
+                                    if st.checkbox(f"삭제 ({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
+                                        selected_to_delete_nums.append(n)
                                 with col_c2:
                                     if v_url and v_url.strip():
                                         if is_new_alert:
@@ -1637,7 +1630,7 @@ if not st.session_state["teacher_authenticated"]:
                                     else:
                                         st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
                             else:
-                                # 평소 모드: 기존과 완전히 동일한 UI 유지
+                                # 평소 모드: 복습 완료 체크박스와 해설 버튼만 깔끔하게 유지
                                 col_c1, col_c2 = st.columns([2.3, 1.7])
                                 with col_c1:
                                     st.checkbox(
@@ -2858,4 +2851,4 @@ else:
                 wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
 
-_ = [st.container(border=True) for _ in [0]] # 잔여 블록 안전 처리
+_ = [st.container(border=True) for _ in [0]]
