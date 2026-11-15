@@ -542,6 +542,7 @@ def delete_student(name):
     q(c, "DELETE FROM notices WHERE student_name = ?", (name,))
     q(c, "DELETE FROM visitor_logs WHERE student_name = ?", (name,))
     q(c, "DELETE FROM student_test_submissions WHERE student_name = ?", (name,))
+    q(c, "DELETE FROM online_test_items WHERE session_id IN (SELECT id FROM online_test_sessions WHERE student_name = ?)", (name,))
     q(c, "DELETE FROM online_test_sessions WHERE student_name = ?", (name,))
     conn.commit()
     st.cache_data.clear()
@@ -1952,7 +1953,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
         
                         all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
-                        render_problem_review_list(problem_list, all_results, selected_session_id, selected_session_id, selected_test_title)
+                        render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
         
                     else:
                         with st.form(key=f"test_form_{selected_session_id}"):
@@ -1997,12 +1998,11 @@ if not st.session_state["teacher_authenticated"]:
                                     )
 
                                     if is_multiple_choice:
-                                        # 💡 '잘 모름'을 맨 마지막에 두고 기본 선택을 '잘 모름'으로 지정하여 아무것도 안 누르고 넘어가는 오류 방지
                                         choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                                         selected_choice = st.radio(
                                             f"{idx + 1}번 정답 선택 (객관식):",
                                             options=choice_options,
-                                            index=5,  # '잘 모름'을 기본 선택으로 지정
+                                            index=5,
                                             key=f"radio_{p_key}",
                                             horizontal=True
                                         )
@@ -2046,7 +2046,6 @@ if not st.session_state["teacher_authenticated"]:
                                     real_ans = "-"
                                 else:
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
-                                    # u_ans가 빈 값이면(잘 모름 선택 시) 무조건 오답 처리
                                     is_correct = 1 if (u_ans != "" and real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
 
                                 if is_correct:
@@ -2674,10 +2673,109 @@ else:
                     st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
 
     with t_cfg_tests:
-        st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회 (테스트별 요약)")
-        
         conn_sub, _ = get_db_connection()
         c_sub = conn_sub.cursor()
+        is_postgres_sub = "psycopg2" in str(type(conn_sub))
+
+        # ----------------------------------------------------
+        # 🆕 [추가 기능] 출제된 온라인 테스트 목록(시험지 자체) 관리 및 삭제
+        # ----------------------------------------------------
+        st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (목록 자체 삭제)")
+        st.caption("학생 페이지의 '주간별 풀이할 테스트 목록'에서 특정 테스트를 완전히 제거합니다. (문항 및 제출 내역도 함께 삭제)")
+
+        try:
+            q(c_sub, """
+                SELECT id, student_name, test_title, created_at, is_completed 
+                FROM online_test_sessions 
+                ORDER BY id DESC
+            """)
+            all_sessions_rows = c_sub.fetchall()
+        except Exception:
+            all_sessions_rows = []
+
+        if all_sessions_rows:
+            filter_sess_stu = st.selectbox(
+                "목록 관리할 학생 선택", 
+                ["전체 학생 보기"] + student_list, 
+                key="filter_sess_manage_stu"
+            )
+            filtered_sessions = all_sessions_rows if filter_sess_stu == "전체 학생 보기" else [r for r in all_sessions_rows if r[1] == filter_sess_stu]
+
+            if filtered_sessions:
+                with st.expander(f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개) — 터치하여 개별/일괄 삭제", expanded=True):
+                    sessions_to_bulk_delete = []
+
+                    for sess_id, s_name, t_title, created_at, is_comp in filtered_sessions:
+                        status_txt = "✅ 제출완료" if is_comp == 1 else "🆕 미제출"
+                        col_chk, col_info, col_del = st.columns([0.6, 3.4, 1.2])
+
+                        with col_chk:
+                            if st.checkbox("", key=f"chk_sess_del_{sess_id}"):
+                                sessions_to_bulk_delete.append((sess_id, s_name, t_title))
+
+                        with col_info:
+                            st.markdown(
+                                f"<div style='font-size:13.5px; line-height:1.4;'>"
+                                f"<b>[{s_name}]</b> {t_title}<br>"
+                                f"<span style='font-size:11.5px; color:#9CA3AF;'>{status_txt} | 등록일시: {created_at}</span>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+
+                        with col_del:
+                            if st.button("🗑️ 삭제", key=f"btn_del_only_sess_{sess_id}", use_container_width=True):
+                                try:
+                                    if is_postgres_sub:
+                                        c_sub.execute("DELETE FROM online_test_items WHERE session_id = %s", (sess_id,))
+                                        c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                        c_sub.execute("DELETE FROM online_test_sessions WHERE id = %s", (sess_id,))
+                                    else:
+                                        q(c_sub, "DELETE FROM online_test_items WHERE session_id = ?", (sess_id,))
+                                        q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                        q(c_sub, "DELETE FROM online_test_sessions WHERE id = ?", (sess_id,))
+                                    conn_sub.commit()
+                                    st.cache_data.clear()
+                                    st.success(f"🗑️ '{s_name}' 학생의 '{t_title}' 테스트 목록이 완전히 삭제되었습니다!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"⚠️ 테스트 삭제 중 오류 발생: {e}")
+
+                        st.markdown("<hr style='margin: 6px 0; border: none; border-top: 1px solid rgba(128,128,128,0.2);'>", unsafe_allow_html=True)
+
+                    if st.button("🗑️ 체크한 테스트 목록 일괄 삭제하기", type="primary", use_container_width=True, key="btn_bulk_del_sessions"):
+                        if sessions_to_bulk_delete:
+                            try:
+                                for sess_id, s_name, t_title in sessions_to_bulk_delete:
+                                    if is_postgres_sub:
+                                        c_sub.execute("DELETE FROM online_test_items WHERE session_id = %s", (sess_id,))
+                                        c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                        c_sub.execute("DELETE FROM online_test_sessions WHERE id = %s", (sess_id,))
+                                    else:
+                                        q(c_sub, "DELETE FROM online_test_items WHERE session_id = ?", (sess_id,))
+                                        q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                        q(c_sub, "DELETE FROM online_test_sessions WHERE id = ?", (sess_id,))
+                                    if f"chk_sess_del_{sess_id}" in st.session_state:
+                                        del st.session_state[f"chk_sess_del_{sess_id}"]
+                                conn_sub.commit()
+                                st.cache_data.clear()
+                                st.success(f"🎉 선택한 {len(sessions_to_bulk_delete)}개의 테스트 목록이 완전히 삭제되었습니다!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"⚠️ 일괄 삭제 중 오류 발생: {e}")
+                        else:
+                            st.warning("삭제할 테스트 왼쪽의 체크박스를 먼저 선택해 주세요.")
+            else:
+                st.info("해당 학생에게 출제된 테스트 목록이 없습니다.")
+        else:
+            st.info("현재 등록된 온라인 테스트 목록이 없습니다.")
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # 기존 기능: 학생 온라인 테스트 제출 결과 조회 및 채점 초기화
+        # ----------------------------------------------------
+        st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회 (테스트별 요약)")
+        
         try:
             q(c_sub, """
                 SELECT 
@@ -2752,9 +2850,8 @@ else:
                             ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
                             st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
 
-                    if st.button(f"🗑️ 이 제출 내역 삭제하기 ({s_name} - {t_title})", key=f"btn_del_sub_{s_name}_{t_title}_{idx}", use_container_width=True):
+                    if st.button(f"🗑️ 이 제출 내역 삭제하기 (재응시 초기화) ({s_name} - {t_title})", key=f"btn_del_sub_{s_name}_{t_title}_{idx}", use_container_width=True):
                         try:
-                            is_postgres_sub = "psycopg2" in str(type(conn_sub))
                             if is_postgres_sub:
                                 c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
                                 c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
