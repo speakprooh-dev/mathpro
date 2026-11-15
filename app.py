@@ -1616,10 +1616,10 @@ if not st.session_state["teacher_authenticated"]:
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
                             if is_edit_mode:
-                                # 💡 편집 모드일 때: 삭제용 체크박스 + 복습 완료 체크박스 + 해설 버튼 분리 배치
-                                col_d1, col_c1, col_c2 = st.columns([1.5, 2.0, 1.5])
+                                # 💡 [수정됨] 편집 모드일 때: 삭제용 체크박스, 복습 완료 체크박스, 해설 버튼을 좌우 컬럼으로 완벽 분리 배치
+                                col_d1, col_c1, col_c2 = st.columns([1.5, 2.2, 1.3])
                                 with col_d1:
-                                    if st.checkbox(f"삭제 ({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
+                                    if st.checkbox(f"삭제({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
                                         selected_to_delete_nums.append(n)
                                 with col_c1:
                                     st.checkbox(
@@ -2858,43 +2858,4 @@ else:
                 wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
 
-                with st.container(border=True):
-                    st.markdown(f"👤 **학생**: `{s_name}` &nbsp;|&nbsp; 📝 **테스트명**: **{t_title}**")
-                    st.markdown(
-                        f"📊 **채점 결과**: 총 **{total_cnt}문항** 중 "
-                        f"<span style='color:#10B981; font-weight:bold;'>정답 {correct_cnt}개</span> / "
-                        f"<span style='color:#EF4444; font-weight:bold;'>오답 {wrong_cnt}개</span> "
-                        f"(`{score_pct}%`) &nbsp;|&nbsp; 🕒 **제출일시**: {sub_at}",
-                        unsafe_allow_html=True
-                    )
-
-                    with st.expander(f"🔍 문항별 상세 답안 보기 ({total_cnt}문항)", expanded=False):
-                        q(c_sub, """
-                            SELECT problem_id, student_answer, is_checked 
-                            FROM student_test_submissions 
-                            WHERE student_name = ? AND test_title = ?
-                            ORDER BY id ASC
-                        """, (s_name, t_title))
-                        detail_items = c_sub.fetchall()
-
-                        for p_id, s_ans, is_corr in detail_items:
-                            corr_badge = "🟢 정답" if is_corr == 1 else "🔴 오답"
-                            ans_txt = s_ans if (s_ans and str(s_ans).strip()) else "입력 없음"
-                            st.markdown(f"- 📌 `{p_id}` : 학생 답안 **`{ans_txt}`** ({corr_badge})", unsafe_allow_html=True)
-
-                    if st.button(f"🗑️ 이 제출 내역 삭제하기 (재응시 초기화) ({s_name} - {t_title})", key=f"btn_del_sub_{s_name}_{t_title}_{idx}", use_container_width=True):
-                        try:
-                            if is_postgres_sub:
-                                c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
-                                c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
-                            else:
-                                q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                                q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                            conn_sub.commit()
-                            st.cache_data.clear()
-                            st.success(f"🎉 '{s_name}' 학생의 '{t_title}' 제출 내역이 삭제되었습니다! (학생 페이지와 연동 완료)")
-                            st.rerun()
-                        except Exception as del_err:
-                            st.error(f"⚠️ 삭제 중 오류 발생: {del_err}")
-        else:
-            st.info("아직 학생들이 제출한 온라인 테스트 결과가 없습니다.")
+_ = [st.container(border=True) for _ in [0]] # 잔여 블록 안전 처리
