@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선을 훨씬 두껍고 밝게 강조하는 최종 강화 CSS 스타일
+# 💡 카드 외곽선 및 체크박스-텍스트 완벽한 한 줄 정렬 CSS 스타일
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경을 뚜렷하게 구분 */
@@ -2678,7 +2678,7 @@ else:
         is_postgres_sub = "psycopg2" in str(type(conn_sub))
 
         # ----------------------------------------------------
-        # 🗑️ [개선된 방식] 접혀진 상태(expander) + 한 줄(가로) 콤팩트 디자인
+        # 🗑️ [강화된 한 줄 콤팩트 디자인] Flexbox CSS 적용
         # ----------------------------------------------------
         st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (일괄 삭제)")
         st.caption("아래 박스를 터치해 목록을 펼치고, 삭제할 테스트를 체크한 뒤 맨 아래 버튼을 누르세요.")
@@ -2707,23 +2707,41 @@ else:
                     with st.form("batch_delete_sessions_form"):
                         sessions_to_bulk_delete = []
 
+                        # 💡 체크박스와 문구가 무조건 한 줄로 나오도록 CSS Flexbox 래퍼 적용
+                        st.markdown("""
+                        <style>
+                        /* 체크박스와 텍스트를 담는 한 줄 Flex 컨테이너 */
+                        .compact-row {
+                            display: flex !important;
+                            align-items: center !important;
+                            gap: 10px !important;
+                            margin-bottom: 8px !important;
+                        }
+                        .compact-row label {
+                            margin-bottom: 0px !important;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+
                         for sess_id, s_name, t_title, created_at, is_comp in filtered_sessions:
                             status_txt = "✅ 제출완료" if is_comp == 1 else "🆕 미제출"
                             
-                            # 📌 체크박스와 텍스트를 가로(한 줄)로 콤팩트하게 배치
-                            cols_row = st.columns([0.4, 9.6])
-                            with cols_row[0]:
-                                is_checked = st.checkbox("", key=f"form_chk_sess_del_{sess_id}")
-                                if is_checked:
-                                    sessions_to_bulk_delete.append((sess_id, s_name, t_title))
-                            with cols_row[1]:
-                                st.markdown(
-                                    f"<div style='font-size:13px; line-height:1.2; padding-top:6px;'>"
-                                    f"<b>[{s_name}]</b> {t_title} "
-                                    f"<span style='font-size:11px; color:#9CA3AF; margin-left:6px;'>({status_txt} | {created_at[:10]})</span>"
-                                    f"</div>",
-                                    unsafe_allow_html=True
-                                )
+                            # 📌 HTML Flexbox를 이용해 체크박스와 텍스트를 동일한 한 줄 선상에 강제 배치
+                            st.markdown(
+                                f'<div class="compact-row">'
+                                f'  <input type="checkbox" name="chk_sess_{sess_id}" id="chk_{sess_id}" style="width:16px; height:16px; cursor:pointer;">'
+                                f'  <label for="chk_{sess_id}" style="font-size:13px; color:#E5E7EB; cursor:pointer; display:flex; align-items:center; gap:6px;">'
+                                f'    <b>[{s_name}]</b> {t_title}'
+                                f'    <span style="font-size:11px; color:#9CA3AF;">({status_txt} | {created_at[:10]})</span>'
+                                f'  </label>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Streamlit 내부 상태 연동을 위한 실제 숨겨진 체크박스 처리
+                            is_checked = st.checkbox(f"[{s_name}] {t_title} ({status_txt})", key=f"form_chk_sess_del_{sess_id}", label_visibility="collapsed")
+                            if is_checked:
+                                sessions_to_bulk_delete.append((sess_id, s_name, t_title))
 
                         submitted_batch_del = st.form_submit_button("🗑️ 체크한 테스트 목록 일괄 삭제하기", type="primary", use_container_width=True)
 
