@@ -1594,9 +1594,21 @@ if not st.session_state["teacher_authenticated"]:
                         </style>
                         """, unsafe_allow_html=True)
 
-                        # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지
+                        # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지 및 전체선택/해제 기능 추가
                         @st.fragment
                         def render_wrong_edit_list():
+                            if is_edit_mode:
+                                flag_key = f"select_all_wrong_flag_{selected_student}_{view_target_code}"
+                                if flag_key not in st.session_state:
+                                    st.session_state[flag_key] = False
+
+                                if st.button("☑️ 전체 선택 / 전체 해제 반전", use_container_width=True):
+                                    st.session_state[flag_key] = not st.session_state[flag_key]
+                                    for n_item in sorted(list(parsed_nums)):
+                                        st.session_state[f"del_num_chk_{selected_student}_{view_target_code}_{n_item}"] = st.session_state[flag_key]
+                                    st.rerun()
+                                st.markdown("---")
+
                             for n in sorted(list(parsed_nums)):
                                 full_code = f"{view_target_code}{n:03d}".upper()
                                 v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
