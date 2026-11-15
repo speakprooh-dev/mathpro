@@ -23,6 +23,23 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5) !important;
 }
 
+/* 폼 내부 체크박스 한 줄 정렬 및 간격 최적화 */
+div[data-testid="stForm"] div[data-testid="stCheckbox"] {
+    display: flex !important;
+    align-items: center !important;
+    margin-bottom: 6px !important;
+}
+div[data-testid="stForm"] div[data-testid="stCheckbox"] label {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+div[data-testid="stForm"] div[data-testid="stCheckbox"] label p {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
 /* 버튼 텍스트 왼쪽 정렬 설정 */
 div.stButton > button {
     display: block !important;
@@ -2678,7 +2695,7 @@ else:
         is_postgres_sub = "psycopg2" in str(type(conn_sub))
 
         # ----------------------------------------------------
-        # 🗑️ [강화된 한 줄 콤팩트 디자인] Flexbox CSS 적용
+        # 🗑️ [완벽하게 정돈된 순수 Streamlit 체크박스 한 줄 리스트]
         # ----------------------------------------------------
         st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (일괄 삭제)")
         st.caption("아래 박스를 터치해 목록을 펼치고, 삭제할 테스트를 체크한 뒤 맨 아래 버튼을 누르세요.")
@@ -2702,44 +2719,18 @@ else:
             filtered_sessions = all_sessions_rows if filter_sess_stu == "전체 학생 보기" else [r for r in all_sessions_rows if r[1] == filter_sess_stu]
 
             if filtered_sessions:
-                # 📌 기본적으로 접혀서 나오도록 st.expander 적용
                 with st.expander(f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개) — 터치하여 펼치기", expanded=False):
                     with st.form("batch_delete_sessions_form"):
                         sessions_to_bulk_delete = []
 
-                        # 💡 체크박스와 문구가 무조건 한 줄로 나오도록 CSS Flexbox 래퍼 적용
-                        st.markdown("""
-                        <style>
-                        /* 체크박스와 텍스트를 담는 한 줄 Flex 컨테이너 */
-                        .compact-row {
-                            display: flex !important;
-                            align-items: center !important;
-                            gap: 10px !important;
-                            margin-bottom: 8px !important;
-                        }
-                        .compact-row label {
-                            margin-bottom: 0px !important;
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-
                         for sess_id, s_name, t_title, created_at, is_comp in filtered_sessions:
                             status_txt = "✅ 제출완료" if is_comp == 1 else "🆕 미제출"
                             
-                            # 📌 HTML Flexbox를 이용해 체크박스와 텍스트를 동일한 한 줄 선상에 강제 배치
-                            st.markdown(
-                                f'<div class="compact-row">'
-                                f'  <input type="checkbox" name="chk_sess_{sess_id}" id="chk_{sess_id}" style="width:16px; height:16px; cursor:pointer;">'
-                                f'  <label for="chk_{sess_id}" style="font-size:13px; color:#E5E7EB; cursor:pointer; display:flex; align-items:center; gap:6px;">'
-                                f'    <b>[{s_name}]</b> {t_title}'
-                                f'    <span style="font-size:11px; color:#9CA3AF;">({status_txt} | {created_at[:10]})</span>'
-                                f'  </label>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
+                            date_part = created_at[:10] if created_at else ""
+                            label_str = f"[{s_name}] {t_title} ({status_txt} | {date_part})"
                             
-                            # Streamlit 내부 상태 연동을 위한 실제 숨겨진 체크박스 처리
-                            is_checked = st.checkbox(f"[{s_name}] {t_title} ({status_txt})", key=f"form_chk_sess_del_{sess_id}", label_visibility="collapsed")
+                            # 📌 Streamlit 표준 체크박스로 텍스트와 완벽하게 한 줄로 동기화
+                            is_checked = st.checkbox(label_str, key=f"form_chk_sess_del_{sess_id}")
                             if is_checked:
                                 sessions_to_bulk_delete.append((sess_id, s_name, t_title))
 
