@@ -1427,24 +1427,41 @@ if not st.session_state["teacher_authenticated"]:
                     items = grouped_s_milestones[(sub, ch)]
                     done_cnt = sum(1 for m_id, _, _ in items if m_progress.get(m_id, False))
                     with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
+                        st.markdown("""
+                        <style>
+                        div[data-testid="stHorizontalBlock"] {
+                            align-items: center !important;
+                            gap: 0px !important;
+                        }
+                        div[data-testid="stCheckbox"] {
+                            margin-top: -6px !important;
+                            margin-bottom: -6px !important;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+
                         for idx, (m_id, t_name, v_url) in enumerate(items):
                             default_val = m_progress.get(m_id, False)
-                            cols = st.columns([4, 1])
                             
                             def on_milestone_change(m_id=m_id, key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}"):
                                 new_val = st.session_state[key]
                                 save_single_milestone_progress(selected_student, m_id, new_val)
 
-                            with cols[0]:
+                            cols_m1, cols_m2 = st.columns([2.3, 1.7])
+                            with cols_m1:
                                 st.checkbox(
                                     f"{t_name}", 
                                     value=default_val, 
                                     key=f"s_milestone_chk_{selected_student}_{ch}_{m_id}_{idx}",
                                     on_change=on_milestone_change
                                 )
-                            with cols[1]:
+                            with cols_m2:
                                 if v_url and v_url.strip() != "":
-                                    st.markdown(f'<a href="{v_url}" target="_blank" style="display:inline-block; padding:4px 10px; border-radius:4px; font-size:12px; text-decoration:none; font-weight:bold; margin-top:4px; border:1px solid rgba(128,128,128,0.3);">🎥 개념해설</a>', unsafe_allow_html=True)
+                                    st.markdown(f'<div style="text-align: right; margin-top: 4px;"><a href="{v_url}" target="_blank" style="padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;">🎥 개념해설</a></div>', unsafe_allow_html=True)
+                                else:
+                                    st.markdown('<div style="text-align: right; margin-top: 4px; font-size:11px; color:gray;">준비중</div>', unsafe_allow_html=True)
+                                        
+                            st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
             else:
                 st.info("아직 배정된 개념 학습 목록이 없습니다.")
 
