@@ -1616,10 +1616,10 @@ if not st.session_state["teacher_authenticated"]:
                                 save_single_wrong_solved_status(selected_student, f_code, new_val)
 
                             if is_edit_mode:
-                                # 💡 [수정됨] 스위치 켰을 때: 복습 완료 체크박스를 완전히 숨기고 삭제 체크박스와 해설 버튼만 나란히 배치
+                                # 💡 [수정됨] 스위치 켰을 때: 삭제 문구에 복습 완료와 동일한 풀네임 형식(`삭제 (114016)`) 적용
                                 col_c1, col_c2 = st.columns([2.3, 1.7])
                                 with col_c1:
-                                    if st.checkbox(f"삭제 ({n}번)", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
+                                    if st.checkbox(f"삭제 ({full_code})", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}"):
                                         selected_to_delete_nums.append(n)
                                 with col_c2:
                                     if v_url and v_url.strip():
