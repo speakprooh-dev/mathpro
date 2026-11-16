@@ -1590,6 +1590,7 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
 
+                        # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지 및 전체선택/해제 기능 추가
                         @st.fragment
                         def render_wrong_edit_list():
                             if is_edit_mode:
@@ -2882,13 +2883,8 @@ else:
                 wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
 
-                # 💡 고유 state 키를 사용하여 개별 아코디언 열림/닫힘 상태 제어
-                expander_state_key = f"expand_sub_detail_{s_name}_{t_title}_{idx}"
-                if expander_state_key not in st.session_state:
-                    st.session_state[expander_state_key] = False
-
                 with st.container(border=True):
-                    col_info1, col_info2 = st.columns([3, 2])
+                    col_info1, col_info2, col_info3 = st.columns([3, 1.5, 1.5])
                     with col_info1:
                         st.markdown(f"👤 **학생:** `{s_name}`")
                         st.markdown(f"📋 **테스트명:** **{t_title}**")
@@ -2896,41 +2892,25 @@ else:
                     with col_info2:
                         st.markdown(f"🎯 **점수:** <span style='color:#0284C7; font-weight:bold;'>{score_pct}점</span>", unsafe_allow_html=True)
                         st.markdown(f"✅ 정답: {correct_cnt}개 / ❌ 오답: {wrong_cnt}개")
+                    with col_info3:
+                        sub_del_key = f"del_sub_{s_name}_{t_title}_{idx}"
+                        if st.button("🗑️ 제출 내역 초기화", key=sub_del_key, use_container_width=True):
+                            try:
+                                if is_postgres_sub:
+                                    c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                    c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                else:
+                                    q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                    q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                conn_sub.commit()
+                                st.cache_data.clear()
+                                st.success(f"[{s_name}] 학생의 '{t_title}' 제출 기록이 초기화되었습니다.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"초기화 중 오류 발생: {e}")
 
-                    # 💡 실수 방지 안전 장치: 초기화 확인 체크박스를 먼저 체크해야 버튼 활성화
-                    st.markdown("---")
-                    confirm_reset_key = f"confirm_reset_{s_name}_{t_title}_{idx}"
-                    is_confirmed = st.checkbox("⚠️ 이 제출 내역을 정말로 초기화(삭제)하시겠습니까?", key=confirm_reset_key)
-                    
-                    sub_del_key = f"del_sub_{s_name}_{t_title}_{idx}"
-                    if st.button("🗑️ 제출 내역 초기화 실행", key=sub_del_key, use_container_width=True, disabled=not is_confirmed):
-                        try:
-                            if is_postgres_sub:
-                                c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
-                                c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
-                            else:
-                                q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                                q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                            conn_sub.commit()
-                            st.cache_data.clear()
-                            st.success(f"[{s_name}] 학생의 '{t_title}' 제출 기록이 초기화되었습니다.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"초기화 중 오류 발생: {e}")
-
-                    st.markdown("---")
-                    
-                    # 💡 초고속 토글 버튼 (이미지는 펼쳐진 순간에만 가볍게 렌더링)
-                    is_expanded = st.session_state[expander_state_key]
-                    toggle_btn_label = "🔼 이 영역 접기" if is_expanded else "🔍 학생이 제출한 문항별 답안 상세 보기"
-                    
-                    if st.button(toggle_btn_label, key=f"toggle_expand_btn_{s_name}_{t_title}_{idx}", use_container_width=True):
-                        st.session_state[expander_state_key] = not is_expanded
-                        st.rerun()
-
-                    if st.session_state[expander_state_key]:
-                        st.markdown("<div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
-                        
+                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
+                        # 💡 선생님 모드 상세 보기에서 각 문항의 문제 사진이 함께 출력되도록 수정된 쿼리 및 렌더링 로직
                         if is_postgres_sub:
                             c_sub.execute("""
                                 SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
@@ -2957,6 +2937,7 @@ else:
                                 
                                 st.markdown(f"• **{d_idx+1}번 문제** (`{p_id}`) — 내 답: **{u_ans_display}** | <span style='color:{ox_color}; font-weight:bold;'>{ox_icon}</span>", unsafe_allow_html=True)
                                 
+                                # 🖼️ 문항별 원본 문제 사진 렌더링
                                 if img_b64:
                                     try:
                                         decoded_img = base64.b64decode(img_b64)
@@ -2968,11 +2949,5 @@ else:
                                 st.markdown("---")
                         else:
                             st.info("세부 제출 문항 내역이 없습니다.")
-
-                        # 💡 맨 아래 추가 접기 버튼
-                        if st.button("🔼 이 영역 접기", key=f"bottom_collapse_btn_{s_name}_{t_title}_{idx}", use_container_width=True):
-                            st.session_state[expander_state_key] = False
-                            st.rerun()
-                        st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("현재 학생들의 온라인 테스트 제출 내역이 없습니다.")
