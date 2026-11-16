@@ -2884,6 +2884,8 @@ else:
 
                 # 💡 고유 state 키를 사용하여 개별 아코디언 열림/닫힘 상태 제어
                 expander_state_key = f"expand_sub_detail_{s_name}_{t_title}_{idx}"
+                if expander_state_key not in st.session_state:
+                    st.session_state[expander_state_key] = False
 
                 with st.container(border=True):
                     col_info1, col_info2 = st.columns([3, 2])
@@ -2916,8 +2918,18 @@ else:
                         except Exception as e:
                             st.error(f"초기화 중 오류 발생: {e}")
 
-                    # 💡 상세 보기 아코디언 및 하단 [접기] 버튼 구현
-                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=st.session_state.get(expander_state_key, False)):
+                    st.markdown("---")
+                    
+                    # 💡 st.expander 대신 커스텀 버튼 토글 방식으로 가볍고 빠르게 열고 닫히도록 구현
+                    is_expanded = st.session_state[expander_state_key]
+                    toggle_btn_label = "🔼 이 영역 접기" if is_expanded else "🔍 학생이 제출한 문항별 답안 상세 보기"
+                    
+                    if st.button(toggle_btn_label, key=f"toggle_expand_btn_{s_name}_{t_title}_{idx}", use_container_width=True):
+                        st.session_state[expander_state_key] = not is_expanded
+                        st.rerun()
+
+                    if st.session_state[expander_state_key]:
+                        st.markdown("<div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
                         if is_postgres_sub:
                             c_sub.execute("""
                                 SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
@@ -2956,9 +2968,10 @@ else:
                         else:
                             st.info("세부 제출 문항 내역이 없습니다.")
 
-                        # 💡 아래쪽에서 바로 접을 수 있는 '접기' 버튼
-                        if st.button("🔼 이 영역 접기", key=f"collapse_btn_{s_name}_{t_title}_{idx}", use_container_width=True):
+                        # 💡 맨 아래 추가 접기 버튼
+                        if st.button("🔼 이 영역 접기", key=f"bottom_collapse_btn_{s_name}_{t_title}_{idx}", use_container_width=True):
                             st.session_state[expander_state_key] = False
                             st.rerun()
+                        st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("현재 학생들의 온라인 테스트 제출 내역이 없습니다.")
