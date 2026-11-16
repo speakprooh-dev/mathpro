@@ -1919,7 +1919,7 @@ if not st.session_state["teacher_authenticated"]:
                                             st.session_state[img_exp_key] = False
                                             st.rerun(scope="fragment")
     
-                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용 (버그 수정 반영)
+                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
                                     st.session_state[ans_exp_key] = False
@@ -1958,7 +1958,6 @@ if not st.session_state["teacher_authenticated"]:
                                                 conn_test.commit()
                                                 st.rerun(scope="fragment")
 
-                                        # 💡 하단 즉시 접기 버튼 추가
                                         if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
@@ -2104,7 +2103,7 @@ if not st.session_state["teacher_authenticated"]:
                                 form_answers[p_key] = user_ans
                                 st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
         
-                            submitted = st.form_submit_button("🎉 전체 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
+                            submitted = st.form_submit_button("🎉 회원 문제 최종 제출 및 자동 채점", type="primary", use_container_width=True)
         
                         if submitted:
                             now_str = get_korean_now_str()
@@ -2932,6 +2931,7 @@ else:
                             except Exception as e:
                                 st.error(f"초기화 중 오류 발생: {e}")
 
+                    # 💡 [학생 제출물 및 풀이 검사] 세부 문항 리스트의 展开(expander) 내부 수정 반영
                     with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
                         if is_postgres_sub:
                             c_sub.execute("""
@@ -2957,16 +2957,33 @@ else:
                                 ox_color = "#10B981" if is_chk == 1 else "#EF4444"
                                 u_ans_display = u_ans if u_ans else "미입력"
                                 
+                                item_exp_key = f"teacher_detail_img_{s_name}_{t_title}_{d_idx}"
+                                if item_exp_key not in st.session_state:
+                                    st.session_state[item_exp_key] = False
+
+                                is_item_open = st.session_state[item_exp_key]
+
                                 st.markdown(f"• **{d_idx+1}번 문제** (`{p_id}`) — 내 답: **{u_ans_display}** | <span style='color:{ox_color}; font-weight:bold;'>{ox_icon}</span>", unsafe_allow_html=True)
                                 
-                                if img_b64:
-                                    try:
-                                        decoded_img = base64.b64decode(img_b64)
-                                        st.image(decoded_img, use_container_width=True)
-                                    except Exception:
-                                        st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
-                                else:
-                                    st.caption("💡 등록된 문제 사진이 없습니다.")
+                                if st.button(f"{'🖼️ 제출된 문제/풀이 사진 접기 ▲' if is_item_open else '🖼️ 제출된 문제/풀이 사진 보기 (터치) ▼'}", key=f"btn_top_detail_{item_exp_key}", use_container_width=True):
+                                    st.session_state[item_exp_key] = not is_item_open
+                                    st.rerun(scope="fragment")
+
+                                if st.session_state[item_exp_key]:
+                                    with st.container(border=True):
+                                        if img_b64:
+                                            try:
+                                                decoded_img = base64.b64decode(img_b64)
+                                                st.image(decoded_img, use_container_width=True)
+                                            except Exception:
+                                                st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
+                                        else:
+                                            st.caption("💡 등록된 문제 사진이 없습니다.")
+                                        
+                                        if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_detail_{item_exp_key}", use_container_width=True):
+                                            st.session_state[item_exp_key] = False
+                                            st.rerun(scope="fragment")
+
                                 st.markdown("---")
                         else:
                             st.info("세부 제출 문항 내역이 없습니다.")
