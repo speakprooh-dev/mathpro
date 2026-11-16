@@ -2866,4 +2866,46 @@ else:
                 wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
 
-_ = [st.container(border=True) for _ in [0]]
+                with st.container(border=True):
+                    col_info1, col_info2, col_info3 = st.columns([3, 1.5, 1.5])
+                    with col_info1:
+                        st.markdown(f"👤 **학생:** `{s_name}`")
+                        st.markdown(f"📋 **테스트명:** **{t_title}**")
+                        st.markdown(f"🕒 **제출일시:** <span style='font-size:12px; color:gray;'>{sub_at}</span>", unsafe_allow_html=True)
+                    with col_info2:
+                        st.markdown(f"🎯 **점수:** <span style='color:#0284C7; font-weight:bold;'>{score_pct}점</span>", unsafe_allow_html=True)
+                        st.markdown(f"✅ 정답: {correct_cnt}개 / ❌ 오답: {wrong_cnt}개")
+                    with col_info3:
+                        sub_del_key = f"del_sub_{s_name}_{t_title}_{idx}"
+                        if st.button("🗑️ 제출 내역 초기화", key=sub_del_key, use_container_width=True):
+                            try:
+                                if is_postgres_sub:
+                                    c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                    c_sub.execute("UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                                else:
+                                    q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                    q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                conn_sub.commit()
+                                st.cache_data.clear()
+                                st.success(f"[{s_name}] 학생의 '{t_title}' 제출 기록이 초기화되었습니다.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"초기화 중 오류 발생: {e}")
+
+                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
+                        if is_postgres_sub:
+                            c_sub.execute("SELECT problem_id, student_answer, is_checked, submitted_at FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                        else:
+                            q(c_sub, "SELECT problem_id, student_answer, is_checked, submitted_at FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                        detail_rows = c_sub.fetchall()
+
+                        if detail_rows:
+                            for d_idx, (p_id, u_ans, is_chk, _) in enumerate(detail_rows):
+                                ox_icon = "⭕ 정답" if is_chk == 1 else "❌ 오답"
+                                ox_color = "#10B981" if is_chk == 1 else "#EF4444"
+                                u_ans_display = u_ans if u_ans else "미입력"
+                                st.markdown(f"• **{d_idx+1}번 문제** (`{p_id}`) — 내 답: **{u_ans_display}** | <span style='color:{ox_color}; font-weight:bold;'>{ox_icon}</span>", unsafe_allow_html=True)
+                        else:
+                            st.info("세부 제출 문항 내역이 없습니다.")
+        else:
+            st.info("현재 학생들의 온라인 테스트 제출 내역이 없습니다.")
