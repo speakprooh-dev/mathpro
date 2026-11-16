@@ -1899,38 +1899,68 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
                                 
-                                with st.expander("🖼️ 문제 사진 보기 (터치해서 열기)", expanded=False):
-                                    if prob["img_bytes"]:
-                                        st.image(prob["img_bytes"], use_container_width=True)
-                                    else:
-                                        st.info("💡 등록된 문제 이미지가 없습니다.")
+                                # 🖼️ [문제 사진 보기] 상/하단 양방향 즉시 토글 적용
+                                img_exp_key = f"toggle_img_{sess_id}_{prob['item_id']}"
+                                if img_exp_key not in st.session_state:
+                                    st.session_state[img_exp_key] = False
+
+                                is_img_open = st.session_state[img_exp_key]
+                                if st.button(f"{'🖼️ 문제 사진 접기 ▲' if is_img_open else '🖼️ 문제 사진 보기 (터치해서 열기) ▼'}", key=f"btn_top_img_{img_exp_key}", use_container_width=True):
+                                    st.session_state[img_exp_key] = not is_img_open
+                                    st.rerun(scope="fragment")
+
+                                if st.session_state[img_exp_key]:
+                                    with st.container(border=True):
+                                        if prob["img_bytes"]:
+                                            st.image(prob["img_bytes"], use_container_width=True)
+                                        else:
+                                            st.info("💡 등록된 문제 이미지가 없습니다.")
+                                        
+                                        if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_img_{img_exp_key}", use_container_width=True):
+                                            st.session_state[img_exp_key] = False
+                                            st.rerun(scope="fragment")
     
-                                with st.expander("🔍 정답 및 채점 확인하기 (터치해서 열기)", expanded=False):
-                                    st.markdown(
-                                        f"<div style='margin-bottom: 10px; font-size: 13px;'>"
-                                        f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor == 1 else '#EF4444'};'>{u_ans_str}</b>"
-                                        f"</div>",
-                                        unsafe_allow_html=True
-                                    )
-                                    
-                                    if not is_multiple_choice_item and matched_res is not None:
-                                        current_self_val = 1 if is_cor == 1 else 0
-                                        self_review_choice = st.radio(
-                                            f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
-                                            options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
-                                            index=current_self_val,
-                                            key=f"self_review_{sess_id}_{prob['item_id']}",
-                                            horizontal=True
+                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용
+                                ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
+                                if ans_exp_key not in st.session_state:
+                                    st.session_state[ans_exp_key] = False
+
+                                is_ans_open = st.session_state[ans_exp_key]
+                                if st.button(f"{'🔍 정답 및 채점 확인 접기 ▲' if is_ans_open else '🔍 정답 및 채점 확인하기 (터치해서 열기) ▼'}", key=f"btn_top_ans_{ans_exp_key}", use_container_width=True):
+                                    st.session_state[ans_exp_key] = not is_ans_open
+                                    st.rerun(scope="fragment")
+
+                                if st.session_state[ans_exp_key]:
+                                    with st.container(border=True):
+                                        st.markdown(
+                                            f"<div style='margin-bottom: 10px; font-size: 13px;'>"
+                                            f"📌 <b>정답 확인:</b> {ans_display} &nbsp;|&nbsp; 내 답: <b style='color: {'#10B981' if is_cor == 1 else '#EF4444'};'>{u_ans_str}</b>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
                                         )
-                                        new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
-                                        if new_is_cor != is_cor:
-                                            matched_res["is_correct"] = new_is_cor
-                                            is_postgres = "psycopg2" in str(type(conn_test))
-                                            if is_postgres:
-                                                c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            else:
-                                                q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
-                                            conn_test.commit()
+                                        
+                                        if not is_multiple_choice_item and matched_res is not None:
+                                            current_self_val = 1 if is_cor == 1 else 0
+                                            self_review_choice = st.radio(
+                                                f"{prob['order']}번 셀프 채점 (오타나 형식 차이로 틀린 경우 여기서 변경하세요):",
+                                                options=["❌ 틀림 (X)", "⭕ 정답 맞춤 (O)"],
+                                                index=current_self_val,
+                                                key=f"self_review_{sess_id}_{prob['item_id']}",
+                                                horizontal=True
+                                            )
+                                            new_is_cor = 1 if "정답 맞춤" in self_review_choice else 0
+                                            if new_is_cor != is_cor:
+                                                matched_res["is_correct"] = new_is_cor
+                                                is_postgres = "psycopg2" in str(type(conn_test))
+                                                if is_postgres:
+                                                    c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                                else:
+                                                    q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                                conn_test.commit()
+                                                st.rerun(scope="fragment")
+
+                                        if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
+                                            st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
     
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
