@@ -1734,20 +1734,12 @@ if not st.session_state["teacher_authenticated"]:
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
                             
-                            date_part = ""
-                            if s_created and len(s_created) >= 10:
-                                try:
-                                    d_obj = date.fromisoformat(s_created[:10])
-                                    short_wd = get_weekday_short_kr(s_created[:10])
-                                    date_part = f"{d_obj.strftime('%m/%d')}({short_wd})"
-                                except Exception:
-                                    date_part = s_created[:10]
-
                             display_title = s_title
-                            if len(display_title) > 16:
-                                display_title = display_title[:15] + "…"
+                            if len(display_title) > 22:  # 자리를 조금 더 넓게 활용
+                                display_title = display_title[:21] + "…"
 
-                            btn_label = f"{status_badge} {display_title} | {date_part}"
+                            # 💡 생성일 날짜(date_part) 출력을 완전히 제거하고 상태와 제목만 깔끔하게 표시
+                            btn_label = f"{status_badge} {display_title}"
                             
                             if st.button(btn_label, key=f"btn_sess_list_{s_id}", use_container_width=True):
                                 st.session_state[f"active_sess_{selected_student}"] = s_id
