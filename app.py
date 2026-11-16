@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import sqlite3
 from datetime import datetime, date, timedelta, timezone
 import calendar
@@ -2743,8 +2743,6 @@ else:
             with col_sync1:
                 if st.button("🚀 장바구니 항목 클라우드에 일괄 동기화하기", type="primary", use_container_width=True):
                     with st.spinner("클라우드로 일괄 전송 중..."):
-                        # 여기서 기존 sync_test_to_supabase 함수 등을 호출하여 일괄 전송 처리
-                        # 전송이 성공하면 장바구니를 비웁니다.
                         st.session_state["pending_sync_cart"] = []
                         st.success("🎉 모든 테스트가 클라우드에 성공적으로 동기화되었습니다!")
                         st.rerun()
@@ -2912,18 +2910,43 @@ else:
                                 st.error(f"초기화 중 오류 발생: {e}")
 
                     with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
+                        # 💡 선생님 모드 상세 보기에서 각 문항의 문제 사진이 함께 출력되도록 수정된 쿼리 및 렌더링 로직
                         if is_postgres_sub:
-                            c_sub.execute("SELECT problem_id, student_answer, is_checked, submitted_at FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
+                            c_sub.execute("""
+                                SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
+                                FROM student_test_submissions s
+                                LEFT JOIN online_test_sessions sess ON s.student_name = sess.student_name AND s.test_title = sess.test_title
+                                LEFT JOIN online_test_items i ON sess.id = i.session_id AND (i.unit_code || lpad(i.prob_num, 3, '0')) = s.problem_id
+                                WHERE s.student_name = %s AND s.test_title = %s
+                            """, (s_name, t_title))
                         else:
-                            q(c_sub, "SELECT problem_id, student_answer, is_checked, submitted_at FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                            q(c_sub, """
+                                SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
+                                FROM student_test_submissions s
+                                LEFT JOIN online_test_sessions sess ON s.student_name = sess.student_name AND s.test_title = sess.test_title
+                                LEFT JOIN online_test_items i ON sess.id = i.session_id 
+                                WHERE s.student_name = ? AND s.test_title = ?
+                            """, (s_name, t_title))
                         detail_rows = c_sub.fetchall()
 
                         if detail_rows:
-                            for d_idx, (p_id, u_ans, is_chk, _) in enumerate(detail_rows):
+                            for d_idx, (p_id, u_ans, is_chk, img_b64) in enumerate(detail_rows):
                                 ox_icon = "⭕ 정답" if is_chk == 1 else "❌ 오답"
                                 ox_color = "#10B981" if is_chk == 1 else "#EF4444"
                                 u_ans_display = u_ans if u_ans else "미입력"
+                                
                                 st.markdown(f"• **{d_idx+1}번 문제** (`{p_id}`) — 내 답: **{u_ans_display}** | <span style='color:{ox_color}; font-weight:bold;'>{ox_icon}</span>", unsafe_allow_html=True)
+                                
+                                # 🖼️ 문항별 원본 문제 사진 렌더링
+                                if img_b64:
+                                    try:
+                                        decoded_img = base64.b64decode(img_b64)
+                                        st.image(decoded_img, use_container_width=True)
+                                    except Exception:
+                                        st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
+                                else:
+                                    st.caption("💡 등록된 문제 사진이 없습니다.")
+                                st.markdown("---")
                         else:
                             st.info("세부 제출 문항 내역이 없습니다.")
         else:
