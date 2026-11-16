@@ -1590,7 +1590,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
 
-                        # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지 및 전체선택/해제 기능 추가
                         @st.fragment
                         def render_wrong_edit_list():
                             if is_edit_mode:
@@ -1920,7 +1919,7 @@ if not st.session_state["teacher_authenticated"]:
                                             st.session_state[img_exp_key] = False
                                             st.rerun(scope="fragment")
     
-                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용
+                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용 (버그 수정 반영)
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
                                     st.session_state[ans_exp_key] = False
@@ -1959,6 +1958,7 @@ if not st.session_state["teacher_authenticated"]:
                                                 conn_test.commit()
                                                 st.rerun(scope="fragment")
 
+                                        # 💡 하단 즉시 접기 버튼 추가
                                         if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
@@ -2759,7 +2759,6 @@ else:
                     st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
 
     with t_cfg_tests:
-        # 🛒 [클라우드 일괄 동기화 장바구니 관리 패널]
         st.markdown("#### 🛒 클라우드 동기화 대기 장바구니")
         cart_list = st.session_state.get("pending_sync_cart", [])
         
@@ -2790,9 +2789,6 @@ else:
         c_sub = conn_sub.cursor()
         is_postgres_sub = "psycopg2" in str(type(conn_sub))
 
-        # ----------------------------------------------------
-        # 🗑️ [완벽하게 정돈된 순수 Streamlit 체크박스 한 줄 리스트]
-        # ----------------------------------------------------
         st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (일괄 삭제)")
         st.caption("아래 박스를 터치해 목록을 펼치고, 삭제할 테스트를 체크한 뒤 맨 아래 버튼을 누르세요.")
 
@@ -2858,9 +2854,6 @@ else:
 
         st.divider()
 
-        # ----------------------------------------------------
-        # 기존 기능: 학생 온라인 테스트 제출 결과 조회 및 채점 초기화
-        # ----------------------------------------------------
         st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회 (테스트별 요약)")
         
         try:
@@ -2940,7 +2933,6 @@ else:
                                 st.error(f"초기화 중 오류 발생: {e}")
 
                     with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
-                        # 💡 선생님 모드 상세 보기에서 각 문항의 문제 사진이 함께 출력되도록 수정된 쿼리 및 렌더링 로직
                         if is_postgres_sub:
                             c_sub.execute("""
                                 SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
@@ -2967,7 +2959,6 @@ else:
                                 
                                 st.markdown(f"• **{d_idx+1}번 문제** (`{p_id}`) — 내 답: **{u_ans_display}** | <span style='color:{ox_color}; font-weight:bold;'>{ox_icon}</span>", unsafe_allow_html=True)
                                 
-                                # 🖼️ 문항별 원본 문제 사진 렌더링
                                 if img_b64:
                                     try:
                                         decoded_img = base64.b64decode(img_b64)
