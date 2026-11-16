@@ -76,6 +76,9 @@ if "teacher_db_mode" not in st.session_state:
 if "student_db_mode" not in st.session_state:
     st.session_state["student_db_mode"] = "supabase"
 
+if "pending_sync_cart" not in st.session_state:
+    st.session_state["pending_sync_cart"] = []
+
 try:
     import psycopg2
     from urllib.parse import urlparse
@@ -1590,7 +1593,6 @@ if not st.session_state["teacher_authenticated"]:
                         solved_map = get_student_wrong_solved_status(selected_student)
                         now_datetime = datetime.now()
 
-                        # 💡 `@st.fragment` 적용으로 체크박스를 누를 때 전체 페이지 새로고침(깜빡임) 방지 및 전체선택/해제 기능 추가
                         @st.fragment
                         def render_wrong_edit_list():
                             if is_edit_mode:
@@ -2743,8 +2745,6 @@ else:
             with col_sync1:
                 if st.button("🚀 장바구니 항목 클라우드에 일괄 동기화하기", type="primary", use_container_width=True):
                     with st.spinner("클라우드로 일괄 전송 중..."):
-                        # 여기서 기존 sync_test_to_supabase 함수 등을 호출하여 일괄 전송 처리
-                        # 전송이 성공하면 장바구니를 비웁니다.
                         st.session_state["pending_sync_cart"] = []
                         st.success("🎉 모든 테스트가 클라우드에 성공적으로 동기화되었습니다!")
                         st.rerun()
