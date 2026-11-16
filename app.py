@@ -2920,7 +2920,7 @@ else:
 
                     st.markdown("---")
                     
-                    # 💡 st.expander 대신 커스텀 버튼 토글 방식으로 가볍고 빠르게 열고 닫히도록 구현
+                    # 💡 초고속 토글 버튼 (이미지는 펼쳐진 순간에만 가볍게 렌더링)
                     is_expanded = st.session_state[expander_state_key]
                     toggle_btn_label = "🔼 이 영역 접기" if is_expanded else "🔍 학생이 제출한 문항별 답안 상세 보기"
                     
@@ -2930,6 +2930,7 @@ else:
 
                     if st.session_state[expander_state_key]:
                         st.markdown("<div style='margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
+                        
                         if is_postgres_sub:
                             c_sub.execute("""
                                 SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
