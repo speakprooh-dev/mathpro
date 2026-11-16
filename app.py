@@ -1735,10 +1735,9 @@ if not st.session_state["teacher_authenticated"]:
                             status_badge = "✅" if s_completed == 1 else "🆕"
                             
                             display_title = s_title
-                            if len(display_title) > 22:  # 자리를 조금 더 넓게 활용
+                            if len(display_title) > 22:
                                 display_title = display_title[:21] + "…"
 
-                            # 💡 생성일 날짜(date_part) 출력을 완전히 제거하고 상태와 제목만 깔끔하게 표시
                             btn_label = f"{status_badge} {display_title}"
                             
                             if st.button(btn_label, key=f"btn_sess_list_{s_id}", use_container_width=True):
@@ -2731,32 +2730,33 @@ else:
 
     with t_cfg_tests:
         # 🛒 [클라우드 일괄 동기화 장바구니 관리 패널]
-    st.markdown("#### 🛒 클라우드 동기화 대기 장바구니")
-    cart_list = st.session_state.get("pending_sync_cart", [])
-    
-    if cart_list:
-        st.info(f"현재 클라우드 전송 대기 중인 테스트가 **{len(cart_list)}개** 있습니다.")
-        with st.expander("📦 대기 중인 테스트 목록 보기", expanded=False):
-            for c_idx, (c_stu, c_title, c_pids) in enumerate(cart_list):
-                st.markdown(f"{c_idx+1}. 학생: **{c_stu}** | 테스트명: **{c_title}** (문항 수: {len(c_pids)}개)")
+        st.markdown("#### 🛒 클라우드 동기화 대기 장바구니")
+        cart_list = st.session_state.get("pending_sync_cart", [])
         
-        col_sync1, col_sync2 = st.columns(2)
-        with col_sync1:
-            if st.button("🚀 장바구니 항목 클라우드에 일괄 동기화하기", type="primary", use_container_width=True):
-                with st.spinner("클라우드로 일괄 전송 중..."):
-                    # 여기서 기존 sync_test_to_supabase 함수 등을 호출하여 일괄 전송 처리
-                    # 전송이 성공하면 장바구니를 비웁니다.
+        if cart_list:
+            st.info(f"현재 클라우드 전송 대기 중인 테스트가 **{len(cart_list)}개** 있습니다.")
+            with st.expander("📦 대기 중인 테스트 목록 보기", expanded=False):
+                for c_idx, (c_stu, c_title, c_pids) in enumerate(cart_list):
+                    st.markdown(f"{c_idx+1}. 학생: **{c_stu}** | 테스트명: **{c_title}** (문항 수: {len(c_pids)}개)")
+            
+            col_sync1, col_sync2 = st.columns(2)
+            with col_sync1:
+                if st.button("🚀 장바구니 항목 클라우드에 일괄 동기화하기", type="primary", use_container_width=True):
+                    with st.spinner("클라우드로 일괄 전송 중..."):
+                        # 여기서 기존 sync_test_to_supabase 함수 등을 호출하여 일괄 전송 처리
+                        # 전송이 성공하면 장바구니를 비웁니다.
+                        st.session_state["pending_sync_cart"] = []
+                        st.success("🎉 모든 테스트가 클라우드에 성공적으로 동기화되었습니다!")
+                        st.rerun()
+            with col_sync2:
+                if st.button("🗑️ 장바구니 비우기", use_container_width=True):
                     st.session_state["pending_sync_cart"] = []
-                    st.success("🎉 모든 테스트가 클라우드에 성공적으로 동기화되었습니다!")
+                    st.success("장바구니가 비워졌습니다.")
                     st.rerun()
-        with col_sync2:
-            if st.button("🗑️ 장바구니 비우기", use_container_width=True):
-                st.session_state["pending_sync_cart"] = []
-                st.success("장바구니가 비워졌습니다.")
-                st.rerun()
-    else:
-        st.caption("💡 현재 동기화 대기 중인 항목이 없습니다. (과제 생성 시 자동으로 장바구니에 쌓입니다.)")
+        else:
+            st.caption("💡 현재 동기화 대기 중인 항목이 없습니다. (과제 생성 시 자동으로 장바구니에 쌓입니다.)")
 
+        st.divider()
         
         conn_sub, _ = get_db_connection()
         c_sub = conn_sub.cursor()
@@ -2797,7 +2797,6 @@ else:
                             date_part = created_at[:10] if created_at else ""
                             label_str = f"[{s_name}] {t_title} ({status_txt} | {date_part})"
                             
-                            # 📌 Streamlit 표준 체크박스로 텍스트와 완벽하게 한 줄로 동기화
                             is_checked = st.checkbox(label_str, key=f"form_chk_sess_del_{sess_id}")
                             if is_checked:
                                 sessions_to_bulk_delete.append((sess_id, s_name, t_title))
