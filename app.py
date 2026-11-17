@@ -1851,6 +1851,13 @@ if not st.session_state["teacher_authenticated"]:
                             )
     
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 검토 ({len(prob_list)}개)")
+
+                        # 💡 새로고침 후에도 등록 완료(비활성화) 상태 유지를 위해 기존 오답노트에서 일괄 조회(1회)
+                        existing_wrong_rows = get_all_student_wrong_entries(s_name)
+                        registered_full_codes = set()
+                        for u_code, nums_txt in existing_wrong_rows:
+                            for num in parse_numbers(nums_txt):
+                                registered_full_codes.add(f"{u_code}{num:03d}".upper())
     
                         selected_wrong_notes = {}
     
@@ -1974,7 +1981,10 @@ if not st.session_state["teacher_authenticated"]:
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
     
-                                is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
+                                is_item_saved = (
+                                    st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
+                                    or (prob['full_code'].upper() in registered_full_codes)
+                                )
                                 is_checked_default = False
     
                                 if is_item_saved:
