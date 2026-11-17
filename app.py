@@ -1728,7 +1728,18 @@ if not st.session_state["teacher_authenticated"]:
                 selected_session_id = None
                 
                 for w_idx, w_key in enumerate(sorted_weeks):
-                    week_sessions = sessions_by_week[w_key]
+                    # 💡 제목 앞의 날짜(예: [261118(수)] -> 261118)를 추출하여 빠른 날짜순(오름차순)으로 정렬
+                    def extract_title_date_key(session_tuple):
+                        t_title = session_tuple[1]
+                        match = re.search(r'(\d{6})', t_title)
+                        # 날짜가 있으면 (0, '261118', 제목) 순으로 정렬, 없으면 맨 뒤로
+                        if match:
+                            return (0, match.group(1), t_title)
+                        return (1, "999999", t_title)
+
+                    # 빠른 날짜(수요일 -> 목요일)부터 나오게 정렬 (최신 날짜가 위로 오게 하려면 reverse=True 추가)
+                    week_sessions = sorted(sessions_by_week[w_key], key=extract_title_date_key)
+
                     with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
