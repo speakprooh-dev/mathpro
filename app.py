@@ -2601,7 +2601,15 @@ else:
             st.warning("등록된 학생이 없습니다.")
 
     with t_cfg_matrix:
-        st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        col_mat_title, col_mat_btn = st.columns([3.5, 1.5])
+        with col_mat_title:
+            st.markdown("#### 📊 전체 학생 숙제 현황 및 통합 관리")
+        with col_mat_btn:
+            if st.button("🔄 새로고침", key="btn_refresh_matrix", use_container_width=True):
+                st.cache_data.clear()
+                st.toast("최신 숙제 현황을 불러왔습니다!", icon="✅")
+                st.rerun()
+
         conn, _ = get_db_connection()
         c = conn.cursor()
         q(c, "SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
