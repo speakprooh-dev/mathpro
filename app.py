@@ -67,7 +67,13 @@ div.stButton > button > div > p {
 </style>
 """, unsafe_allow_html=True)
 
-if "teacher_authenticated" not in st.session_state:
+# URL 파라미터 확인 및 관리자 인증 상태 동기화
+query_params = st.query_params
+url_admin = query_params.get("admin", None)
+
+if url_admin == "true":
+    st.session_state["teacher_authenticated"] = True
+elif "teacher_authenticated" not in st.session_state:
     st.session_state["teacher_authenticated"] = False
 
 if "teacher_db_mode" not in st.session_state:
@@ -1227,6 +1233,12 @@ with st.sidebar:
 
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
             st.session_state["teacher_authenticated"] = False
+            # URL에서 admin 파라미터 제거
+            try:
+                if "admin" in st.query_params:
+                    del st.query_params["admin"]
+            except Exception:
+                pass
             st.rerun()
         st.divider()
         
@@ -1255,12 +1267,17 @@ with st.sidebar:
     st.markdown("---")
     
     if not st.session_state["teacher_authenticated"]:
-        with st.expander("🔒 선생님 전용 공간 (관리자 전환)"):
+        with st.expander("🔒 선생님 전용 공간 (관리자 전환)", expanded=True):
             with st.form("sidebar_teacher_login_form"):
                 teacher_pw_input = st.text_input("비밀번호 입력", type="password")
                 if st.form_submit_button("선생님 모드 전환", type="primary"):
                     if teacher_pw_input == "1234":
                         st.session_state["teacher_authenticated"] = True
+                        # URL 파라미터에 admin=true 추가하여 새로고침 시에도 로그인 유지
+                        try:
+                            st.query_params["admin"] = "true"
+                        except Exception:
+                            pass
                         st.success("인증 성공!")
                         st.rerun()
                     else:
@@ -1728,16 +1745,13 @@ if not st.session_state["teacher_authenticated"]:
                 selected_session_id = None
                 
                 for w_idx, w_key in enumerate(sorted_weeks):
-                    # 💡 제목 앞의 날짜(예: [261118(수)] -> 261118)를 추출하여 빠른 날짜순(오름차순)으로 정렬
                     def extract_title_date_key(session_tuple):
                         t_title = session_tuple[1]
                         match = re.search(r'(\d{6})', t_title)
-                        # 날짜가 있으면 (0, '261118', 제목) 순으로 정렬, 없으면 맨 뒤로
                         if match:
                             return (0, match.group(1), t_title)
                         return (1, "999999", t_title)
 
-                    # 빠른 날짜(수요일 -> 목요일)부터 나오게 정렬 (최신 날짜가 위로 오게 하려면 reverse=True 추가)
                     week_sessions = sorted(sessions_by_week[w_key], key=extract_title_date_key)
 
                     with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
@@ -1852,7 +1866,6 @@ if not st.session_state["teacher_authenticated"]:
     
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 검토 ({len(prob_list)}개)")
 
-                        # 💡 새로고침 후에도 등록 완료(비활성화) 상태 유지를 위해 기존 오답노트에서 일괄 조회(1회)
                         existing_wrong_rows = get_all_student_wrong_entries(s_name)
                         registered_full_codes = set()
                         for u_code, nums_txt in existing_wrong_rows:
@@ -1916,7 +1929,6 @@ if not st.session_state["teacher_authenticated"]:
                                     unsafe_allow_html=True
                                 )
                                 
-                                # 🖼️ [문제 사진 보기] 상/하단 양방향 즉시 토글 적용
                                 img_exp_key = f"toggle_img_{sess_id}_{prob['item_id']}"
                                 if img_exp_key not in st.session_state:
                                     st.session_state[img_exp_key] = False
@@ -1937,7 +1949,6 @@ if not st.session_state["teacher_authenticated"]:
                                             st.session_state[img_exp_key] = False
                                             st.rerun(scope="fragment")
     
-                                # 🔍 [정답 및 채점 확인하기] 상/하단 양방향 즉시 토글 적용 (버그 수정 반영)
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
                                     st.session_state[ans_exp_key] = False
@@ -1976,7 +1987,6 @@ if not st.session_state["teacher_authenticated"]:
                                                 conn_test.commit()
                                                 st.rerun(scope="fragment")
 
-                                        # 💡 하단 즉시 접기 버튼 추가
                                         if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
