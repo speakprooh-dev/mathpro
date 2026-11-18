@@ -346,6 +346,8 @@ def get_week_range_str(date_str):
     except Exception:
         return "주간 미상"
 
+# 💡 최적화 1: 앱 실행 시 매번 실행되던 init_db를 캐시 리소스로 감싸서 1번만 실행되도록 수정
+@st.cache_resource(show_spinner=False)
 def init_db():
     try:
         os.makedirs("submissions", exist_ok=True)
@@ -522,6 +524,7 @@ def get_students():
     except Exception:
         return []
 
+@st.cache_data(ttl=300)
 def get_student_drive_url(name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -854,7 +857,10 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     c = conn.cursor()
     q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
     conn.commit()
-    st.cache_data.clear()
+    # 💡 최적화 2: 전체 캐시 초기화 대신 필요한 함수 캐시만 부분 무효화
+    get_student_daily_logs_by_date.clear()
+    get_routine_completion_rate.clear()
+    get_student_routine_streak.clear()
 
 def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     conn, _ = get_db_connection()
@@ -862,7 +868,9 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     for routine_id_str, val in routine_checked_dict.items():
         q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date, int(val), int(val)))
     conn.commit()
-    st.cache_data.clear()
+    get_student_daily_logs_by_date.clear()
+    get_routine_completion_rate.clear()
+    get_student_routine_streak.clear()
 
 @st.cache_data(ttl=300)
 def get_homework_templates():
@@ -1052,7 +1060,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
         else:
             q(c, "INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?", (student_name, milestone_id, int(val), int(val)))
         conn.commit()
-        st.cache_data.clear()
+        get_milestone_progress.clear()
     except Exception:
         pass
 
@@ -1066,7 +1074,8 @@ def save_single_homework_progress(student_name, student_hw_id, val):
         else:
             q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
-        st.cache_data.clear()
+        get_student_homework_progress.clear()
+        get_entire_homework_progress_map.clear()
     except Exception:
         pass
 
@@ -1105,7 +1114,8 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 c.execute("INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING", (student_name, unit_code, int(num), today_str, now_str))
 
         conn.commit()
-        st.cache_data.clear()
+        get_student_wrong_entry.clear()
+        get_all_student_wrong_entries.clear()
     except Exception as e:
         print(f"오답 저장 중 예외: {e}")
 
@@ -1126,7 +1136,7 @@ def save_single_wrong_solved_status(student_name, full_code, is_solved_val):
         else:
             q(c, "INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (?, ?, ?) ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?", (student_name, full_code, int(is_solved_val), int(is_solved_val)))
         conn.commit()
-        st.cache_data.clear()
+        get_student_wrong_solved_status.clear()
     except Exception:
         pass
 
@@ -1233,7 +1243,6 @@ with st.sidebar:
 
         if st.button("로그아웃 (학생 모드로 전환)", use_container_width=True):
             st.session_state["teacher_authenticated"] = False
-            # URL에서 admin 파라미터 제거
             try:
                 if "admin" in st.query_params:
                     del st.query_params["admin"]
@@ -1273,7 +1282,6 @@ with st.sidebar:
                 if st.form_submit_button("선생님 모드 전환", type="primary"):
                     if teacher_pw_input == "1234":
                         st.session_state["teacher_authenticated"] = True
-                        # URL 파라미터에 admin=true 추가하여 새로고침 시에도 로그인 유지
                         try:
                             st.query_params["admin"] = "true"
                         except Exception:
@@ -1873,6 +1881,10 @@ if not st.session_state["teacher_authenticated"]:
                                 registered_full_codes.add(f"{u_code}{num:03d}".upper())
     
                         selected_wrong_notes = {}
+                        
+                        # 💡 최적화 3: 반복문 돌기 전 해설 정보를 한 번에 일괄 조회 (N+1 쿼리 방지)
+                        all_f_codes = [prob["full_code"] for prob in prob_list]
+                        batch_review_links = get_batch_problem_link_info(all_f_codes)
     
                         for prob in prob_list:
                             matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
@@ -1893,7 +1905,7 @@ if not st.session_state["teacher_authenticated"]:
                                 ox_mark = "-"
                                 ox_color = "gray"
     
-                            v_url, _ = get_problem_link_info(prob["full_code"])
+                            v_url, _ = batch_review_links.get(prob["full_code"], ("", ""))
                             link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
     
                             f_code = str(prob["full_code"]).strip()
