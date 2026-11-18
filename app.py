@@ -2694,6 +2694,7 @@ else:
                                     wday_str = f" ({short_wday})" if short_wday else ""
                                     date_suffix = f" (마감: {due_date}{wday_str})"
 
+                                # 💡 수정된 한 줄 정렬 레이아웃 적용 (완료/미완료 배지가 오른쪽 한 줄에 출력)
                                 cols_mat_item = st.columns([4, 1])
                                 with cols_mat_item[0]:
                                     if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
@@ -2701,9 +2702,9 @@ else:
                                         st.rerun()
                                 with cols_mat_item[1]:
                                     if is_done:
-                                        st.markdown("<span style='color:#10B981; font-size:12px; font-weight:bold;'>완료됨</span>", unsafe_allow_html=True)
+                                        st.markdown("<div style='text-align: right;'><span style='color:#10B981; font-size:12px; font-weight:bold; white-space:nowrap;'>완료됨</span></div>", unsafe_allow_html=True)
                                     else:
-                                        st.markdown("<span style='color:gray; font-size:12px;'>미완료</span>", unsafe_allow_html=True)
+                                        st.markdown("<div style='text-align: right;'><span style='color:gray; font-size:12px; white-space:nowrap;'>미완료</span></div>", unsafe_allow_html=True)
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
                         with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
