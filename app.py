@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 CSS 스타일
+# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 CSS 스타일 (미완료 문구 제거 반영)
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경 */
@@ -2661,54 +2661,60 @@ else:
         
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-            all_students_hw_map = get_all_students_homework_map(selected_matrix_date)
-            entire_hw_prog = get_entire_homework_progress_map()
-            active_hw_students = [s_name for s_name in student_list if all_students_hw_map.get(s_name)]
+            
+            # 💡 숙제 매트릭스 전체 영역에 @st.fragment 적용하여 체크박스 조작 시 해당 영역만 즉시 비동기 갱신 (속도 극대화)
+            @st.fragment
+            def render_homework_matrix_section(sel_date, s_list):
+                all_students_hw_map = get_all_students_homework_map(sel_date)
+                entire_hw_prog = get_entire_homework_progress_map()
+                active_hw_students = [s_name for s_name in s_list if all_students_hw_map.get(s_name)]
 
-            if active_hw_students:
-                st.markdown(f"**📌 총 {len(active_hw_students)}명의 학생에게 숙제가 배정되어 있습니다.**")
-                st.markdown("---")
+                if active_hw_students:
+                    st.markdown(f"**📌 총 {len(active_hw_students)}명의 학생에게 숙제가 배정되어 있습니다.**")
+                    st.markdown("---")
 
-                for s_idx_main, s_name in enumerate(active_hw_students):
-                    hws = all_students_hw_map.get(s_name, [])
-                    
-                    done_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:") and entire_hw_prog.get((s_name, hw_item[0]), False))
-                    total_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:"))
-                    
-                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (완료: {done_count_mat} / {total_count_mat}개)", expanded=False):
-                        initial_mat_text = "\n".join([hw[1] for hw in hws])
-                        for h_idx, hw_tuple in enumerate(hws):
-                            h_id = hw_tuple[0]
-                            title = hw_tuple[1]
-                            due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
+                    for s_idx_main, s_name in enumerate(active_hw_students):
+                        hws = all_students_hw_map.get(s_name, [])
+                        
+                        done_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:") and entire_hw_prog.get((s_name, hw_item[0]), False))
+                        total_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:"))
+                        
+                        with st.expander(f"👤 {s_name} 학생 숙제 현황 (완료: {done_count_mat} / {total_count_mat}개)", expanded=False):
+                            initial_mat_text = "\n".join([hw[1] for hw in hws])
+                            for h_idx, hw_tuple in enumerate(hws):
+                                h_id = hw_tuple[0]
+                                title = hw_tuple[1]
+                                due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
 
-                            if title.startswith("💬 [선생님 메시지]:"):
-                                st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
-                            else:
-                                is_done = entire_hw_prog.get((s_name, h_id), False)
-                                chk_key = f"mat_{s_idx_main}_{selected_matrix_date}_{h_id}_{h_idx}"
-                                
-                                date_suffix = ""
-                                if due_date and due_date.strip():
-                                    short_wday = get_weekday_short_kr(due_date)
-                                    wday_str = f" ({short_wday})" if short_wday else ""
-                                    date_suffix = f" (마감: {due_date}{wday_str})"
+                                if title.startswith("💬 [선생님 메시지]:"):
+                                    st.info(f"💬 **선생님 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
+                                else:
+                                    is_done = entire_hw_prog.get((s_name, h_id), False)
+                                    chk_key = f"mat_{s_idx_main}_{sel_date}_{h_id}_{h_idx}"
+                                    
+                                    date_suffix = ""
+                                    if due_date and due_date.strip():
+                                        short_wday = get_weekday_short_kr(due_date)
+                                        wday_str = f" ({short_wday})" if short_wday else ""
+                                        date_suffix = f" (마감: {due_date}{wday_str})"
 
-                                # 💡 '미완료/완료' 텍스트 문구를 제거하고 체크박스가 넓게 한 줄을 쓰도록 수정
-                                if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                    st.rerun()
-                                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                                    # 💡 '미완료/완료' 문구 아예 제거 및 한 줄 정렬 반영
+                                    if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
+                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                        st.rerun(scope="fragment")
+                                    st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
-                        with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
-                            with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
-                                edited_bulk_hw_text = st.text_area("숙제 내용 편집", value=initial_mat_text, height=120)
-                                if st.form_submit_button("💾 수정 저장", type="primary"):
-                                    update_student_homework_by_date(s_name, selected_matrix_date, edited_bulk_hw_text.strip())
-                                    st.success("수정 완료!")
-                                    st.rerun()
-            else:
-                st.info("해당 날짜에 배정된 숙제가 없습니다.")
+                            with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
+                                with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{sel_date}"):
+                                    edited_bulk_hw_text = st.text_area("숙제 내용 편집", value=initial_mat_text, height=120)
+                                    if st.form_submit_button("💾 수정 저장", type="primary"):
+                                        update_student_homework_by_date(s_name, sel_date, edited_bulk_hw_text.strip())
+                                        st.success("수정 완료!")
+                                        st.rerun()
+                else:
+                    st.info("해당 날짜에 배정된 숙제가 없습니다.")
+
+            render_homework_matrix_section(selected_matrix_date, student_list)
 
     with t_cfg_links:
         st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
