@@ -2694,17 +2694,10 @@ else:
                                     wday_str = f" ({short_wday})" if short_wday else ""
                                     date_suffix = f" (마감: {due_date}{wday_str})"
 
-                                # 💡 수정된 한 줄 정렬 레이아웃 적용 (완료/미완료 배지가 오른쪽 한 줄에 출력)
-                                cols_mat_item = st.columns([4, 1])
-                                with cols_mat_item[0]:
-                                    if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
-                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                        st.rerun()
-                                with cols_mat_item[1]:
-                                    if is_done:
-                                        st.markdown("<div style='text-align: right;'><span style='color:#10B981; font-size:12px; font-weight:bold; white-space:nowrap;'>완료됨</span></div>", unsafe_allow_html=True)
-                                    else:
-                                        st.markdown("<div style='text-align: right;'><span style='color:gray; font-size:12px; white-space:nowrap;'>미완료</span></div>", unsafe_allow_html=True)
+                                # 💡 '미완료/완료' 텍스트 문구를 제거하고 체크박스가 넓게 한 줄을 쓰도록 수정
+                                if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
+                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                    st.rerun()
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
                         with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
