@@ -126,7 +126,7 @@ def q(c, query, params=None):
         c.execute(query)
     return c
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_all_problem_link_set():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -137,7 +137,7 @@ def get_all_problem_link_set():
     except Exception:
         return set()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_batch_problem_link_info(full_codes):
     if not full_codes:
         return {}
@@ -155,7 +155,7 @@ def get_batch_problem_link_info(full_codes):
     except Exception:
         return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_entire_homework_progress_map():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -166,7 +166,7 @@ def get_entire_homework_progress_map():
     except Exception:
         return {}
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_unit_code_summary_list():
     try:
         conn, _ = get_db_connection()
@@ -190,6 +190,7 @@ def get_korean_now_str():
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_visitor_stats():
     try:
         conn, _ = get_db_connection()
@@ -206,6 +207,36 @@ def get_visitor_stats():
         return today_active_cnt, total_visits, s_summary, daily_logs
     except Exception:
         return 0, 0, [], []
+
+@st.cache_data(ttl=120, show_spinner=False)
+def get_cached_all_sessions():
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, "SELECT id, student_name, test_title, created_at, is_completed FROM online_test_sessions ORDER BY id DESC")
+        return c.fetchall()
+    except Exception:
+        return []
+
+@st.cache_data(ttl=120, show_spinner=False)
+def get_cached_test_submission_summaries():
+    try:
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, """
+            SELECT 
+                student_name, 
+                test_title, 
+                MAX(submitted_at) AS submitted_at, 
+                COUNT(*) AS total_cnt, 
+                SUM(COALESCE(is_checked, 0)) AS correct_cnt
+            FROM student_test_submissions
+            GROUP BY student_name, test_title
+            ORDER BY MAX(submitted_at) DESC
+        """)
+        return c.fetchall()
+    except Exception:
+        return []
 
 def create_excel_backup():
     try:
@@ -513,7 +544,7 @@ def log_student_visit(student_name):
         conn.commit()
         st.session_state[session_key] = True
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_students():
     try:
         conn, _ = get_db_connection()
@@ -523,7 +554,7 @@ def get_students():
     except Exception:
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_student_drive_url(name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -577,7 +608,7 @@ def delete_student(name):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_subjects():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -597,7 +628,7 @@ def add_subject(name):
     except Exception:
         return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_chapters():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -610,6 +641,7 @@ def get_chapters():
         return (subject, num, name)
     return sorted(rows, key=natural_sort_key)
 
+@st.cache_data(ttl=120, show_spinner=False)
 def get_chapter_types(chapter_id):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -684,7 +716,7 @@ def get_problem_links_by_unit(unit_code):
     q(c, "SELECT full_code, video_url FROM problem_links WHERE unit_code = ? ORDER BY full_code", (unit_code.upper(),))
     return c.fetchall()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_problem_link_info(full_code):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -725,14 +757,14 @@ def add_notice(student_name, title, content):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_notices_for_student(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT id, title, content, created_at, student_name FROM notices WHERE student_name = '' OR student_name = ? ORDER BY id DESC", (student_name,))
     return c.fetchall()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_all_notices():
     try:
         conn, _ = get_db_connection()
@@ -749,7 +781,7 @@ def delete_notice(notice_id):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_daily_routines(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -782,7 +814,7 @@ def delete_daily_routine(r_id):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_daily_logs_by_date(student_name, target_date_str):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -796,7 +828,7 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
         log_map[(str(r_id), target_date_str)] = bool(val)
     return log_map
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -818,7 +850,7 @@ def get_routine_completion_rate(student_name, days_limit=7):
     
     return rate, completed_count, total_expected
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_routine_streak(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -834,7 +866,7 @@ def get_student_routine_streak(student_name):
     if db_type == "postgres":
         q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
     else:
-        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= %s AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
+        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
     rows = c.fetchall()
     completed_days = {r[0]: r[1] for r in rows}
     streak = 0
@@ -870,7 +902,7 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
     get_routine_completion_rate.clear()
     get_student_routine_streak.clear()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_homework_templates():
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -891,7 +923,7 @@ def delete_homework_template(t_id):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_milestones(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -924,7 +956,7 @@ def assign_chapters_to_student(student_name, chapter_ids):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_homework_dates(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -934,7 +966,7 @@ def get_student_homework_dates(student_name):
         q(c, "SELECT DISTINCT hw_date FROM student_homework WHERE student_name = ? ORDER BY hw_date DESC", (student_name,))
     return [r[0] for r in c.fetchall()]
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_homework_by_date(student_name, hw_date):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -951,7 +983,7 @@ def get_student_homework_by_date(student_name, hw_date):
             q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
         return c.fetchall()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_all_students_homework_map(hw_date):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -970,7 +1002,7 @@ def get_all_students_homework_map(hw_date):
     except Exception:
         return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_all_student_homework(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1028,7 +1060,7 @@ def delete_student_homework_date(student_name, hw_date):
     conn.commit()
     st.cache_data.clear()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_milestone_progress(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
@@ -1041,7 +1073,7 @@ def get_milestone_progress(student_name):
     except Exception:
         return {}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_homework_progress(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1077,7 +1109,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
     except Exception:
         pass
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_wrong_entry(student_name, unit_code):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1085,7 +1117,7 @@ def get_student_wrong_entry(student_name, unit_code):
     row = c.fetchone()
     return row[0] if row else ""
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_all_student_wrong_entries(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1117,7 +1149,7 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     except Exception as e:
         print(f"오답 저장 중 예외: {e}")
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_wrong_solved_status(student_name):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -1250,13 +1282,16 @@ with st.sidebar:
         st.divider()
         
         st.markdown("##### 📥/📤 데이터 백업 및 동기화")
-        st.download_button(
-            label="📥 전체 데이터 엑셀 백업하기",
-            data=create_excel_backup(),
-            file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        if st.button("📦 전체 데이터 엑셀 백업 준비하기", use_container_width=True):
+            st.session_state["ready_excel_backup"] = create_excel_backup()
+        if "ready_excel_backup" in st.session_state:
+            st.download_button(
+                label="📥 준비된 엑셀 백업 다운로드",
+                data=st.session_state["ready_excel_backup"],
+                file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         
         with st.expander("🔄 엑셀 파일로 데이터 복구하기", expanded=False):
             uploaded_backup = st.file_uploader("백업 엑셀 파일(.xlsx) 선택", type=["xlsx"])
@@ -1922,7 +1957,7 @@ if not st.session_state["teacher_authenticated"]:
                                 "@" in filename_str or 
                                 any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
                                 any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
+                                ans_str in ["1번", "2번", "3번", "4번", "5번"]
                             )
 
                             with st.container(border=True):
@@ -2120,7 +2155,7 @@ if not st.session_state["teacher_authenticated"]:
                                         "@" in filename_str or 
                                         any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
                                         any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        ans_str in ["1번", "2번", "3번", "4번", "5번", "1", "2", "3", "4", "5"]
+                                        ans_str in ["1번", "2번", "3번", "4번", "5번"]
                                     )
 
                                     if is_multiple_choice:
@@ -2662,7 +2697,6 @@ else:
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
             
-            # 💡 숙제 매트릭스 전체 영역에 @st.fragment 적용하여 체크박스 조작 시 해당 영역만 즉시 비동기 갱신 (속도 극대화)
             @st.fragment
             def render_homework_matrix_section(sel_date, s_list):
                 all_students_hw_map = get_all_students_homework_map(sel_date)
@@ -2698,7 +2732,6 @@ else:
                                         wday_str = f" ({short_wday})" if short_wday else ""
                                         date_suffix = f" (마감: {due_date}{wday_str})"
 
-                                    # 💡 '미완료/완료' 문구 아예 제거 및 한 줄 정렬 반영
                                     if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
                                         save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
                                         st.rerun(scope="fragment")
@@ -2860,15 +2893,7 @@ else:
         st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (일괄 삭제)")
         st.caption("아래 박스를 터치해 목록을 펼치고, 삭제할 테스트를 체크한 뒤 맨 아래 버튼을 누르세요.")
 
-        try:
-            q(c_sub, """
-                SELECT id, student_name, test_title, created_at, is_completed 
-                FROM online_test_sessions 
-                ORDER BY id DESC
-            """)
-            all_sessions_rows = c_sub.fetchall()
-        except Exception:
-            all_sessions_rows = []
+        all_sessions_rows = get_cached_all_sessions()
 
         if all_sessions_rows:
             filter_sess_stu = st.selectbox(
@@ -2924,21 +2949,7 @@ else:
 
         st.markdown("#### 📋 학생 온라인 테스트 제출 결과 조회 (테스트별 요약)")
         
-        try:
-            q(c_sub, """
-                SELECT 
-                    student_name, 
-                    test_title, 
-                    MAX(submitted_at) AS submitted_at, 
-                    COUNT(*) AS total_cnt, 
-                    SUM(COALESCE(is_checked, 0)) AS correct_cnt
-                FROM student_test_submissions
-                GROUP BY student_name, test_title
-                ORDER BY MAX(submitted_at) DESC
-            """)
-            summary_rows = c_sub.fetchall()
-        except Exception:
-            summary_rows = []
+        summary_rows = get_cached_test_submission_summaries()
 
         if summary_rows:
             filter_stu = st.selectbox("학생별 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
@@ -3000,7 +3011,8 @@ else:
                             except Exception as e:
                                 st.error(f"초기화 중 오류 발생: {e}")
 
-                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
+                    detail_toggle_key = f"show_sub_detail_{s_name}_{t_title}_{idx}"
+                    if st.toggle("🔍 학생이 제출한 문항별 답안 상세 보기", value=False, key=detail_toggle_key):
                         if is_postgres_sub:
                             c_sub.execute("""
                                 SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
