@@ -346,7 +346,6 @@ def get_week_range_str(date_str):
     except Exception:
         return "주간 미상"
 
-# 💡 최적화 1: 앱 실행 시 매번 실행되던 init_db를 캐시 리소스로 감싸서 1번만 실행되도록 수정
 @st.cache_resource(show_spinner=False)
 def init_db():
     try:
@@ -857,7 +856,6 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     c = conn.cursor()
     q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
     conn.commit()
-    # 💡 최적화 2: 전체 캐시 초기화 대신 필요한 함수 캐시만 부분 무효화
     get_student_daily_logs_by_date.clear()
     get_routine_completion_rate.clear()
     get_student_routine_streak.clear()
@@ -1882,7 +1880,6 @@ if not st.session_state["teacher_authenticated"]:
     
                         selected_wrong_notes = {}
                         
-                        # 💡 최적화 3: 반복문 돌기 전 해설 정보를 한 번에 일괄 조회 (N+1 쿼리 방지)
                         all_f_codes = [prob["full_code"] for prob in prob_list]
                         batch_review_links = get_batch_problem_link_info(all_f_codes)
     
@@ -2653,10 +2650,14 @@ else:
                 st.toast("최신 숙제 현황을 불러왔습니다!", icon="✅")
                 st.rerun()
 
-        conn, _ = get_db_connection()
-        c = conn.cursor()
-        q(c, "SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
-        all_hw_dates = [r[0] for r in c.fetchall()]
+        @st.cache_data(ttl=30, show_spinner=False)
+        def get_cached_hw_dates():
+            conn_m, _ = get_db_connection()
+            c_m = conn_m.cursor()
+            q(c_m, "SELECT DISTINCT hw_date FROM student_homework ORDER BY hw_date DESC")
+            return [r[0] for r in c_m.fetchall()]
+
+        all_hw_dates = get_cached_hw_dates()
         
         if all_hw_dates and student_list:
             selected_matrix_date = st.selectbox("확인할 숙제 날짜 선택", all_hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
@@ -2665,9 +2666,16 @@ else:
             active_hw_students = [s_name for s_name in student_list if all_students_hw_map.get(s_name)]
 
             if active_hw_students:
+                st.markdown(f"**📌 총 {len(active_hw_students)}명의 학생에게 숙제가 배정되어 있습니다.**")
+                st.markdown("---")
+
                 for s_idx_main, s_name in enumerate(active_hw_students):
                     hws = all_students_hw_map.get(s_name, [])
-                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (총 {len(hws)}개 항목)", expanded=False):
+                    
+                    done_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:") and entire_hw_prog.get((s_name, hw_item[0]), False))
+                    total_count_mat = sum(1 for hw_item in hws if not hw_item[1].startswith("💬 [선생님 메시지]:"))
+                    
+                    with st.expander(f"👤 {s_name} 학생 숙제 현황 (완료: {done_count_mat} / {total_count_mat}개)", expanded=False):
                         initial_mat_text = "\n".join([hw[1] for hw in hws])
                         for h_idx, hw_tuple in enumerate(hws):
                             h_id = hw_tuple[0]
@@ -2686,9 +2694,18 @@ else:
                                     wday_str = f" ({short_wday})" if short_wday else ""
                                     date_suffix = f" (마감: {due_date}{wday_str})"
 
-                                if st.checkbox(f"📌 {title}{date_suffix}", value=is_done, key=chk_key) != is_done:
-                                    save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                    st.rerun()
+                                cols_mat_item = st.columns([4, 1])
+                                with cols_mat_item[0]:
+                                    if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
+                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
+                                        st.rerun()
+                                with cols_mat_item[1]:
+                                    if is_done:
+                                        st.markdown("<span style='color:#10B981; font-size:12px; font-weight:bold;'>완료됨</span>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown("<span style='color:gray; font-size:12px;'>미완료</span>", unsafe_allow_html=True)
+                                st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+
                         with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
                             with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{selected_matrix_date}"):
                                 edited_bulk_hw_text = st.text_area("숙제 내용 편집", value=initial_mat_text, height=120)
