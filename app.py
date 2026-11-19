@@ -2742,9 +2742,15 @@ else:
                                         wday_str = f" ({short_wday})" if short_wday else ""
                                         date_suffix = f" (마감: {due_date}{wday_str})"
 
-                                    if st.checkbox(f"{title}{date_suffix}", value=is_done, key=chk_key) != is_done:
-                                        save_single_homework_progress(s_name, h_id, st.session_state[chk_key])
-                                        st.rerun(scope="fragment")
+                                    def on_mat_hw_change(stu=s_name, hw_id_val=h_id, k=chk_key):
+                                        save_single_homework_progress(stu, hw_id_val, st.session_state[k])
+
+                                    st.checkbox(
+                                        f"{title}{date_suffix}",
+                                        value=is_done,
+                                        key=chk_key,
+                                        on_change=on_mat_hw_change
+                                    )
                                     st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
                             with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
