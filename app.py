@@ -2086,9 +2086,9 @@ if not st.session_state["teacher_authenticated"]:
                         if f"all_results_{selected_session_id}" not in st.session_state:
                             is_postgres = "psycopg2" in str(type(conn_test))
                             if is_postgres:
-                                c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (selected_student, selected_test_title))
+                                c_test.execute("SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC", (selected_student, selected_test_title))
                             else:
-                                q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (selected_student, selected_test_title))
+                                q(c_test, "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC", (selected_student, selected_test_title))
                             submitted_rows = c_test.fetchall()
                             sub_dict = {row[0]: {"user_ans": row[1], "is_checked": row[2]} for row in submitted_rows}
                             
@@ -2224,6 +2224,16 @@ if not st.session_state["teacher_authenticated"]:
         
                             try:
                                 is_postgres = "psycopg2" in str(type(conn_test))
+                                if is_postgres:
+                                    c_test.execute(
+                                        "DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s",
+                                        (selected_student, selected_test_title)
+                                    )
+                                else:
+                                    q(c_test,
+                                      "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?",
+                                      (selected_student, selected_test_title))
+
                                 for res in all_results:
                                     if is_postgres:
                                         c_test.execute(
@@ -3015,21 +3025,53 @@ else:
                     if st.toggle("🔍 학생이 제출한 문항별 답안 상세 보기", value=False, key=detail_toggle_key):
                         if is_postgres_sub:
                             c_sub.execute("""
-                                SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
+                                SELECT DISTINCT ON (s.id)
+                                    s.problem_id,
+                                    s.student_answer,
+                                    s.is_checked,
+                                    i.img_base64
                                 FROM student_test_submissions s
-                                LEFT JOIN online_test_sessions sess ON s.student_name = sess.student_name AND s.test_title = sess.test_title
-                                LEFT JOIN online_test_items i ON sess.id = i.session_id AND (i.unit_code || lpad(i.prob_num, 3, '0')) = s.problem_id
+                                LEFT JOIN (
+                                    SELECT id
+                                    FROM online_test_sessions
+                                    WHERE student_name = %s AND test_title = %s
+                                    ORDER BY id DESC
+                                    LIMIT 1
+                                ) latest_sess ON TRUE
+                                LEFT JOIN online_test_items i
+                                    ON i.session_id = latest_sess.id
+                                    AND UPPER(i.unit_code || lpad(CAST(i.prob_num AS TEXT), 3, '0')) = UPPER(s.problem_id)
                                 WHERE s.student_name = %s AND s.test_title = %s
-                            """, (s_name, t_title))
+                                ORDER BY s.id ASC
+                            """, (s_name, t_title, s_name, t_title))
                         else:
                             q(c_sub, """
-                                SELECT s.problem_id, s.student_answer, s.is_checked, i.img_base64 
+                                SELECT
+                                    s.problem_id,
+                                    s.student_answer,
+                                    s.is_checked,
+                                    i.img_base64
                                 FROM student_test_submissions s
-                                LEFT JOIN online_test_sessions sess ON s.student_name = sess.student_name AND s.test_title = sess.test_title
-                                LEFT JOIN online_test_items i ON sess.id = i.session_id 
+                                LEFT JOIN online_test_items i
+                                    ON i.session_id = (
+                                        SELECT id
+                                        FROM online_test_sessions
+                                        WHERE student_name = ? AND test_title = ?
+                                        ORDER BY id DESC
+                                        LIMIT 1
+                                    )
+                                    AND UPPER(i.unit_code || printf('%03d', CAST(i.prob_num AS INTEGER))) = UPPER(s.problem_id)
                                 WHERE s.student_name = ? AND s.test_title = ?
-                            """, (s_name, t_title))
-                        detail_rows = c_sub.fetchall()
+                                GROUP BY s.id
+                                ORDER BY s.id ASC
+                            """, (s_name, t_title, s_name, t_title))
+                        raw_detail_rows = c_sub.fetchall()
+
+                        # 동일 문제 코드가 재제출 등으로 DB에 여러 번 남아있을 경우 가장 최신(마지막) 기록 1건만 유지
+                        dedup_map = {}
+                        for p_id, u_ans, is_chk, img_b64 in raw_detail_rows:
+                            dedup_map[p_id] = (p_id, u_ans, is_chk, img_b64)
+                        detail_rows = list(dedup_map.values())
 
                         if detail_rows:
                             for d_idx, (p_id, u_ans, is_chk, img_b64) in enumerate(detail_rows):
