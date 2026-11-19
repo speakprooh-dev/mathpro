@@ -2610,14 +2610,19 @@ else:
                         selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
                         filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
 
-                        grouped_map = {}
+                        grouped_week_map = {}
                         for s_name, u_code, p_num, reg_date in filtered_logs:
-                            key = (s_name, u_code, reg_date)
-                            grouped_map.setdefault(key, []).append(p_num)
+                            key = (s_name, u_code)
+                            if key not in grouped_week_map:
+                                grouped_week_map[key] = {"nums": set(), "dates": []}
+                            grouped_week_map[key]["nums"].add(int(p_num))
+                            if reg_date:
+                                grouped_week_map[key]["dates"].append(reg_date)
                         
-                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                            nums_txt = ", ".join(map(str, sorted(num_list)))
-                            target_rows.append((s_name, u_code, nums_txt, reg_date))
+                        for (s_name, u_code), info in grouped_week_map.items():
+                            nums_txt = ", ".join(map(str, sorted(list(info["nums"]))))
+                            date_span_str = f"{min(info['dates'])} ~ {max(info['dates'])}" if info["dates"] else (selected_week or "")
+                            target_rows.append((s_name, u_code, nums_txt, date_span_str))
             else:
                 if chk_student_choice == "전체 학생 (모두 보기)":
                     q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
