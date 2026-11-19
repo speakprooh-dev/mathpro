@@ -1130,14 +1130,23 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
     today_str = str(get_korean_today())
     now_str = get_korean_now_str()
     try:
+        # 1. 저장 전 기존 누적 오답 번호 조회
+        prev_text = get_student_wrong_entry(student_name, unit_code)
+        prev_nums = parse_numbers(prev_text)
+        new_total_nums = parse_numbers(numbers_text)
+
+        # 2. 이번에 새로 추가된 번호만 추출 (누적 번호 중 기존에 없던 번호)
+        newly_added_nums = sorted(list(new_total_nums - prev_nums))
+
+        # 3. 전체 누적 오답 목록은 student_wrong_entries에 저장
         if db_type == "sqlite":
             q(c, "DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
         else:
-            q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?", (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
+            q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?", (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
         
-        parsed_nums = parse_numbers(numbers_text)
-        for num in parsed_nums:
+        # 4. '새로 추가된 번호'만 당일 로그(student_wrong_logs)에 기록
+        for num in newly_added_nums:
             if db_type == "sqlite":
                 q(c, "INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (?, ?, ?, ?, ?)", (student_name, unit_code, int(num), today_str, now_str))
             else:
@@ -1146,6 +1155,7 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
         conn.commit()
         get_student_wrong_entry.clear()
         get_all_student_wrong_entries.clear()
+        get_cached_wrong_logs.clear()
     except Exception as e:
         print(f"오답 저장 중 예외: {e}")
 
