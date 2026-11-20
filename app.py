@@ -2298,7 +2298,9 @@ if not st.session_state["teacher_authenticated"]:
                 sessions_by_week = {}
                 for s in sessions_list:
                     s_id, s_title, s_created, s_completed = s
-                    week_key = get_week_range_str(s_created) if s_created else "기타 주간"
+                    parsed_d = extract_test_date(s_title, s_created)
+                    ref_date_str = str(parsed_d) if parsed_d else s_created
+                    week_key = get_week_range_str(ref_date_str) if ref_date_str else "기타 주간"
                     sessions_by_week.setdefault(week_key, []).append(s)
 
                 sorted_weeks = sorted(sessions_by_week.keys(), reverse=True)
