@@ -2843,7 +2843,7 @@ if not st.session_state["teacher_authenticated"]:
                                         target_filename = f"{u_part}_ans_({n_digits}).png"
                                         ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                     
-                                        st.markdown(f"**서술형 #{idx_q}**")
+                                        st.markdown(f"**서술형 — {q_prob['order']}번 문제**")
                                         st.markdown(
                                             f"<div style='margin: 4px 0 8px 0;'>"
                                             f"<span style='font-size: 13px; color: #9CA3AF;'>정답지:</span><br>"
