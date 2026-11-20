@@ -864,6 +864,22 @@ def get_student_daily_logs_by_date(student_name, target_date_str):
     return log_map
 
 @st.cache_data(ttl=60, show_spinner=False)
+def get_student_daily_logs_by_dates(student_name, date_strs):
+    if not date_strs:
+        return {}
+    date_tuple = tuple(sorted(list(set(str(d) for d in date_strs))))
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    placeholders = ", ".join(["%s" if db_type == "postgres" else "?"] * len(date_tuple))
+    q(
+        c,
+        f"SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date IN ({placeholders})",
+        [student_name] + list(date_tuple)
+    )
+    rows = c.fetchall()
+    return {(str(r_id), str(l_date)): bool(val) for r_id, l_date, val in rows}
+
+@st.cache_data(ttl=60, show_spinner=False)
 def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
@@ -924,6 +940,7 @@ def save_single_routine_log(student_name, routine_id_str, log_date_str, val):
     q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date_str, int(val), int(val)))
     conn.commit()
     get_student_daily_logs_by_date.clear()
+    get_student_daily_logs_by_dates.clear()
     get_routine_completion_rate.clear()
     get_student_routine_streak.clear()
 
@@ -934,6 +951,7 @@ def save_daily_routine_logs(student_name, log_date, routine_checked_dict):
         q(c, "INSERT INTO daily_routine_logs (student_name, routine_id, log_date, is_checked) VALUES (?, ?, ?, ?) ON CONFLICT(student_name, routine_id, log_date) DO UPDATE SET is_checked = ?", (student_name, str(routine_id_str), log_date, int(val), int(val)))
     conn.commit()
     get_student_daily_logs_by_date.clear()
+    get_student_daily_logs_by_dates.clear()
     get_routine_completion_rate.clear()
     get_student_routine_streak.clear()
 
@@ -1629,64 +1647,67 @@ if not st.session_state["teacher_authenticated"]:
             today_obj = get_korean_today()
             today_str = str(today_obj)
             daily_routines_list = get_student_daily_routines(selected_student)
-            today_routine_logs = get_student_daily_logs_by_date(selected_student, today_str)
-            today_hws = get_student_homework_by_date(selected_student, today_str)
 
-            st.markdown(f"### 📚 오늘의 숙제 및 루틴 ({today_str} · {get_weekday_kr(today_str)})")
+            # 최근 숙제 날짜가 맨 앞에 오도록 정렬
+            sorted_hw_dates = sorted(list(set(hw_dates or [])), reverse=True)
+            default_target_date = sorted_hw_dates[0] if sorted_hw_dates else today_str
 
-            # 1) 오늘 개별 숙제 현황
-            actual_today_hws = [h for h in today_hws if not h[1].startswith("💬 [선생님 메시지]:")]
-            total_today_h = len(actual_today_hws)
-            completed_today_h = sum(1 for h_item in actual_today_hws if h_progress.get(h_item[0], False))
+            st.markdown("### 📚 날짜별 숙제 및 주간 루틴")
 
-            # 2) 오늘 매일 루틴 현황
-            total_today_rt = len(daily_routines_list)
-            completed_today_rt = sum(
+            if sorted_hw_dates:
+                date_options = sorted_hw_dates if today_str in sorted_hw_dates else sorted_hw_dates + [today_str]
+                default_idx = date_options.index(default_target_date) if default_target_date in date_options else 0
+
+                selected_hw_date = st.selectbox(
+                    "📅 확인할 숙제 날짜 선택 (최근 날짜 우선)",
+                    options=date_options,
+                    index=default_idx,
+                    format_func=lambda d: f"{d} ({get_weekday_kr(d)})" + (" · 오늘" if d == today_str else (" · 최근 숙제" if d == sorted_hw_dates[0] else "")),
+                    key=f"s_hw_date_sel_{selected_student}"
+                )
+            else:
+                selected_hw_date = today_str
+                st.caption(f"기준 날짜: {selected_hw_date} ({get_weekday_kr(selected_hw_date)})")
+
+            target_date_str = str(selected_hw_date)
+            target_hws = get_student_homework_by_date(selected_student, target_date_str)
+
+            # 선택 날짜 개별 숙제 현황
+            actual_target_hws = [h for h in target_hws if not h[1].startswith("💬 [선생님 메시지]:")]
+            total_target_h = len(actual_target_hws)
+            completed_target_h = sum(1 for h_item in actual_target_hws if h_progress.get(h_item[0], False))
+
+            # 해당 주(월~일) 날짜 계산
+            base_d = date.fromisoformat(target_date_str)
+            week_start = base_d - timedelta(days=base_d.weekday())
+            week_days = [(week_start + timedelta(days=i)) for i in range(7)]
+            week_day_strs = [str(d) for d in week_days]
+
+            # 주간 루틴 로그 일괄 조회
+            week_log_map = get_student_daily_logs_by_dates(selected_student, week_day_strs)
+
+            total_week_rt = len(daily_routines_list) * 7
+            completed_week_rt = sum(
                 1 for r_id, _ in daily_routines_list
-                if today_routine_logs.get((str(r_id), today_str), False)
+                for d_str in week_day_strs
+                if week_log_map.get((str(r_id), d_str), False)
             )
 
             col_p1, col_p2 = st.columns(2)
             with col_p1:
-                st.markdown(f"📚 **오늘 숙제 현황**: 총 **{total_today_h}개** 중 **{completed_today_h}개** 완료")
+                st.markdown(f"📚 **선택일 숙제 현황**: 총 **{total_target_h}개** 중 **{completed_target_h}개** 완료")
             with col_p2:
-                st.markdown(f"🔁 **오늘 루틴 현황**: 총 **{total_today_rt}개** 중 **{completed_today_rt}개** 완료")
+                st.markdown(f"🔁 **이번 주 루틴 현황**: 총 **{total_week_rt}칸** 중 **{completed_week_rt}칸** 완료")
 
-            st.markdown(
-                "<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>"
-                "📌 오늘 숙제와 매일 반복 루틴을 완료한 후 체크박스를 꼭 눌러주세요!</p>",
-                unsafe_allow_html=True
-            )
-
+            # 1) 선택 날짜 개별 숙제 카드
             with st.container(border=True):
-                # 1) 오늘 매일 반복 루틴 통합 표시
-                if daily_routines_list:
-                    st.markdown(
-                        "<div style='font-size:13px; font-weight:bold; color:#F59E0B; margin-bottom:6px;'>🔁 매일 반복 루틴</div>",
-                        unsafe_allow_html=True
-                    )
-                    for r_id, r_title in daily_routines_list:
-                        rt_default = today_routine_logs.get((str(r_id), today_str), False)
-                        rt_key = f"s_daily_{selected_student}_{today_str}_{r_id}"
-
-                        def on_routine_change(r_id=r_id, key=rt_key):
-                            save_single_routine_log(selected_student, str(r_id), today_str, st.session_state[key])
-
-                        st.checkbox(
-                            f"[루틴] {r_title}",
-                            value=rt_default,
-                            key=rt_key,
-                            on_change=on_routine_change
-                        )
-                    st.divider()
-
-                # 2) 오늘 날짜 개별 숙제 표시
                 st.markdown(
-                    "<div style='font-size:13px; font-weight:bold; color:#0284C7; margin-bottom:6px;'>📝 오늘의 개별 숙제</div>",
+                    f"<div style='font-size:13px; font-weight:bold; color:#0284C7; margin-bottom:6px;'>"
+                    f"📝 {target_date_str} ({get_weekday_kr(target_date_str)}) 개별 숙제</div>",
                     unsafe_allow_html=True
                 )
-                if today_hws:
-                    for h_idx, hw_tuple in enumerate(today_hws):
+                if target_hws:
+                    for h_idx, hw_tuple in enumerate(target_hws):
                         h_id = hw_tuple[0]
                         title = hw_tuple[1]
                         due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
@@ -1695,7 +1716,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.info(f"📌 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                         else:
                             default_val = h_progress.get(h_id, False)
-                            chk_key = f"s_hw_{selected_student}_{today_str}_{h_id}_{h_idx}"
+                            chk_key = f"s_hw_{selected_student}_{target_date_str}_{h_id}_{h_idx}"
 
                             def on_hw_change(h_id=h_id, key=chk_key):
                                 new_val = st.session_state[key]
@@ -1719,7 +1740,44 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                 else:
-                    st.caption("오늘 등록된 개별 숙제가 없습니다.")
+                    st.caption("선택한 날짜에 등록된 개별 숙제가 없습니다.")
+
+            # 2) 루틴별 주간(월~일) 체크버튼 카드
+            @st.fragment
+            def render_weekly_routine_grid():
+                with st.container(border=True):
+                    st.markdown(
+                        f"<div style='font-size:13px; font-weight:bold; color:#F59E0B; margin-bottom:8px;'>"
+                        f"🔁 주간 루틴 체크 ({week_days[0]} ~ {week_days[-1]} · 월~일)</div>",
+                        unsafe_allow_html=True
+                    )
+                    if not daily_routines_list:
+                        st.caption("등록된 매일 반복 루틴이 없습니다.")
+                        return
+
+                    day_labels = ["월", "화", "수", "목", "금", "토", "일"]
+                    for r_id, r_title in daily_routines_list:
+                        st.markdown(f"**• {r_title}**")
+                        cols_days = st.columns(7)
+                        for idx_d, d_obj in enumerate(week_days):
+                            d_str = str(d_obj)
+                            is_today_mark = "📍" if d_str == today_str else ""
+                            chk_default = week_log_map.get((str(r_id), d_str), False)
+                            wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
+
+                            def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
+                                save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
+
+                            with cols_days[idx_d]:
+                                st.checkbox(
+                                    f"{day_labels[idx_d]}{is_today_mark}",
+                                    value=chk_default,
+                                    key=wk_key,
+                                    on_change=on_wk_routine_change
+                                )
+                        st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+
+            render_weekly_routine_grid()
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
@@ -2762,7 +2820,7 @@ else:
                             nums_txt = ", ".join(map(str, sorted(num_list)))
                             target_rows.append((s_name, u_code, nums_txt, reg_date))
                     else:
-                        def get_week_range_str(date_str):
+                        def get_week_range_str_local(date_str):
                             try:
                                 d = date.fromisoformat(date_str[:10])
                                 start_week = d - timedelta(days=d.weekday())
@@ -2773,7 +2831,7 @@ else:
                         
                         weeks_dict = {}
                         for s_name, u_code, p_num, reg_date in log_rows:
-                            weeks_dict.setdefault(get_week_range_str(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                            weeks_dict.setdefault(get_week_range_str_local(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
                         
                         sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
                         selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
