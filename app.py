@@ -1924,17 +1924,53 @@ if not st.session_state["teacher_authenticated"]:
                         unsafe_allow_html=True
                     )
 
-                    col_nav1, col_nav2, col_nav3 = st.columns([1, 0.9, 1], gap="small")
+                    st.markdown(
+                        """
+                        <style>
+                        .week-nav-marker + div[data-testid="stHorizontalBlock"] {
+                            display: flex !important;
+                            flex-direction: row !important;
+                            flex-wrap: nowrap !important;
+                            align-items: center !important;
+                            gap: 6px !important;
+                        }
+                        .week-nav-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                            flex: 1 1 0 !important;
+                            min-width: 0 !important;
+                            width: auto !important;
+                        }
+                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button {
+                            min-height: 28px !important;
+                            height: 28px !important;
+                            padding: 2px 6px !important;
+                            border-radius: 6px !important;
+                        }
+                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button p {
+                            font-size: 11px !important;
+                            line-height: 1.15 !important;
+                            white-space: nowrap !important;
+                            text-align: center !important;
+                        }
+                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button > div {
+                            justify-content: center !important;
+                        }
+                        </style>
+                        <div class="week-nav-marker" style="display:none;"></div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    col_nav1, col_nav2, col_nav3 = st.columns([1.15, 0.85, 1.15], gap="small")
                     with col_nav1:
-                        if st.button("◀ 이전 주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
+                        if st.button("◀ 이전주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
                             st.session_state[week_offset_key] = wk_offset - 1
                             st.rerun(scope="fragment")
                     with col_nav2:
-                        if st.button("이번 주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
+                        if st.button("이번주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
                             st.session_state[week_offset_key] = 0
                             st.rerun(scope="fragment")
                     with col_nav3:
-                        if st.button("다음 주 ▶", key=f"btn_next_wk_{selected_student}", use_container_width=True):
+                        if st.button("다음주 ▶", key=f"btn_next_wk_{selected_student}", use_container_width=True):
                             st.session_state[week_offset_key] = wk_offset + 1
                             st.rerun(scope="fragment")
 
