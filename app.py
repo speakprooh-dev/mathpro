@@ -2722,6 +2722,7 @@ if not st.session_state["teacher_authenticated"]:
                     
                     
                     def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
+                        # 리뷰 화면에서 셀프채점 등으로 정답(is_correct == 1) 처리된 문항은 재풀이 대상에서 제외
                         wrong_items_for_retry = [
                             prob for prob in prob_list
                             if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
@@ -2730,14 +2731,16 @@ if not st.session_state["teacher_authenticated"]:
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
                     
+                        # 제출 직후에도 바로 retry로 가지 않고, 먼저 리뷰 화면(표기 확인/셀프채점)을 보여줌
                         if st.session_state.get(just_submitted_key, False):
-                            if len(wrong_items_for_retry) > 0:
-                                st.session_state[retry_stage_key] = "retry"
-                            else:
-                                st.session_state[retry_stage_key] = "review"
+                            st.session_state[retry_stage_key] = "review"
                             st.session_state[just_submitted_key] = False
                     
                         if retry_stage_key not in st.session_state:
+                            st.session_state[retry_stage_key] = "review"
+                    
+                        # 만약 현재 다시풀기 중인데 셀프채점 등으로 남은 오답이 0개가 되었다면 리뷰로 복귀
+                        if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) == 0:
                             st.session_state[retry_stage_key] = "review"
                     
                         reolved_map_key = f"reolved_wrong_map_{sess_id}"
@@ -2776,15 +2779,21 @@ if not st.session_state["teacher_authenticated"]:
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
                                 <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
                                 <p style="font-size: 14px; margin: 0;">
-                                    채점 결과를 보기 전에 틀린 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
+                                    표기 확인 및 셀프채점을 마친 오답 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
                                     (답 입력/선택: <b>{attempted_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
                     
-                            if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
-                                run_retry_grading_and_go_review()
-                                st.rerun()
+                            col_top_1, col_top_2 = st.columns([3, 1])
+                            with col_top_1:
+                                if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
+                                    run_retry_grading_and_go_review()
+                                    st.rerun()
+                            with col_top_2:
+                                if st.button("⬅️ 리뷰로 돌아가기", use_container_width=True, key=f"btn_back_to_review_{sess_id}"):
+                                    st.session_state[retry_stage_key] = "review"
+                                    st.rerun()
                     
                             choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                     
@@ -2840,8 +2849,18 @@ if not st.session_state["teacher_authenticated"]:
                                 run_retry_grading_and_go_review()
                                 st.rerun()
                         else:
+                            # 리뷰 단계: 먼저 주관식 표기 확인 및 서술형 셀프채점을 진행한 뒤, 남은 오답만 다시 풀기 가능
                             if len(wrong_items_for_retry) > 0:
-                                if st.button("🔁 틀린 문제 다시 풀어보기 단계 열기", use_container_width=True, key=f"btn_reopen_retry_{sess_id}"):
+                                st.info(
+                                    f"💡 주관식 표기 확인 및 서술형 셀프채점을 마친 뒤, "
+                                    f"최종 오답 **{len(wrong_items_for_retry)}문항**을 다시 풀어볼 수 있습니다."
+                                )
+                                if st.button(
+                                    f"🔁 최종 오답 {len(wrong_items_for_retry)}문항 다시 풀기",
+                                    type="primary",
+                                    use_container_width=True,
+                                    key=f"btn_reopen_retry_{sess_id}"
+                                ):
                                     st.session_state[retry_stage_key] = "retry"
                                     st.rerun()
                     
