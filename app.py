@@ -343,6 +343,41 @@ def restore_from_excel(uploaded_file):
     except Exception as e:
         return False, f"복구 중 오류 발생: {str(e)}"
 
+def cleanup_duplicate_wrong_logs():
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            c.execute("""
+                DELETE FROM student_wrong_logs a
+                USING student_wrong_logs b
+                WHERE a.student_name = b.student_name
+                  AND a.unit_code = b.unit_code
+                  AND a.prob_num = b.prob_num
+                  AND a.registered_date > b.registered_date
+            """)
+        else:
+            q(c, """
+                DELETE FROM student_wrong_logs
+                WHERE id IN (
+                    SELECT a.id
+                    FROM student_wrong_logs a
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM student_wrong_logs b
+                        WHERE a.student_name = b.student_name
+                          AND a.unit_code = b.unit_code
+                          AND a.prob_num = b.prob_num
+                          AND b.registered_date < a.registered_date
+                    )
+                )
+            """)
+        conn.commit()
+        st.cache_data.clear()
+        return True, "기존 중복 누적 로그 정리가 완료되었습니다!"
+    except Exception as e:
+        return False, f"로그 정리 중 오류 발생: {e}"
+
 def get_base_url():
     try:
         base_url = st.context.headers.get("Host", "")
@@ -1153,9 +1188,7 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
                 c.execute("INSERT INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (student_name, unit_code, prob_num, registered_date) DO NOTHING", (student_name, unit_code, int(num), today_str, now_str))
 
         conn.commit()
-        get_student_wrong_entry.clear()
-        get_all_student_wrong_entries.clear()
-        get_cached_wrong_logs.clear()
+        st.cache_data.clear()
     except Exception as e:
         print(f"오답 저장 중 예외: {e}")
 
@@ -1292,15 +1325,18 @@ with st.sidebar:
         st.divider()
         
         st.markdown("##### 📥/📤 데이터 백업 및 동기화")
-        if st.button("📦 전체 데이터 엑셀 백업 준비하기", use_container_width=True):
-            st.session_state["ready_excel_backup"] = create_excel_backup()
-        if "ready_excel_backup" in st.session_state:
+        if st.button("📦 전체 데이터 엑셀 백업 준비하기", use_container_width=True, key="btn_prepare_excel_backup"):
+            with st.spinner("엑셀 백업 파일을 생성하는 중..."):
+                st.session_state["ready_excel_backup"] = create_excel_backup()
+                st.session_state["ready_excel_backup_date"] = str(get_korean_today())
+        if st.session_state.get("ready_excel_backup"):
             st.download_button(
                 label="📥 준비된 엑셀 백업 다운로드",
                 data=st.session_state["ready_excel_backup"],
-                file_name=f"mathpro_backup_{get_korean_today()}.xlsx",
+                file_name=f"mathpro_backup_{st.session_state.get('ready_excel_backup_date', get_korean_today())}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                use_container_width=True,
+                key="btn_download_excel_backup"
             )
         
         with st.expander("🔄 엑셀 파일로 데이터 복구하기", expanded=False):
@@ -2551,6 +2587,16 @@ else:
     with t_cfg_wrong:
         st.markdown("#### 🔍 학생별 오답노트 조회 및 모아보기")
         if student_list:
+            with st.expander("🧹 기존 중복 누적 로그 일괄 정리하기 (1회성 정리 도구)", expanded=False):
+                st.caption("과거에 누적 저장되어 여러 날짜/주간에 중복 표시되는 이력을 최초 등록일 기준으로 깔끔하게 정리합니다.")
+                if st.button("🧹 기존 중복 오답 로그 정리 실행", key="btn_cleanup_dup_wrong_logs", use_container_width=True):
+                    ok_clean, msg_clean = cleanup_duplicate_wrong_logs()
+                    if ok_clean:
+                        st.success(msg_clean)
+                        st.rerun()
+                    else:
+                        st.error(msg_clean)
+
             chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
             wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
             
@@ -2595,7 +2641,7 @@ else:
                     else:
                         def get_week_range_str(date_str):
                             try:
-                                d = date.fromisoformat(date_str)
+                                d = date.fromisoformat(date_str[:10])
                                 start_week = d - timedelta(days=d.weekday())
                                 end_week = start_week + timedelta(days=6)
                                 return f"{start_week} ~ {end_week} (월~일)"
