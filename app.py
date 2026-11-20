@@ -1764,35 +1764,67 @@ if not st.session_state["teacher_authenticated"]:
 
                     day_labels = ["월", "화", "수", "목", "금", "토", "일"]
 
-                    def render_day_checkbox(r_id, idx_d, d_obj):
-                        d_str = str(d_obj)
-                        is_today_mark = " 📍" if d_str == today_str else ""
-                        chk_default = week_log_map.get((str(r_id), d_str), False)
-                        wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
-
-                        def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
-                            save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
-
-                        st.checkbox(
-                            f"{day_labels[idx_d]}({d_obj.day}일){is_today_mark}",
-                            value=chk_default,
-                            key=wk_key,
-                            on_change=on_wk_routine_change
-                        )
+                    st.markdown(
+                        """
+                        <style>
+                        /* 주간 루틴 한 줄 컴팩트 체크박스 스타일 */
+                        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stCheckbox"] input[aria-label*="wk_rt_"]),
+                        .weekly-compact-row div[data-testid="stHorizontalBlock"] {
+                            display: flex !important;
+                            flex-direction: row !important;
+                            flex-wrap: nowrap !important;
+                            gap: 2px !important;
+                            align-items: center !important;
+                            overflow-x: auto !important;
+                        }
+                        .weekly-compact-row div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                            flex: 1 1 0 !important;
+                            min-width: 0 !important;
+                            padding: 0 !important;
+                        }
+                        .weekly-compact-row div[data-testid="stCheckbox"] {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            justify-content: center !important;
+                        }
+                        .weekly-compact-row div[data-testid="stCheckbox"] label {
+                            gap: 2px !important;
+                            padding: 2px 1px !important;
+                            justify-content: center !important;
+                        }
+                        .weekly-compact-row div[data-testid="stCheckbox"] label p {
+                            font-size: 11px !important;
+                            line-height: 1.15 !important;
+                            letter-spacing: -0.4px !important;
+                            white-space: nowrap !important;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
                     for r_id, r_title in daily_routines_list:
-                        st.markdown(f"**• {r_title}**")
+                        st.markdown(f"<div style='font-size:13px; font-weight:bold; margin-bottom:4px;'>• {r_title}</div>", unsafe_allow_html=True)
+                        st.markdown("<div class='weekly-compact-row'>", unsafe_allow_html=True)
+                        cols_7 = st.columns(7, gap="small")
+                        for idx_d, d_obj in enumerate(week_days):
+                            d_str = str(d_obj)
+                            is_today_mark = "📍" if d_str == today_str else ""
+                            chk_default = week_log_map.get((str(r_id), d_str), False)
+                            wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
 
-                        # 모바일에서도 2열(좌: 월~목 / 우: 금~일)로 유지되도록 st.columns(2) 사용
-                        cols_2 = st.columns(2)
-                        with cols_2[0]:
-                            for idx_d in range(0, 4):
-                                render_day_checkbox(r_id, idx_d, week_days[idx_d])
-                        with cols_2[1]:
-                            for idx_d in range(4, 7):
-                                render_day_checkbox(r_id, idx_d, week_days[idx_d])
+                            def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
+                                save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
 
-                        st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                            with cols_7[idx_d]:
+                                st.checkbox(
+                                    f"{day_labels[idx_d]}({d_obj.day}){is_today_mark}",
+                                    value=chk_default,
+                                    key=wk_key,
+                                    on_change=on_wk_routine_change
+                                )
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
             render_weekly_routine_grid()
 
