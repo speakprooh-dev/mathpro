@@ -3572,6 +3572,9 @@ else:
                     st.info("날짜 정보가 있는 테스트가 없습니다.")
                     filtered_sessions = []
 
+            unsubmitted_cnt = sum(1 for x in filtered_sessions if x[4] != 1)
+            completed_cnt = sum(1 for x in filtered_sessions if x[4] == 1)
+
             if filtered_sessions:
                 with st.expander(
                     f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개 · 🆕 미제출 {unsubmitted_cnt} / ✅ 완료 {completed_cnt}) — 터치하여 펼치기",
