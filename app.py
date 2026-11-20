@@ -2794,7 +2794,7 @@ else:
                 grouped_t_milestones = {}
                 for m_id, sub, ch, t_name, v_url in sorted_s_milestones:
                     grouped_t_milestones.setdefault((sub, ch), []).append((m_id, t_name, v_url))
-                
+
                 def parse_chapter_sort_key_teacher(sub_ch_tuple):
                     sub, ch = sub_ch_tuple
                     match = re.search(r'(\d+)', ch)
@@ -2803,16 +2803,38 @@ else:
 
                 sorted_t_grouped_keys = sorted(grouped_t_milestones.keys(), key=parse_chapter_sort_key_teacher)
 
-                for (sub, ch) in sorted_t_grouped_keys:
-                    items = grouped_t_milestones[(sub, ch)]
-                    done_cnt = sum(1 for m_id, _, _ in items if s_m_progress.get(m_id, False))
-                    with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=False):
-                        for idx, (m_id, t_name, v_url) in enumerate(items):
-                            is_done = s_m_progress.get(m_id, False)
-                            chk_key = f"t_milestone_{selected_student}_{ch}_{m_id}_{idx}"
-                            if st.checkbox(f"{t_name}", value=is_done, key=chk_key) != is_done:
-                                save_single_milestone_progress(selected_student, m_id, st.session_state[chk_key])
-                                st.rerun()
+                @st.fragment
+                def render_teacher_milestone_list(stu_name, grouped_keys, grouped_map, prog_map):
+                    open_exp_key = f"t_open_chapter_{stu_name}"
+                    if open_exp_key not in st.session_state:
+                        st.session_state[open_exp_key] = None
+
+                    current_prog = dict(prog_map)
+
+                    for (sub, ch) in grouped_keys:
+                        items = grouped_map[(sub, ch)]
+                        done_cnt = sum(1 for m_id, _, _ in items if current_prog.get(m_id, False))
+                        chapter_tag = f"{sub}||{ch}"
+                        is_expanded = (st.session_state[open_exp_key] == chapter_tag)
+
+                        with st.expander(f"[{sub}] {ch}  (완료: {done_cnt}/{len(items)})", expanded=is_expanded):
+                            st.session_state[open_exp_key] = chapter_tag
+                            for idx, (m_id, t_name, v_url) in enumerate(items):
+                                is_done = current_prog.get(m_id, False)
+                                chk_key = f"t_milestone_{stu_name}_{ch}_{m_id}_{idx}"
+
+                                def on_t_milestone_change(m_id_val=m_id, k=chk_key, tag=chapter_tag):
+                                    st.session_state[open_exp_key] = tag
+                                    save_single_milestone_progress(stu_name, m_id_val, st.session_state[k])
+
+                                st.checkbox(
+                                    f"{t_name}",
+                                    value=is_done,
+                                    key=chk_key,
+                                    on_change=on_t_milestone_change
+                                )
+
+                render_teacher_milestone_list(selected_student, sorted_t_grouped_keys, grouped_t_milestones, s_m_progress)
             else:
                 st.info("해당 학생에게 배정된 단원이 없습니다.")
 
