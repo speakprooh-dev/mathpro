@@ -2426,40 +2426,69 @@ if not st.session_state["teacher_authenticated"]:
                     @st.fragment
                     def render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title):
                         correct_cnt = sum(1 for r in res_list if r.get("is_correct") == 1)
+                        wrong_items = [
+                            prob for prob in prob_list
+                            if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
+                        ]
+                        wrong_cnt = len(wrong_items)
+
+                        reolved_map_key = f"reolved_wrong_map_{sess_id}"
+                        if reolved_map_key not in st.session_state:
+                            st.session_state[reolved_map_key] = {}
+                        reolved_map = st.session_state[reolved_map_key]
+
+                        reolved_done_cnt = sum(
+                            1 for w_prob in wrong_items
+                            if reolved_map.get(w_prob["full_code"], False)
+                        )
+
                         st.session_state[f"correct_count_{sess_id}"] = correct_cnt
-                        
+
                         st.markdown(f"""
-                        <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
-                            <h2 style="color: #0284C7; margin: 0 0 10px 0;">🎉 과제 제출 및 자동 채점 완료!</h2>
-                            <p style="font-size: 18px; font-weight: bold; margin: 0;">
-                                총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span>
+                        <div style="background-color: var(--secondary-background-color); border: 2px solid #0284C7; padding: 18px; border-radius: 12px; text-align: center; margin-bottom: 16px;">
+                            <h3 style="color: #0284C7; margin: 0 0 8px 0;">🎉 과제 제출 및 자동 채점 완료!</h3>
+                            <p style="font-size: 16px; font-weight: bold; margin: 0;">
+                                총 {len(prob_list)}문항 중 <span style="color: #10B981;">{correct_cnt}문항 정답</span> · <span style="color: #EF4444;">{wrong_cnt}문항 오답</span>
                             </p>
-                            <p style="font-size: 14px; color: #EF4444; font-weight: bold; margin-top: 10px; background-color: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 6px;">
-                                ⚠️ 아래에서 정답을 확인하시고, 오답노트에 담을 문제를 체크하신 후 <b>[선택한 문제들을 오답노트에 등록하기]</b> 버튼을 꼭 눌러주세요!
+                            <p style="font-size: 13px; color: #F59E0B; font-weight: bold; margin-top: 8px; margin-bottom: 0;">
+                                🔁 틀린 문제 재풀이: {reolved_done_cnt} / {wrong_cnt}문항 완료
                             </p>
                         </div>
                         """, unsafe_allow_html=True)
-    
+
                         if "master_dir_input" not in st.session_state:
                             st.session_state["master_dir_input"] = r"D:\MathPro\master_answer"
-                            
+
                         with st.expander("⚙️ 정답 이미지 폴더 경로 설정", expanded=False):
                             st.session_state["master_dir_input"] = st.text_input(
                                 "master_dir_input 폴더의 실제 경로를 입력하세요:",
                                 value=st.session_state["master_dir_input"],
                                 key=f"master_dir_{sess_id}"
                             )
-    
-                        st.markdown(f"### 📝 전체 문항별 채점 결과 및 검토 ({len(prob_list)}개)")
+
+                        only_wrong_key = f"only_wrong_filter_{sess_id}"
+                        if wrong_cnt > 0:
+                            only_wrong_mode = st.toggle(
+                                f"🎯 틀린 문제만 모아 보기 ({wrong_cnt}문항)",
+                                value=st.session_state.get(only_wrong_key, True),
+                                key=only_wrong_key
+                            )
+                        else:
+                            only_wrong_mode = False
+                            st.success("👏 이번 테스트는 틀린 문제가 없어요! 전체 결과를 확인해 보세요.")
+
+                        display_prob_list = wrong_items if (only_wrong_mode and wrong_items) else prob_list
+
+                        st.markdown(f"### 📝 검토 문항 ({len(display_prob_list)}개)")
 
                         selected_wrong_notes = {}
-                        
-                        all_f_codes = [prob["full_code"] for prob in prob_list]
+
+                        all_f_codes = [prob["full_code"] for prob in display_prob_list]
                         batch_review_links = get_batch_problem_link_info(all_f_codes)
-    
-                        for prob in prob_list:
+
+                        for prob in display_prob_list:
                             matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
-                            
+
                             ans_str = str(prob.get("answer", "")).strip()
                             filename_str = str(prob.get("filename", "")).strip()
 
@@ -2475,10 +2504,14 @@ if not st.session_state["teacher_authenticated"]:
                                 is_cor = 0
                                 ox_mark = "-"
                                 ox_color = "gray"
-    
+
                             v_url, _ = batch_review_links.get(prob["full_code"], ("", ""))
-                            link_btn = f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>' if v_url else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
-    
+                            link_btn = (
+                                f'<a href="{v_url}" target="_blank" style="background-color:#EF4444; color:white; padding:2px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold;">해설영상</a>'
+                                if v_url
+                                else '<span style="color:gray; font-size:11px;">해설 준비중</span>'
+                            )
+
                             f_code = str(prob["full_code"]).strip()
                             u_part = f_code[:4] if len(f_code) > 4 else "A114"
                             num_part = f_code[4:] if len(f_code) > 4 else f_code
@@ -2486,26 +2519,30 @@ if not st.session_state["teacher_authenticated"]:
                             project_id = "qfpclacalaaxbhhheosw"
                             target_filename = f"{u_part}_ans_({n_digits}).png"
                             img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
-                            
+
                             if r_ans and r_ans != "-":
                                 ans_display = f"<b style='color: #10B981;'>{r_ans}</b>"
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
-    
-                            clean_ans_review = ans_str.replace("@", "").replace("번", "").strip()
-                            is_multiple_choice_item = (
-                                "@" in filename_str or 
-                                any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                ans_str in ["1번", "2번", "3번", "4번", "5번"] or
-                                clean_ans_review in ["1", "2", "3", "4", "5"]
+
+                            clean_ans_check = ans_str.replace("@", "").replace("번", "").strip()
+                            is_explicit_subjective = (
+                                any(k in filename_str for k in ["서술형", "주관식", "단답"]) or
+                                any(k in ans_str for k in ["서술형", "주관식"])
                             )
+                            has_choice_signal = (
+                                ("@" in filename_str) or
+                                any(circ in ans_str or circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
+                                (ans_str in ["1번", "2번", "3번", "4번", "5번"]) or
+                                (clean_ans_check in ["1", "2", "3", "4", "5"])
+                            )
+                            is_multiple_choice_item = (not is_explicit_subjective) and has_choice_signal
 
                             with st.container(border=True):
                                 st.markdown(
-                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 4px; padding: 4px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
+                                    f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 6px; padding: 5px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
                                     f"  <div>"
-                                    f"    <b style='color: #E5E7EB;'>{prob['order']}번 문제</b> "
+                                    f"    <b>{prob['order']}번 문제</b> "
                                     f"    <span style='color: #9CA3AF; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
                                     f"  </div>"
@@ -2513,13 +2550,17 @@ if not st.session_state["teacher_authenticated"]:
                                     f"</div>",
                                     unsafe_allow_html=True
                                 )
-                                
+
                                 img_exp_key = f"toggle_img_{sess_id}_{prob['item_id']}"
                                 if img_exp_key not in st.session_state:
                                     st.session_state[img_exp_key] = False
 
                                 is_img_open = st.session_state[img_exp_key]
-                                if st.button(f"{'🖼️ 문제 사진 접기 ▲' if is_img_open else '🖼️ 문제 사진 보기 (터치해서 열기) ▼'}", key=f"btn_top_img_{img_exp_key}", use_container_width=True):
+                                if st.button(
+                                    f"{'🖼️ 문제 사진 접기 ▲' if is_img_open else '🖼️ 문제 사진 보기 ▼'}",
+                                    key=f"btn_top_img_{img_exp_key}",
+                                    use_container_width=True
+                                ):
                                     st.session_state[img_exp_key] = not is_img_open
                                     st.rerun(scope="fragment")
 
@@ -2529,17 +2570,21 @@ if not st.session_state["teacher_authenticated"]:
                                             st.image(prob["img_bytes"], use_container_width=True)
                                         else:
                                             st.info("💡 등록된 문제 이미지가 없습니다.")
-                                        
-                                        if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_img_{img_exp_key}", use_container_width=True):
+
+                                        if st.button("접기 ▲", key=f"btn_bot_img_{img_exp_key}", use_container_width=True):
                                             st.session_state[img_exp_key] = False
                                             st.rerun(scope="fragment")
-    
+
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
                                     st.session_state[ans_exp_key] = False
 
                                 is_ans_open = st.session_state[ans_exp_key]
-                                if st.button(f"{'🔍 정답 및 채점 확인 접기 ▲' if is_ans_open else '🔍 정답 및 채점 확인하기 (터치해서 열기) ▼'}", key=f"btn_top_ans_{ans_exp_key}", use_container_width=True):
+                                if st.button(
+                                    f"{'🔍 정답 및 채점 확인 접기 ▲' if is_ans_open else '🔍 정답 및 채점 확인하기 ▼'}",
+                                    key=f"btn_top_ans_{ans_exp_key}",
+                                    use_container_width=True
+                                ):
                                     st.session_state[ans_exp_key] = not is_ans_open
                                     st.rerun(scope="fragment")
 
@@ -2551,7 +2596,7 @@ if not st.session_state["teacher_authenticated"]:
                                             f"</div>",
                                             unsafe_allow_html=True
                                         )
-                                        
+
                                         if not is_multiple_choice_item and matched_res is not None:
                                             current_self_val = 1 if is_cor == 1 else 0
                                             self_review_choice = st.radio(
@@ -2566,43 +2611,61 @@ if not st.session_state["teacher_authenticated"]:
                                                 matched_res["is_correct"] = new_is_cor
                                                 is_postgres = "psycopg2" in str(type(conn_test))
                                                 if is_postgres:
-                                                    c_test.execute("UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s", (new_is_cor, s_name, s_title, prob['full_code']))
+                                                    c_test.execute(
+                                                        "UPDATE student_test_submissions SET is_checked = %s WHERE student_name = %s AND test_title = %s AND problem_id = %s",
+                                                        (new_is_cor, s_name, s_title, prob['full_code'])
+                                                    )
                                                 else:
-                                                    q(c_test, "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?", (new_is_cor, s_name, s_title, prob['full_code']))
+                                                    q(
+                                                        c_test,
+                                                        "UPDATE student_test_submissions SET is_checked = ? WHERE student_name = ? AND test_title = ? AND problem_id = ?",
+                                                        (new_is_cor, s_name, s_title, prob['full_code'])
+                                                    )
                                                 conn_test.commit()
                                                 st.rerun(scope="fragment")
 
-                                        if st.button("접기 ▲ (바로 닫기)", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
+                                        if st.button("접기 ▲", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
-    
+
+                                if is_cor != 1:
+                                    re_key = f"re_solve_chk_{sess_id}_{prob['full_code']}"
+                                    prev_re_val = bool(reolved_map.get(prob["full_code"], False))
+                                    re_checked = st.checkbox(
+                                        f"🔁 {prob['order']}번 노트에 다시 풀어봄 (재풀이 완료)",
+                                        value=prev_re_val,
+                                        key=re_key
+                                    )
+                                    if re_checked != prev_re_val:
+                                        reolved_map[prob["full_code"]] = re_checked
+                                        st.rerun(scope="fragment")
+
                                 is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                is_checked_default = False
-    
+
                                 if is_item_saved:
                                     st.checkbox(
-                                        f"✅ {prob['order']}번 문제 (오답노트 등록 완료됨)",
+                                        f"✅ {prob['order']}번 오답노트 등록 완료됨",
                                         value=True,
                                         disabled=True,
                                         key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
                                     )
                                 else:
                                     selected_wrong_notes[prob['full_code']] = st.checkbox(
-                                        f"📌 {prob['order']}번 오답노트 담기 (체크 후 맨 아래 등록 버튼을 누르면 추가 반영됩니다!)",
-                                        value=is_checked_default,
+                                        f"📌 {prob['order']}번 오답노트 담기",
+                                        value=False,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
                                     )
-    
+
                         if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                             manual_wrong_units = {}
                             current_checked_codes = []
-                            
-                            for prob in prob_list:
+
+                            for prob in display_prob_list:
                                 if selected_wrong_notes.get(prob['full_code'], False):
                                     current_checked_codes.append(prob['full_code'])
                                     if prob["unit_code"] != "TEST":
                                         manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
-    
+
                             try:
                                 for u_code, num_set in manual_wrong_units.items():
                                     existing_txt = get_student_wrong_entry(s_name, u_code)
@@ -2610,13 +2673,13 @@ if not st.session_state["teacher_authenticated"]:
                                     merged_nums = pre_nums | num_set
                                     merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
                                     save_student_wrong_entry(s_name, u_code, merged_txt, target_nums_to_log=num_set)
-                                
+
                                 for f_code in current_checked_codes:
                                     st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
-    
+
                                 st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
                                 st.rerun()
-                                
+
                             except Exception as e:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
         
