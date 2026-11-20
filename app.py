@@ -1885,38 +1885,6 @@ if not st.session_state["teacher_authenticated"]:
 
                 with st.container(border=True):
                     st.markdown(
-                        f"""
-                        <style>
-                        /* 주간 이동 버튼(◀ 이전 주 / 📍 이번 주 / 다음 주 ▶) 컴팩트 축소 */
-                        div[class*="st-key-btn_prev_wk_"] button,
-                        div[class*="st-key-btn_cur_wk_"] button,
-                        div[class*="st-key-btn_next_wk_"] button {{
-                            min-height: 28px !important;
-                            height: 28px !important;
-                            padding: 2px 6px !important;
-                            border-radius: 6px !important;
-                            font-size: 11.5px !important;
-                            opacity: 0.9 !important;
-                        }}
-                        div[class*="st-key-btn_prev_wk_"] button p,
-                        div[class*="st-key-btn_cur_wk_"] button p,
-                        div[class*="st-key-btn_next_wk_"] button p {{
-                            font-size: 11.5px !important;
-                            line-height: 1.2 !important;
-                            white-space: nowrap !important;
-                            text-align: center !important;
-                        }}
-                        div[class*="st-key-btn_prev_wk_"] button > div,
-                        div[class*="st-key-btn_cur_wk_"] button > div,
-                        div[class*="st-key-btn_next_wk_"] button > div {{
-                            justify-content: center !important;
-                        }}
-                        </style>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                    st.markdown(
                         f"<div style='display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;'>"
                         f"<span style='font-size:13px; font-weight:bold; color:#F59E0B;'>🔁 주간 루틴 체크</span>"
                         f"<span style='font-size:11px; color:#94A3B8;'>{w_days[0].strftime('%m/%d')} ~ {w_days[-1].strftime('%m/%d')} (월~일)</span>"
@@ -1964,6 +1932,53 @@ if not st.session_state["teacher_authenticated"]:
                         """,
                         unsafe_allow_html=True
                     )
+
+                    col_nav1, col_nav2, col_nav3 = st.columns([1.15, 0.85, 1.15], gap="small")
+                    with col_nav1:
+                        if st.button("◀ 이전주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
+                            st.session_state[week_offset_key] = wk_offset - 1
+                            st.rerun(scope="fragment")
+                    with col_nav2:
+                        if st.button("이번주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
+                            st.session_state[week_offset_key] = 0
+                            st.rerun(scope="fragment")
+                    with col_nav3:
+                        if st.button("다음주 ▶", key=f"btn_next_wk_{selected_student}", use_container_width=True):
+                            st.session_state[week_offset_key] = wk_offset + 1
+                            st.rerun(scope="fragment")
+
+                    st.markdown("<hr style='margin: 6px 0 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+
+                    if not daily_routines_list:
+                        st.caption("등록된 매일 반복 루틴이 없습니다.")
+                        return
+
+                    day_labels = ["월", "화", "수", "목", "금", "토", "일"]
+
+                    st.markdown(
+                        """
+                        <style>
+                        /* 주간 루틴 세로 1열 리스트 컴팩트 스타일 */
+                        .weekly-vertical-list div[data-testid="stCheckbox"] {
+                            margin-top: 2px !important;
+                            margin-bottom: 2px !important;
+                            padding: 2px 4px !important;
+                        }
+                        .weekly-vertical-list div[data-testid="stCheckbox"] label {
+                            width: 100% !important;
+                            gap: 8px !important;
+                        }
+                        .weekly-vertical-list div[data-testid="stCheckbox"] label p {
+                            font-size: 13px !important;
+                            white-space: normal !important;
+                            overflow: visible !important;
+                            text-overflow: clip !important;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
                     for r_id, r_title in daily_routines_list:
                         done_in_week = sum(
                             1 for d_str in w_day_strs
@@ -3608,32 +3623,35 @@ else:
                                         st.markdown(
                                             """
                                             <style>
-                                            .teacher-detail-img img {
-                                                width: auto !important;
-                                                object-fit: contain !important;
-                                                border-radius: 8px !important;
-                                                background-color: #FFFFFF !important;
-                                                padding: 6px !important;
-                                            }
                                             @media (min-width: 641px) {
-                                                .teacher-detail-img img {
-                                                    max-width: 540px !important;
-                                                    max-height: 360px !important;
+                                                div[data-testid="stImage"] img {
+                                                    max-width: 340px !important;
+                                                    max-height: 220px !important;
+                                                    width: auto !important;
+                                                    height: auto !important;
+                                                    object-fit: contain !important;
+                                                    border-radius: 8px !important;
+                                                    background-color: #FFFFFF !important;
+                                                    padding: 6px !important;
                                                 }
                                             }
                                             @media (max-width: 640px) {
-                                                .teacher-detail-img img {
-                                                    max-width: 100% !important;
-                                                    max-height: 250px !important;
+                                                div[data-testid="stImage"] img {
+                                                    max-width: 260px !important;
+                                                    max-height: 180px !important;
+                                                    width: auto !important;
+                                                    height: auto !important;
+                                                    object-fit: contain !important;
+                                                    border-radius: 8px !important;
+                                                    background-color: #FFFFFF !important;
+                                                    padding: 6px !important;
                                                 }
                                             }
                                             </style>
-                                            <div class="teacher-detail-img">
                                             """,
                                             unsafe_allow_html=True
                                         )
-                                        st.image(decoded_img, use_container_width=False)
-                                        st.markdown("</div>", unsafe_allow_html=True)
+                                        st.image(decoded_img, width=320)
                                     except Exception:
                                         st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
                                 else:
