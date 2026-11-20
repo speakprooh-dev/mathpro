@@ -1485,13 +1485,9 @@ def check_subjective_answer(user_ans, real_ans):
 
     def normalize_text(t):
         t = str(t).strip().lower()
-        # 각종 마이너스/대시 기호를 일반 '-'로 통일
         t = re.sub(r'[−－—–]', '-', t)
-        # 곱셈/나눗셈 기호 통일
         t = t.replace("×", "*").replace("÷", "/")
-        # "번", "제" 제거
         t = t.replace("번", "").replace("제", "")
-        # 모든 공백 제거
         t = re.sub(r'\s+', '', t)
         return t
 
@@ -1501,7 +1497,6 @@ def check_subjective_answer(user_ans, real_ans):
     if u_norm == r_norm:
         return True
 
-    # 쉼표로 구분된 복수 답안(예: "2,5" vs "5,2")의 집합 비교
     if "," in u_norm and "," in r_norm:
         u_parts = sorted(p for p in u_norm.split(",") if p)
         r_parts = sorted(p for p in r_norm.split(",") if p)
@@ -1528,6 +1523,52 @@ def detect_multiple_choice(ans_str, filename_str):
     )
 
     return (not is_explicit_subjective) and has_choice_signal
+
+def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
+    quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
+    retry_res_map = st.session_state.get(f"retry_result_map_{sess_id}", {})
+
+    init_wrong = []
+    quick_fixed = []
+    retry_ok = []
+    still_wrong = []
+
+    for prob in prob_list:
+        code = prob["full_code"]
+        order = prob.get("order", code)
+        orig_correct = next((r.get("is_correct") for r in res_list if r["full_code"] == code), 0) == 1
+
+        if orig_correct:
+            continue
+
+        init_wrong.append(order)
+
+        if quick_grade_map.get(code) == "O":
+            quick_fixed.append(order)
+            continue
+
+        if retry_res_map.get(code) == "correct":
+            retry_ok.append(order)
+        else:
+            still_wrong.append(order)
+
+    fixed_txt = ", ".join(f"{n}번" for n in quick_fixed) if quick_fixed else "없음"
+    retry_ok_txt = ", ".join(f"{n}번" for n in retry_ok) if retry_ok else "없음"
+    remain_txt = ", ".join(f"{n}번" for n in still_wrong) if still_wrong else "없음"
+
+    st.markdown(f"""
+    <div style="background-color: var(--secondary-background-color); border: 1px solid #374151; padding: 12px 14px; border-radius: 10px; margin: 8px 0;">
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">
+            👩‍🏫 {s_name} — 채점·정정·다시풀기 한눈에 보기
+        </div>
+        <div style="font-size: 13px; line-height: 1.65;">
+- <b>최초 오답 ({len(init_wrong)}문항):</b> {", ".join(f"{n}번" for n in init_wrong) if init_wrong else "없음"}<br>
+- <span style="color:#38BDF8;"><b>빠른 확인 O 정정 ({len(quick_fixed)}문항):</b></span> {fixed_txt}<br>
+- <span style="color:#10B981;"><b>다시풀기 정답 ({len(retry_ok)}문항):</b></span> {retry_ok_txt}<br>
+- <span style="color:#EF4444;"><b>최종 남은 오답 ({len(still_wrong)}문항):</b></span> {remain_txt}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # 🖼️ 메인 화면 상단 로고 및 헤더
@@ -2710,7 +2751,6 @@ if not st.session_state["teacher_authenticated"]:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
                     def evaluate_retry_answer(w_prob, raw_retry_ans):
-                        """다시풀기 입력 답안을 문항 정답과 비교해 'correct' / 'wrong' / 'manual' 반환"""
                         u_ans = str(raw_retry_ans or "").strip()
                         ans_str = str(w_prob.get("answer", "")).strip()
                         fn_str = str(w_prob.get("filename", "")).strip()
@@ -2732,16 +2772,12 @@ if not st.session_state["teacher_authenticated"]:
                         real_ans = ans_str.replace("@", "").replace("번", "").strip()
                         return "correct" if check_subjective_answer(u_ans, real_ans) else "wrong"
                     
-                    
                     def _is_essay_or_subjective(prob):
-                        """객관식이 아닌 문항(주관식/서술형) 여부 판별"""
                         ans_str = str(prob.get("answer", "")).strip()
                         fn_str = str(prob.get("filename", "")).strip()
                         return not detect_multiple_choice(ans_str, fn_str)
                     
-                    
                     def _is_essay_item(prob):
-                        """정답이 '-' 등으로 셀프채점이 필요한 서술형 문항 여부 판별"""
                         ans_str = str(prob.get("answer", "")).strip()
                         fn_str = str(prob.get("filename", "")).strip()
                         is_diff_empty = False
@@ -2753,15 +2789,12 @@ if not st.session_state["teacher_authenticated"]:
                                     is_diff_empty = True
                         return (ans_str == "-" or not ans_str or is_diff_empty)
                     
-                    
                     def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
-                        # 정정/셀프채점 결과를 저장할 세션 키 (code -> "O" 또는 "X")
                         quick_grade_key = f"quick_grade_map_{sess_id}"
                         if quick_grade_key not in st.session_state:
                             st.session_state[quick_grade_key] = {}
                         quick_grade_map = st.session_state[quick_grade_key]
                     
-                        # 최초 오답 중 '정답(O)'으로 정정/셀프채점된 문항을 제외한 실제 오답 목록
                         wrong_items_for_retry = []
                         for prob in prob_list:
                             code = prob["full_code"]
@@ -2772,9 +2805,6 @@ if not st.session_state["teacher_authenticated"]:
                                 continue
                             wrong_items_for_retry.append(prob)
                     
-                        # 빠른 확인 대상:
-                        # - 서술형: 연습장 풀이 셀프채점이 필요하므로 대상
-                        # - 주관식: 실제 답을 입력했는데 오답 처리된 경우만 대상 (미입력은 제외)
                         quick_check_targets = []
                         for prob in prob_list:
                             matched_r = next((r for r in res_list if r["full_code"] == prob["full_code"]), None)
@@ -2792,10 +2822,6 @@ if not st.session_state["teacher_authenticated"]:
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
                     
-                        # 제출 직후 분기:
-                        # - 주관식/서술형 오답이 있으면 먼저 심플한 'quick_check' 단계로 진입
-                        # - 객관식 오답만 있으면 바로 'retry' 단계로 진입
-                        # - 오답이 아예 없으면 'review' 단계로 진입
                         if st.session_state.get(just_submitted_key, False):
                             if len(quick_check_targets) > 0:
                                 st.session_state[retry_stage_key] = "quick_check"
@@ -2834,7 +2860,6 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[retry_res_key] = graded_summary
                             st.session_state[retry_stage_key] = "review"
                     
-                        # 1단계: 주관식 표기 확인 & 서술형 셀프채점 (문제번호·문제사진 미표시)
                         if st.session_state[retry_stage_key] == "quick_check" and len(quick_check_targets) > 0:
                             st.markdown("""
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #38BDF8; padding: 14px 16px; border-radius: 12px; margin-bottom: 14px;">
@@ -2895,7 +2920,6 @@ if not st.session_state["teacher_authenticated"]:
                                     quick_grade_map[q_code] = "O" if picked_ox.startswith("⭕") else "X"
                     
                             if st.button("✅ 확인 완료하고 틀린 문제 다시풀기", type="primary", use_container_width=True, key=f"btn_go_retry_after_quick_{sess_id}"):
-                                # 방금 O로 바꾼 문항을 제외한 최종 오답 재계산
                                 remaining_wrong = [
                                     prob for prob in prob_list
                                     if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
@@ -2907,7 +2931,6 @@ if not st.session_state["teacher_authenticated"]:
                                     st.session_state[retry_stage_key] = "review"
                                 st.rerun()
                     
-                        # 2단계: 틀린 문제 다시 풀기
                         elif st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
                             attempted_retry_cnt = sum(
                                 1 for w_prob in wrong_items_for_retry
@@ -2982,7 +3005,6 @@ if not st.session_state["teacher_authenticated"]:
                                 run_retry_grading_and_go_review()
                                 st.rerun()
                     
-                        # 3단계: 전체 리뷰 화면
                         else:
                             if len(quick_check_targets) > 0:
                                 if st.button("⚡ 주관식/서술형 빠른 확인 다시 열기", use_container_width=True, key=f"btn_reopen_quick_{sess_id}"):
@@ -3004,54 +3026,6 @@ if not st.session_state["teacher_authenticated"]:
                                 """, unsafe_allow_html=True)
                     
                             render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title)
-
-
-def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
-    quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
-    retry_res_map = st.session_state.get(f"retry_result_map_{sess_id}", {})
-
-    init_wrong = []
-    quick_fixed = []
-    retry_ok = []
-    still_wrong = []
-
-    for prob in prob_list:
-        code = prob["full_code"]
-        order = prob.get("order", code)
-        orig_correct = next((r.get("is_correct") for r in res_list if r["full_code"] == code), 0) == 1
-
-        if orig_correct:
-            continue
-
-        init_wrong.append(order)
-
-        if quick_grade_map.get(code) == "O":
-            quick_fixed.append(order)
-            continue
-
-        if retry_res_map.get(code) == "correct":
-            retry_ok.append(order)
-        else:
-            still_wrong.append(order)
-
-    fixed_txt = ", ".join(f"{n}번" for n in quick_fixed) if quick_fixed else "없음"
-    retry_ok_txt = ", ".join(f"{n}번" for n in retry_ok) if retry_ok else "없음"
-    remain_txt = ", ".join(f"{n}번" for n in still_wrong) if still_wrong else "없음"
-
-    st.markdown(f"""
-    <div style="background-color: var(--secondary-background-color); border: 1px solid #374151; padding: 12px 14px; border-radius: 10px; margin: 8px 0;">
-        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">
-            👩‍🏫 {s_name} — 채점·정정·다시풀기 한눈에 보기
-        </div>
-        <div style="font-size: 13px; line-height: 1.65;">
-- <b>최초 오답 ({len(init_wrong)}문항):</b> {", ".join(f"{n}번" for n in init_wrong) if init_wrong else "없음"}<br>
-- <span style="color:#38BDF8;"><b>빠른 확인 O 정정 ({len(quick_fixed)}문항):</b></span> {fixed_txt}<br>
-- <span style="color:#10B981;"><b>다시풀기 정답 ({len(retry_ok)}문항):</b></span> {retry_ok_txt}<br>
-- <span style="color:#EF4444;"><b>최종 남은 오답 ({len(still_wrong)}문항):</b></span> {remain_txt}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 
                     if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
                         if f"all_results_{selected_session_id}" not in st.session_state:
@@ -3985,7 +3959,6 @@ else:
                 p_date = extract_test_date(t_title, created_at)
                 enriched_sessions.append((sess_id, s_name, t_title, created_at, is_comp, p_date))
 
-            # 최근 날짜순 정렬 (날짜가 있는 항목 우선, 그 다음 날짜 내림차순, 세션 ID 내림차순)
             enriched_sessions.sort(
                 key=lambda x: (x[5] is not None, x[5] or date.min, x[0]),
                 reverse=True
@@ -4200,7 +4173,6 @@ else:
                             except Exception as e:
                                 st.error(f"초기화 중 오류 발생: {e}")
 
-                    # 해당 (학생, 테스트명)의 최근 세션 ID 조회 및 문항/결과 목록 구성
                     matched_sess_row = next(
                         (s for s in all_sessions_rows if s[1] == s_name and s[2] == t_title),
                         None
