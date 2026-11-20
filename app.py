@@ -1927,85 +1927,43 @@ if not st.session_state["teacher_authenticated"]:
                     st.markdown(
                         """
                         <style>
-                        .week-nav-marker + div[data-testid="stHorizontalBlock"] {
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) {
                             display: flex !important;
                             flex-direction: row !important;
                             flex-wrap: nowrap !important;
                             align-items: center !important;
                             gap: 6px !important;
+                            width: 100% !important;
                         }
-                        .week-nav-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) > div[data-testid="column"] {
                             flex: 1 1 0 !important;
                             min-width: 0 !important;
                             width: auto !important;
                         }
-                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button {
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) button {
                             min-height: 28px !important;
                             height: 28px !important;
-                            padding: 2px 6px !important;
+                            padding: 2px 4px !important;
                             border-radius: 6px !important;
+                            width: 100% !important;
                         }
-                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button p {
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) button > div {
+                            display: flex !important;
+                            justify-content: center !important;
+                            align-items: center !important;
+                            width: 100% !important;
+                        }
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) button p {
                             font-size: 11px !important;
                             line-height: 1.15 !important;
                             white-space: nowrap !important;
                             text-align: center !important;
-                        }
-                        .week-nav-marker + div[data-testid="stHorizontalBlock"] button > div {
-                            justify-content: center !important;
-                        }
-                        </style>
-                        <div class="week-nav-marker" style="display:none;"></div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                    col_nav1, col_nav2, col_nav3 = st.columns([1.15, 0.85, 1.15], gap="small")
-                    with col_nav1:
-                        if st.button("◀ 이전주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
-                            st.session_state[week_offset_key] = wk_offset - 1
-                            st.rerun(scope="fragment")
-                    with col_nav2:
-                        if st.button("이번주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
-                            st.session_state[week_offset_key] = 0
-                            st.rerun(scope="fragment")
-                    with col_nav3:
-                        if st.button("다음주 ▶", key=f"btn_next_wk_{selected_student}", use_container_width=True):
-                            st.session_state[week_offset_key] = wk_offset + 1
-                            st.rerun(scope="fragment")
-
-                    st.markdown("<hr style='margin: 6px 0 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
-
-                    if not daily_routines_list:
-                        st.caption("등록된 매일 반복 루틴이 없습니다.")
-                        return
-
-                    day_labels = ["월", "화", "수", "목", "금", "토", "일"]
-
-                    st.markdown(
-                        """
-                        <style>
-                        /* 주간 루틴 세로 1열 리스트 컴팩트 스타일 */
-                        .weekly-vertical-list div[data-testid="stCheckbox"] {
-                            margin-top: 2px !important;
-                            margin-bottom: 2px !important;
-                            padding: 2px 4px !important;
-                        }
-                        .weekly-vertical-list div[data-testid="stCheckbox"] label {
-                            width: 100% !important;
-                            gap: 8px !important;
-                        }
-                        .weekly-vertical-list div[data-testid="stCheckbox"] label p {
-                            font-size: 13px !important;
-                            white-space: normal !important;
-                            overflow: visible !important;
-                            text-overflow: clip !important;
+                            width: auto !important;
                         }
                         </style>
                         """,
                         unsafe_allow_html=True
                     )
-
                     for r_id, r_title in daily_routines_list:
                         done_in_week = sum(
                             1 for d_str in w_day_strs
