@@ -2816,9 +2816,12 @@ if not st.session_state["teacher_authenticated"]:
                         if st.session_state[retry_stage_key] == "quick_check" and len(quick_check_targets) > 0:
                             st.markdown("""
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #38BDF8; padding: 14px 16px; border-radius: 12px; margin-bottom: 14px;">
-                                <h3 style="color: #38BDF8; margin: 0 0 4px 0;">⚡ 다시풀기 전 빠른 확인</h3>
-                                <p style="font-size: 13.5px; margin: 0;">
-                                    주관식 표기 차이나 서술형 정답 여부를 빠르게 체크한 뒤, 남은 오답만 다시 풀어보세요.
+                                <h3 style="color: #38BDF8; margin: 0 0 6px 0;">⚡ 다시풀기 전 빠른 확인 (O/X 체크)</h3>
+                                <p style="font-size: 13.5px; margin: 0 0 4px 0;">
+                                    1. <b>표기·띄어쓰기 차이로 맞았거나 서술형을 맞힌 경우</b>만 <b>⭕ 정답 (O)</b>을 눌러주세요.
+                                </p>
+                                <p style="font-size: 13.5px; margin: 0; color: #9CA3AF;">
+                                    2. 진짜 틀린 문제나 미입력 문항은 <b>❌ 오답 (X)</b> 그대로 두고, 아래 버튼으로 <b>다시풀기</b>를 진행합니다.
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -2826,7 +2829,8 @@ if not st.session_state["teacher_authenticated"]:
                             for idx_q, q_prob in enumerate(quick_check_targets, start=1):
                                 q_code = q_prob["full_code"]
                                 matched_r = next((r for r in res_list if r["full_code"] == q_code), {})
-                                user_written = str(matched_r.get("user_ans", "")).strip() or "미입력"
+                                raw_user_ans = str(matched_r.get("user_ans", "")).strip()
+                                user_written = raw_user_ans if raw_user_ans else "미입력 (다시풀기 대상)"
                                 real_answer_txt = str(matched_r.get("real_ans") or q_prob.get("answer") or "-").strip()
                                 is_essay = _is_essay_item(q_prob)
                     
@@ -2843,7 +2847,7 @@ if not st.session_state["teacher_authenticated"]:
                                         target_filename = f"{u_part}_ans_({n_digits}).png"
                                         ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
                     
-                                        st.markdown(f"**서술형 — {q_prob['order']}번 문제**")
+                                        st.markdown(f"**서술형 — {q_prob['order']}번 문제** <span style='color:#9CA3AF; font-size:12px;'>(연습장 풀이와 정답지 비교)</span>", unsafe_allow_html=True)
                                         st.markdown(
                                             f"<div style='margin: 4px 0 8px 0;'>"
                                             f"<span style='font-size: 13px; color: #9CA3AF;'>정답지:</span><br>"
@@ -2854,7 +2858,7 @@ if not st.session_state["teacher_authenticated"]:
                                             unsafe_allow_html=True
                                         )
                                     else:
-                                        st.markdown(f"**주관식 #{idx_q}**")
+                                        st.markdown(f"**주관식 #{idx_q}** <span style='color:#9CA3AF; font-size:12px;'>(띄어쓰기·표기 차이만 정답 인정)</span>", unsafe_allow_html=True)
                                         st.markdown(f"- **정답:** `{real_answer_txt}`")
                                         st.markdown(f"- **내가 쓴 답:** `{user_written}`")
                     
