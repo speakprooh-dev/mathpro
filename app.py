@@ -1361,6 +1361,23 @@ def get_all_student_wrong_entries(student_name):
     return c.fetchall()
 
 @st.cache_data(ttl=60, show_spinner=False)
+def get_student_wrong_note_codes(student_name):
+    if not student_name:
+        return set()
+    try:
+        entries = get_all_student_wrong_entries(student_name)
+        codes = set()
+        for u_code, nums_txt in entries:
+            u_clean = str(u_code or "").strip().upper()
+            if not u_clean:
+                continue
+            for n in parse_numbers(nums_txt):
+                codes.add(f"{u_clean}{int(n):03d}")
+        return codes
+    except Exception:
+        return set()
+
+@st.cache_data(ttl=60, show_spinner=False)
 def get_student_wrong_repeat_counts(student_name):
     if not student_name:
         return {}
@@ -1527,16 +1544,25 @@ def detect_multiple_choice(ans_str, filename_str):
 def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
     quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
     retry_res_map = st.session_state.get(f"retry_result_map_{sess_id}", {})
+    wrong_note_codes = get_student_wrong_note_codes(s_name)
 
     init_wrong = []
     quick_fixed = []
     retry_ok = []
     still_wrong = []
+    noted_orders = []
 
     for prob in prob_list:
-        code = prob["full_code"]
+        code = str(prob.get("full_code") or "").strip().upper()
         order = prob.get("order", code)
-        orig_correct = next((r.get("is_correct") for r in res_list if r["full_code"] == code), 0) == 1
+
+        if code and code in wrong_note_codes:
+            noted_orders.append(order)
+
+        orig_correct = next(
+            (r.get("is_correct") for r in res_list if str(r.get("full_code") or "").strip().upper() == code),
+            0
+        ) == 1
 
         if orig_correct:
             continue
@@ -1555,6 +1581,7 @@ def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
     fixed_txt = ", ".join(f"{n}번" for n in quick_fixed) if quick_fixed else "없음"
     retry_ok_txt = ", ".join(f"{n}번" for n in retry_ok) if retry_ok else "없음"
     remain_txt = ", ".join(f"{n}번" for n in still_wrong) if still_wrong else "없음"
+    noted_txt = ", ".join(f"{n}번" for n in noted_orders) if noted_orders else "없음"
 
     st.markdown(f"""
     <div style="background-color: var(--secondary-background-color); border: 1px solid #374151; padding: 12px 14px; border-radius: 10px; margin: 8px 0;">
@@ -1565,7 +1592,8 @@ def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
 - <b>최초 오답 ({len(init_wrong)}문항):</b> {", ".join(f"{n}번" for n in init_wrong) if init_wrong else "없음"}<br>
 - <span style="color:#38BDF8;"><b>빠른 확인 O 정정 ({len(quick_fixed)}문항):</b></span> {fixed_txt}<br>
 - <span style="color:#10B981;"><b>다시풀기 정답 ({len(retry_ok)}문항):</b></span> {retry_ok_txt}<br>
-- <span style="color:#EF4444;"><b>최종 남은 오답 ({len(still_wrong)}문항):</b></span> {remain_txt}
+- <span style="color:#EF4444;"><b>최종 남은 오답 ({len(still_wrong)}문항):</b></span> {remain_txt}<br>
+- <span style="color:#F59E0B;"><b>오답노트 등록 ({len(noted_orders)}문항):</b></span> {noted_txt}
         </div>
     </div>
     """, unsafe_allow_html=True)
