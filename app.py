@@ -3004,7 +3004,55 @@ if not st.session_state["teacher_authenticated"]:
                                 """, unsafe_allow_html=True)
                     
                             render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title)
-        
+
+
+def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
+    quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
+    retry_res_map = st.session_state.get(f"retry_result_map_{sess_id}", {})
+
+    init_wrong = []
+    quick_fixed = []
+    retry_ok = []
+    still_wrong = []
+
+    for prob in prob_list:
+        code = prob["full_code"]
+        order = prob.get("order", code)
+        orig_correct = next((r.get("is_correct") for r in res_list if r["full_code"] == code), 0) == 1
+
+        if orig_correct:
+            continue
+
+        init_wrong.append(order)
+
+        if quick_grade_map.get(code) == "O":
+            quick_fixed.append(order)
+            continue
+
+        if retry_res_map.get(code) == "correct":
+            retry_ok.append(order)
+        else:
+            still_wrong.append(order)
+
+    fixed_txt = ", ".join(f"{n}번" for n in quick_fixed) if quick_fixed else "없음"
+    retry_ok_txt = ", ".join(f"{n}번" for n in retry_ok) if retry_ok else "없음"
+    remain_txt = ", ".join(f"{n}번" for n in still_wrong) if still_wrong else "없음"
+
+    st.markdown(f"""
+    <div style="background-color: var(--secondary-background-color); border: 1px solid #374151; padding: 12px 14px; border-radius: 10px; margin: 8px 0;">
+        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">
+            👩‍🏫 {s_name} — 채점·정정·다시풀기 한눈에 보기
+        </div>
+        <div style="font-size: 13px; line-height: 1.65;">
+- <b>최초 오답 ({len(init_wrong)}문항):</b> {", ".join(f"{n}번" for n in init_wrong) if init_wrong else "없음"}<br>
+- <span style="color:#38BDF8;"><b>빠른 확인 O 정정 ({len(quick_fixed)}문항):</b></span> {fixed_txt}<br>
+- <span style="color:#10B981;"><b>다시풀기 정답 ({len(retry_ok)}문항):</b></span> {retry_ok_txt}<br>
+- <span style="color:#EF4444;"><b>최종 남은 오답 ({len(still_wrong)}문항):</b></span> {remain_txt}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
                     if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
                         if f"all_results_{selected_session_id}" not in st.session_state:
                             is_postgres = "psycopg2" in str(type(conn_test))
@@ -4151,6 +4199,44 @@ else:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"초기화 중 오류 발생: {e}")
+
+                    # 해당 (학생, 테스트명)의 최근 세션 ID 조회 및 문항/결과 목록 구성
+                    matched_sess_row = next(
+                        (s for s in all_sessions_rows if s[1] == s_name and s[2] == t_title),
+                        None
+                    )
+                    matched_sess_id = matched_sess_row[0] if matched_sess_row else None
+
+                    if is_postgres_sub:
+                        c_sub.execute(
+                            "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
+                            (s_name, t_title)
+                        )
+                    else:
+                        q(
+                            c_sub,
+                            "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
+                            (s_name, t_title)
+                        )
+                    summary_sub_rows = c_sub.fetchall()
+
+                    summary_prob_list = []
+                    summary_res_list = []
+                    for p_ord_idx, (p_id_s, u_ans_s, is_chk_s) in enumerate(summary_sub_rows, start=1):
+                        summary_prob_list.append({"full_code": p_id_s, "order": p_ord_idx})
+                        summary_res_list.append({
+                            "full_code": p_id_s,
+                            "user_ans": u_ans_s,
+                            "is_correct": is_chk_s,
+                        })
+
+                    if matched_sess_id is not None and summary_prob_list:
+                        render_teacher_process_summary(
+                            prob_list=summary_prob_list,
+                            res_list=summary_res_list,
+                            sess_id=matched_sess_id,
+                            s_name=s_name,
+                        )
 
                     detail_toggle_key = f"show_sub_detail_{s_name}_{t_title}_{idx}"
                     if st.toggle("🔍 학생이 제출한 문항별 답안 상세 보기", value=False, key=detail_toggle_key):
