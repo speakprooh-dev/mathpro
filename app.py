@@ -1892,18 +1892,52 @@ if not st.session_state["teacher_authenticated"]:
 
                 with st.container(border=True):
                     st.markdown(
-                        f"<div style='font-size:13px; font-weight:bold; color:#F59E0B; margin-bottom:8px;'>"
-                        f"🔁 주간 루틴 체크 ({w_days[0]} ~ {w_days[-1]} · 월~일)</div>",
+                        f"""
+                        <style>
+                        /* 주간 이동 버튼(◀ 이전 주 / 📍 이번 주 / 다음 주 ▶) 컴팩트 축소 */
+                        div[class*="st-key-btn_prev_wk_"] button,
+                        div[class*="st-key-btn_cur_wk_"] button,
+                        div[class*="st-key-btn_next_wk_"] button {{
+                            min-height: 28px !important;
+                            height: 28px !important;
+                            padding: 2px 6px !important;
+                            border-radius: 6px !important;
+                            font-size: 11.5px !important;
+                            opacity: 0.9 !important;
+                        }}
+                        div[class*="st-key-btn_prev_wk_"] button p,
+                        div[class*="st-key-btn_cur_wk_"] button p,
+                        div[class*="st-key-btn_next_wk_"] button p {{
+                            font-size: 11.5px !important;
+                            line-height: 1.2 !important;
+                            white-space: nowrap !important;
+                            text-align: center !important;
+                        }}
+                        div[class*="st-key-btn_prev_wk_"] button > div,
+                        div[class*="st-key-btn_cur_wk_"] button > div,
+                        div[class*="st-key-btn_next_wk_"] button > div {{
+                            justify-content: center !important;
+                        }}
+                        </style>
+                        """,
                         unsafe_allow_html=True
                     )
 
-                    col_nav1, col_nav2, col_nav3 = st.columns([1.2, 1.1, 1.2])
+                    st.markdown(
+                        f"<div style='display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;'>"
+                        f"<span style='font-size:13px; font-weight:bold; color:#F59E0B;'>🔁 주간 루틴 체크</span>"
+                        f"<span style='font-size:11px; color:#94A3B8;'>{w_days[0].strftime('%m/%d')} ~ {w_days[-1].strftime('%m/%d')} (월~일)</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+
+                    col_nav1, col_nav2, col_nav3 = st.columns([1, 0.9, 1], gap="small")
                     with col_nav1:
                         if st.button("◀ 이전 주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
                             st.session_state[week_offset_key] = wk_offset - 1
                             st.rerun(scope="fragment")
                     with col_nav2:
-                        if st.button("📍 이번 주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
+                        if st.button("이번 주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
                             st.session_state[week_offset_key] = 0
                             st.rerun(scope="fragment")
                     with col_nav3:
@@ -1911,7 +1945,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[week_offset_key] = wk_offset + 1
                             st.rerun(scope="fragment")
 
-                    st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                    st.markdown("<hr style='margin: 6px 0 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
                     if not daily_routines_list:
                         st.caption("등록된 매일 반복 루틴이 없습니다.")
