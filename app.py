@@ -1525,7 +1525,6 @@ def check_subjective_answer(user_ans, real_ans):
 def detect_multiple_choice(ans_str, filename_str):
     ans_clean = str(ans_str or "").strip()
     fn_clean = str(filename_str or "").strip()
-    clean_ans_check = ans_clean.replace("@", "").replace("번", "").strip()
 
     is_explicit_subjective = (
         any(k in fn_clean for k in ["서술형", "주관식", "단답"]) or
@@ -1535,8 +1534,7 @@ def detect_multiple_choice(ans_str, filename_str):
     has_choice_signal = (
         ("@" in fn_clean) or
         any(circ in ans_clean or circ in fn_clean for circ in ["①", "②", "③", "④", "⑤"]) or
-        (ans_clean in ["1번", "2번", "3번", "4번", "5번"]) or
-        (clean_ans_check in ["1", "2", "3", "4", "5"])
+        (ans_clean in ["1번", "2번", "3번", "4번", "5번"])
     )
 
     return (not is_explicit_subjective) and has_choice_signal
