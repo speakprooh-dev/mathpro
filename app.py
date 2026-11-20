@@ -1900,20 +1900,24 @@ if not st.session_state["teacher_authenticated"]:
                             flex-direction: row !important;
                             flex-wrap: nowrap !important;
                             align-items: center !important;
+                            justify-content: space-between !important;
                             gap: 6px !important;
                             width: 100% !important;
                         }
+                        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) > div[data-testid="stColumn"],
                         div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) > div[data-testid="column"] {
-                            flex: 1 1 0 !important;
+                            flex: 0 0 calc((100% - 12px) / 3) !important;
+                            width: calc((100% - 12px) / 3) !important;
                             min-width: 0 !important;
-                            width: auto !important;
+                            max-width: calc((100% - 12px) / 3) !important;
                         }
                         div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) button {
-                            min-height: 28px !important;
-                            height: 28px !important;
+                            min-height: 30px !important;
+                            height: 30px !important;
                             padding: 2px 4px !important;
                             border-radius: 6px !important;
                             width: 100% !important;
+                            min-width: 0 !important;
                         }
                         div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-btn_prev_wk_"]) button > div {
                             display: flex !important;
