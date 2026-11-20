@@ -26,13 +26,13 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
 /* 개념 진도 및 오답 목록 컬럼 간격 및 상하 여백 압축 (콤팩트 정렬) */
 div[data-testid="stHorizontalBlock"] {
     align-items: center !important;
-    gap: 0px !important;
+    gap: 6px !important;
 }
 div[data-testid="stCheckbox"] {
     display: flex !important;
     align-items: center !important;
-    margin-top: -6px !important;
-    margin-bottom: -6px !important;
+    margin-top: -4px !important;
+    margin-bottom: -4px !important;
 }
 div[data-testid="stCheckbox"] label {
     display: flex !important;
@@ -43,6 +43,7 @@ div[data-testid="stCheckbox"] label p {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    font-size: 13px !important;
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
@@ -1179,7 +1180,6 @@ def get_all_student_wrong_entries(student_name):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_student_wrong_repeat_counts(student_name):
-    """(student_name)의 각 문항(full_code)이 서로 다른 날짜(registered_date)에 몇 번 등록되었는지 반환"""
     if not student_name:
         return {}
     conn, db_type = get_db_connection()
@@ -1207,7 +1207,6 @@ def get_student_wrong_repeat_counts(student_name):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_all_students_wrong_repeat_counts():
-    """전체 학생 기준 (student_name, full_code)별 서로 다른 등록일 수 반환"""
     conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
@@ -1232,7 +1231,6 @@ def get_all_students_wrong_repeat_counts():
         return {}
 
 def format_repeat_badge_html(rep_cnt):
-    """반복 등록 횟수(2회 이상)에 따른 HTML 배지 반환"""
     try:
         cnt = int(rep_cnt)
     except Exception:
@@ -1742,7 +1740,7 @@ if not st.session_state["teacher_authenticated"]:
                 else:
                     st.caption("선택한 날짜에 등록된 개별 숙제가 없습니다.")
 
-            # 2) 루틴별 주간(월~일) 체크버튼 카드
+            # 2) 루틴별 주간(월~일) 체크버튼 카드 — 모바일 2줄 배치 (월~목 4열 / 금~일 3열) & '월(11일)' 표기
             @st.fragment
             def render_weekly_routine_grid():
                 with st.container(border=True):
@@ -1756,26 +1754,39 @@ if not st.session_state["teacher_authenticated"]:
                         return
 
                     day_labels = ["월", "화", "수", "목", "금", "토", "일"]
+
+                    def render_day_checkbox(r_id, idx_d, d_obj):
+                        d_str = str(d_obj)
+                        is_today_mark = "📍" if d_str == today_str else ""
+                        chk_default = week_log_map.get((str(r_id), d_str), False)
+                        wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
+
+                        def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
+                            save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
+
+                        st.checkbox(
+                            f"{day_labels[idx_d]}({d_obj.day}일){is_today_mark}",
+                            value=chk_default,
+                            key=wk_key,
+                            on_change=on_wk_routine_change
+                        )
+
                     for r_id, r_title in daily_routines_list:
                         st.markdown(f"**• {r_title}**")
-                        cols_days = st.columns(7)
-                        for idx_d, d_obj in enumerate(week_days):
-                            d_str = str(d_obj)
-                            is_today_mark = "📍" if d_str == today_str else ""
-                            chk_default = week_log_map.get((str(r_id), d_str), False)
-                            wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
 
-                            def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
-                                save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
+                        # 1행: 월, 화, 수, 목 (4열)
+                        cols_row1 = st.columns(4)
+                        for idx_d in range(4):
+                            with cols_row1[idx_d]:
+                                render_day_checkbox(r_id, idx_d, week_days[idx_d])
 
-                            with cols_days[idx_d]:
-                                st.checkbox(
-                                    f"{day_labels[idx_d]}{is_today_mark}",
-                                    value=chk_default,
-                                    key=wk_key,
-                                    on_change=on_wk_routine_change
-                                )
-                        st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+                        # 2행: 금, 토, 일 (3열)
+                        cols_row2 = st.columns(3)
+                        for idx_d in range(4, 7):
+                            with cols_row2[idx_d - 4]:
+                                render_day_checkbox(r_id, idx_d, week_days[idx_d])
+
+                        st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
             render_weekly_routine_grid()
 
