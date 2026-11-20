@@ -1646,7 +1646,6 @@ if not st.session_state["teacher_authenticated"]:
             today_str = str(today_obj)
             daily_routines_list = get_student_daily_routines(selected_student)
 
-            # 최근 숙제 날짜가 맨 앞에 오도록 정렬
             sorted_hw_dates = sorted(list(set(hw_dates or [])), reverse=True)
             default_target_date = sorted_hw_dates[0] if sorted_hw_dates else today_str
 
@@ -1670,18 +1669,15 @@ if not st.session_state["teacher_authenticated"]:
             target_date_str = str(selected_hw_date)
             target_hws = get_student_homework_by_date(selected_student, target_date_str)
 
-            # 선택 날짜 개별 숙제 현황
             actual_target_hws = [h for h in target_hws if not h[1].startswith("💬 [선생님 메시지]:")]
             total_target_h = len(actual_target_hws)
             completed_target_h = sum(1 for h_item in actual_target_hws if h_progress.get(h_item[0], False))
 
-            # 해당 주(월~일) 날짜 계산
             base_d = date.fromisoformat(target_date_str)
             week_start = base_d - timedelta(days=base_d.weekday())
             week_days = [(week_start + timedelta(days=i)) for i in range(7)]
             week_day_strs = [str(d) for d in week_days]
 
-            # 주간 루틴 로그 일괄 조회
             week_log_map = get_student_daily_logs_by_dates(selected_student, week_day_strs)
 
             total_week_rt = len(daily_routines_list) * 7
@@ -1697,7 +1693,6 @@ if not st.session_state["teacher_authenticated"]:
             with col_p2:
                 st.markdown(f"🔁 **이번 주 루틴 현황**: 총 **{total_week_rt}칸** 중 **{completed_week_rt}칸** 완료")
 
-            # 1) 선택 날짜 개별 숙제 카드
             with st.container(border=True):
                 st.markdown(
                     f"<div style='font-size:13px; font-weight:bold; color:#0284C7; margin-bottom:6px;'>"
@@ -1740,7 +1735,6 @@ if not st.session_state["teacher_authenticated"]:
                 else:
                     st.caption("선택한 날짜에 등록된 개별 숙제가 없습니다.")
 
-            # 2) 루틴별 주간(월~일) 체크버튼 카드 — 모바일 2줄 배치 (월~목 4열 / 금~일 3열) & '월(11일)' 표기
             @st.fragment
             def render_weekly_routine_grid():
                 with st.container(border=True):
@@ -1774,13 +1768,11 @@ if not st.session_state["teacher_authenticated"]:
                     for r_id, r_title in daily_routines_list:
                         st.markdown(f"**• {r_title}**")
 
-                        # 1행: 월, 화, 수, 목 (4열)
                         cols_row1 = st.columns(4)
                         for idx_d in range(4):
                             with cols_row1[idx_d]:
                                 render_day_checkbox(r_id, idx_d, week_days[idx_d])
 
-                        # 2행: 금, 토, 일 (3열)
                         cols_row2 = st.columns(3)
                         for idx_d in range(4, 7):
                             with cols_row2[idx_d - 4]:
@@ -2929,17 +2921,31 @@ else:
                         with st.container(border=True):
                             st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
                             
-                            colored_num_tags = []
+                            num_items_html = []
+                            repeat_badges_html = []
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}".upper()
                                 v_url, _ = batch_link_cache.get(f_code, ("", ""))
                                 num_color = "#0284C7" if (v_url and v_url.strip()) else "#DC2626"
+                                num_items_html.append(f"<span style='color: {num_color}; font-weight: bold;'>{n:03d}</span>")
+
                                 rep_cnt_item = all_rep_counts_map.get((s_name, f_code), 0)
                                 rep_badge_item = format_repeat_badge_html(rep_cnt_item)
-                                badge_suffix = f" {rep_badge_item}" if rep_badge_item else ""
-                                colored_num_tags.append(f"<span style='display:inline-flex; align-items:center; gap:4px; margin:2px 4px;'><span style='color: {num_color}; font-weight: bold;'>{n:03d}</span>{badge_suffix}</span>")
+                                if rep_badge_item:
+                                    repeat_badges_html.append(f"<span style='display:inline-flex; align-items:center; gap:3px;'><span style='color:{num_color}; font-weight:bold; font-size:12px;'>{n:03d}</span>{rep_badge_item}</span>")
 
-                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3); line-height:1.8;'>{u_code}_({''.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                            joined_nums_str = ",".join(num_items_html)
+                            repeat_summary_html = (
+                                f"<div style='margin-top: 6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;'>{''.join(repeat_badges_html)}</div>"
+                                if repeat_badges_html else ""
+                            )
+
+                            st.markdown(
+                                f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3); line-height:1.6; user-select:text;'>"
+                                f"<span>{u_code}_({joined_nums_str})</span>{repeat_summary_html}"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
             else:
                 st.info("조건에 일치하는 오답노트 기록이 없습니다.")
         else:
