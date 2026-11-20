@@ -3568,8 +3568,17 @@ else:
                         st.markdown(f"🎯 **점수:** <span style='color:#0284C7; font-weight:bold;'>{score_pct}점</span>", unsafe_allow_html=True)
                         st.markdown(f"✅ 정답: {correct_cnt}개 / ❌ 오답: {wrong_cnt}개")
                     with col_info3:
-                        sub_del_key = f"del_sub_{s_name}_{t_title}_{idx}"
-                        if st.button("🗑️ 제출 내역 초기화", key=sub_del_key, use_container_width=True):
+                        safe_key = f"{s_name}_{t_title}_{idx}"
+                        confirm_key = f"confirm_reset_{safe_key}"
+                        confirmed = st.checkbox("초기화 확인", key=confirm_key)
+                    
+                        if st.button(
+                            "🗑️ 제출 내역 초기화",
+                            key=f"btn_reset_{safe_key}",
+                            disabled=not confirmed,
+                            type="primary" if confirmed else "secondary",
+                            use_container_width=True,
+                        ):
                             try:
                                 if is_postgres_sub:
                                     c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
@@ -3579,6 +3588,7 @@ else:
                                     q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
                                 conn_sub.commit()
                                 st.cache_data.clear()
+                                st.session_state[confirm_key] = False
                                 st.success(f"[{s_name}] 학생의 '{t_title}' 제출 기록이 초기화되었습니다.")
                                 st.rerun()
                             except Exception as e:
