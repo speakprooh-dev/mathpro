@@ -1498,6 +1498,25 @@ def check_subjective_answer(user_ans, real_ans):
         
     return False
 
+def detect_multiple_choice(ans_str, filename_str):
+    ans_clean = str(ans_str or "").strip()
+    fn_clean = str(filename_str or "").strip()
+    clean_ans_check = ans_clean.replace("@", "").replace("번", "").strip()
+
+    is_explicit_subjective = (
+        any(k in fn_clean for k in ["서술형", "주관식", "단답"]) or
+        any(k in ans_clean for k in ["서술형", "주관식"])
+    )
+
+    has_choice_signal = (
+        ("@" in fn_clean) or
+        any(circ in ans_clean or circ in fn_clean for circ in ["①", "②", "③", "④", "⑤"]) or
+        (ans_clean in ["1번", "2번", "3번", "4번", "5번"]) or
+        (clean_ans_check in ["1", "2", "3", "4", "5"])
+    )
+
+    return (not is_explicit_subjective) and has_choice_signal
+
 # ----------------------------------------------------
 # 🖼️ 메인 화면 상단 로고 및 헤더
 # ----------------------------------------------------
@@ -2369,6 +2388,8 @@ if not st.session_state["teacher_authenticated"]:
                         del st.session_state[f"submitted_{selected_session_id}"]
                     if f"all_results_{selected_session_id}" in st.session_state:
                         del st.session_state[f"all_results_{selected_session_id}"]
+                    if f"retry_stage_{selected_session_id}" in st.session_state:
+                        del st.session_state[f"retry_stage_{selected_session_id}"]
         
                 cache_key_items = f"cached_items_form_{selected_session_id}"
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
@@ -2419,6 +2440,8 @@ if not st.session_state["teacher_authenticated"]:
                                     del st.session_state[f"submitted_{selected_session_id}"]
                                 if f"all_results_{selected_session_id}" in st.session_state:
                                     del st.session_state[f"all_results_{selected_session_id}"]
+                                if f"retry_stage_{selected_session_id}" in st.session_state:
+                                    del st.session_state[f"retry_stage_{selected_session_id}"]
                                 st.rerun()
 
                     st.markdown("---")
@@ -2525,18 +2548,7 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
 
-                            clean_ans_check = ans_str.replace("@", "").replace("번", "").strip()
-                            is_explicit_subjective = (
-                                any(k in filename_str for k in ["서술형", "주관식", "단답"]) or
-                                any(k in ans_str for k in ["서술형", "주관식"])
-                            )
-                            has_choice_signal = (
-                                ("@" in filename_str) or
-                                any(circ in ans_str or circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                (ans_str in ["1번", "2번", "3번", "4번", "5번"]) or
-                                (clean_ans_check in ["1", "2", "3", "4", "5"])
-                            )
-                            is_multiple_choice_item = (not is_explicit_subjective) and has_choice_signal
+                            is_multiple_choice_item = detect_multiple_choice(ans_str, filename_str)
 
                             with st.container(border=True):
                                 st.markdown(
@@ -2570,7 +2582,6 @@ if not st.session_state["teacher_authenticated"]:
                                             st.image(prob["img_bytes"], use_container_width=True)
                                         else:
                                             st.info("💡 등록된 문제 이미지가 없습니다.")
-
 
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
@@ -2620,10 +2631,6 @@ if not st.session_state["teacher_authenticated"]:
                                                     )
                                                 conn_test.commit()
                                                 st.rerun(scope="fragment")
-
-                                        if st.button("접기 ▲", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
-                                            st.session_state[ans_exp_key] = False
-                                            st.rerun(scope="fragment")
 
                                 if is_cor != 1:
                                     re_key = f"re_solve_chk_{sess_id}_{prob['full_code']}"
@@ -2679,6 +2686,101 @@ if not st.session_state["teacher_authenticated"]:
 
                             except Exception as e:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
+
+                    def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
+                        wrong_items_for_retry = [
+                            prob for prob in prob_list
+                            if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
+                        ]
+
+                        retry_stage_key = f"retry_stage_{sess_id}"
+                        just_submitted_key = f"just_submitted_{sess_id}"
+
+                        if st.session_state.get(just_submitted_key, False):
+                            if len(wrong_items_for_retry) > 0:
+                                st.session_state[retry_stage_key] = "retry"
+                            else:
+                                st.session_state[retry_stage_key] = "review"
+                            st.session_state[just_submitted_key] = False
+
+                        if retry_stage_key not in st.session_state:
+                            st.session_state[retry_stage_key] = "review"
+
+                        reolved_map_key = f"reolved_wrong_map_{sess_id}"
+                        if reolved_map_key not in st.session_state:
+                            st.session_state[reolved_map_key] = {}
+                        reolved_map = st.session_state[reolved_map_key]
+
+                        retry_ans_key = f"retry_ans_map_{sess_id}"
+                        if retry_ans_key not in st.session_state:
+                            st.session_state[retry_ans_key] = {}
+                        retry_ans_map = st.session_state[retry_ans_key]
+
+                        if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
+                            done_retry_cnt = sum(
+                                1 for w_prob in wrong_items_for_retry
+                                if reolved_map.get(w_prob["full_code"], False)
+                            )
+
+                            st.markdown(f"""
+                            <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
+                                <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
+                                <p style="font-size: 14px; margin: 0;">
+                                    채점 결과를 보기 전에 틀린 <b>{len(wrong_items_for_retry)}문항</b>을 한 번 더 고민해 보세요.
+                                    (재풀이 체크: <b>{done_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            if st.button("✅ 다시 풀기 완료하고 채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
+                                st.session_state[retry_stage_key] = "review"
+                                st.rerun()
+
+                            for idx_w, w_prob in enumerate(wrong_items_for_retry, start=1):
+                                w_code = w_prob["full_code"]
+                                with st.container(border=True):
+                                    st.markdown(
+                                        f"<div style='font-size: 14px; font-weight: bold; margin-bottom: 8px;'>"
+                                        f"🧩 재도전 {idx_w}/{len(wrong_items_for_retry)} — <b>{w_prob['order']}번 문제</b> "
+                                        f"<span style='color: #9CA3AF; font-size: 11px;'>(`{w_code}`)</span>"
+                                        f"</div>",
+                                        unsafe_allow_html=True
+                                    )
+
+                                    if w_prob.get("img_bytes"):
+                                        st.image(w_prob["img_bytes"], use_container_width=True)
+                                    else:
+                                        st.info("💡 등록된 문제 이미지가 없습니다.")
+
+                                    prev_re_ans = retry_ans_map.get(w_code, "")
+                                    new_re_ans = st.text_input(
+                                        f"{w_prob['order']}번 다시 풀어본 답 메모 (선택)",
+                                        value=prev_re_ans,
+                                        placeholder="노트에 다시 풀어보고 답이나 풀이 메모를 적어보세요",
+                                        key=f"retry_input_{sess_id}_{w_code}"
+                                    )
+                                    retry_ans_map[w_code] = new_re_ans
+
+                                    prev_done = bool(reolved_map.get(w_code, False))
+                                    now_done = st.checkbox(
+                                        f"🔁 {w_prob['order']}번 다시 풀어봄 완료",
+                                        value=prev_done,
+                                        key=f"retry_step_chk_{sess_id}_{w_code}"
+                                    )
+                                    if now_done != prev_done:
+                                        reolved_map[w_code] = now_done
+                                        st.rerun()
+
+                            if st.button("✅ 다시 풀기 마치고 최종 채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
+                                st.session_state[retry_stage_key] = "review"
+                                st.rerun()
+                        else:
+                            if len(wrong_items_for_retry) > 0:
+                                if st.button("🔁 틀린 문제 다시 풀어보기 단계 열기", use_container_width=True, key=f"btn_reopen_retry_{sess_id}"):
+                                    st.session_state[retry_stage_key] = "retry"
+                                    st.rerun()
+
+                            render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title)
         
                     if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
                         if f"all_results_{selected_session_id}" not in st.session_state:
@@ -2712,7 +2814,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"correct_count_{selected_session_id}"] = restored_correct_cnt
         
                         all_results = st.session_state.get(f"all_results_{selected_session_id}", [])
-                        render_problem_review_list(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
+                        render_retry_then_review(problem_list, all_results, selected_session_id, selected_student, selected_test_title)
         
                     else:
                         with st.form(key=f"test_form_{selected_session_id}"):
@@ -2749,21 +2851,7 @@ if not st.session_state["teacher_authenticated"]:
                                     )
                                     user_ans = "셀프채점시대기"
                                 else:
-                                    clean_ans_check = ans_str.replace("@", "").replace("번", "").strip()
-
-                                    is_explicit_subjective = (
-                                        any(k in filename_str for k in ["서술형", "주관식", "단답"]) or
-                                        any(k in ans_str for k in ["서술형", "주관식"])
-                                    )
-                                    
-                                    has_choice_signal = (
-                                        ("@" in filename_str) or
-                                        any(circ in ans_str or circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        (ans_str in ["1번", "2번", "3번", "4번", "5번"]) or
-                                        (clean_ans_check in ["1", "2", "3", "4", "5"])
-                                    )
-                                    
-                                    is_multiple_choice = (not is_explicit_subjective) and has_choice_signal
+                                    is_multiple_choice = detect_multiple_choice(ans_str, filename_str)
 
                                     if is_multiple_choice:
                                         choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
@@ -2862,6 +2950,7 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[f"submitted_{selected_session_id}"] = True
                             st.session_state[f"all_results_{selected_session_id}"] = all_results
                             st.session_state[f"correct_count_{selected_session_id}"] = correct_count
+                            st.session_state[f"just_submitted_{selected_session_id}"] = True
                             if f"force_retest_{selected_session_id}" in st.session_state:
                                 del st.session_state[f"force_retest_{selected_session_id}"]
                             st.balloons()
