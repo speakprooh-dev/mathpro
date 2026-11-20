@@ -10,9 +10,15 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 및 모바일 2열 가로 유지 CSS 스타일
+# 💡 카드 외곽선, 체크박스-버튼 컴팩트 정렬 및 모바일 가로 넘침/잘림 방지 CSS 스타일
 st.markdown("""
 <style>
+/* 전체 페이지 모바일 가로 넘침 방지 */
+html, body, [data-testid="stAppViewContainer"], .main, .block-container {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+}
+
 /* st.container(border=True) 카드 외곽선과 배경 */
 div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
     border: 4px solid rgba(56, 189, 248, 0.8) !important;
@@ -21,23 +27,28 @@ div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[da
     padding: 18px !important;
     margin-bottom: 16px !important;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5) !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 /* 개념 진도 및 오답 목록 컬럼 간격 및 상하 여백 압축 (콤팩트 정렬) */
 div[data-testid="stHorizontalBlock"] {
     align-items: center !important;
     gap: 6px !important;
+    max-width: 100% !important;
 }
 div[data-testid="stCheckbox"] {
     display: flex !important;
     align-items: center !important;
     margin-top: -4px !important;
     margin-bottom: -4px !important;
+    max-width: 100% !important;
 }
 div[data-testid="stCheckbox"] label {
     display: flex !important;
     align-items: center !important;
     width: 100% !important;
+    max-width: 100% !important;
 }
 div[data-testid="stCheckbox"] label p {
     white-space: nowrap !important;
@@ -46,18 +57,30 @@ div[data-testid="stCheckbox"] label p {
     font-size: 13px !important;
 }
 
-/* 모바일 화면에서도 st.columns(2)가 세로로 쌓이지 않고 좌/우 2열로 나란히 유지되도록 설정 */
+/* 모바일 화면 가로 넘침 및 오른쪽 잘림 방지 */
 @media (max-width: 640px) {
+    .block-container {
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
+        padding: 12px 10px !important;
+    }
     div[data-testid="stHorizontalBlock"] {
         flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: flex-start !important;
-        gap: 8px !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        gap: 6px !important;
     }
     div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-        width: 50% !important;
-        flex: 1 1 50% !important;
+        flex: 1 1 auto !important;
         min-width: 0 !important;
+        max-width: 100% !important;
+    }
+    /* 주간 이동 버튼(이전 주 / 이번 주 / 다음 주) 모바일 컴팩트화 */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] button p {
+        font-size: 12px !important;
+        white-space: nowrap !important;
     }
 }
 
@@ -916,7 +939,6 @@ def update_routine_order(student_name, routine_id, direction):
         if not items:
             return
 
-        # 기존 순서가 모두 동일하거나 중복인 경우 1부터 순번 정규화
         normalized = []
         for idx, (r_id, _) in enumerate(items, start=1):
             normalized.append([r_id, idx])
@@ -1931,9 +1953,9 @@ if not st.session_state["teacher_authenticated"]:
                         badge_bd = "#10B981" if done_in_week >= 7 else ("#F59E0B" if done_in_week > 0 else "rgba(148,163,184,0.35)")
 
                         st.markdown(
-                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;'>"
-                            f"<div style='font-size:13px; font-weight:bold;'>• {r_title}</div>"
-                            f"<span style='background-color:{badge_bg}; color:{badge_fg}; border:1px solid {badge_bd}; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:bold; white-space:nowrap;'>{done_in_week}/7</span>"
+                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; max-width:100%;'>"
+                            f"<div style='font-size:13px; font-weight:bold; min-width:0; flex:1; word-break:break-word;'>• {r_title}</div>"
+                            f"<span style='background-color:{badge_bg}; color:{badge_fg}; border:1px solid {badge_bd}; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:bold; white-space:nowrap; flex-shrink:0;'>{done_in_week}/7</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
