@@ -2835,8 +2835,24 @@ if not st.session_state["teacher_authenticated"]:
                     
                                 with st.container(border=True):
                                     if is_essay:
+                                        f_code = str(q_code).strip()
+                                        u_part = f_code[:4] if len(f_code) > 4 else "A114"
+                                        num_part = f_code[4:] if len(f_code) > 4 else f_code
+                                        n_digits = "".join(filter(str.isdigit, num_part))
+                                        project_id = "qfpclacalaaxbhhheosw"
+                                        target_filename = f"{u_part}_ans_({n_digits}).png"
+                                        ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
+                    
                                         st.markdown(f"**서술형 #{idx_q}**")
-                                        st.markdown(f"- **정답:** `{real_answer_txt}`")
+                                        st.markdown(
+                                            f"<div style='margin: 4px 0 8px 0;'>"
+                                            f"<span style='font-size: 13px; color: #9CA3AF;'>정답지:</span><br>"
+                                            f"<img src='{ans_img_url}' onerror=\"this.style.display='none'; this.nextElementSibling.style.display='inline';\" "
+                                            f"style='max-height: 90px; width: auto; background: white; padding: 4px 8px; border-radius: 6px; border: 1px solid #ddd; margin-top: 4px;' />"
+                                            f"<span style='display: none; font-size: 13px; color: #9CA3AF;'>정답 이미지 없음 — 본인 풀이 기준 셀프채점</span>"
+                                            f"</div>",
+                                            unsafe_allow_html=True
+                                        )
                                     else:
                                         st.markdown(f"**주관식 #{idx_q}**")
                                         st.markdown(f"- **정답:** `{real_answer_txt}`")
