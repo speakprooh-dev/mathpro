@@ -2571,9 +2571,6 @@ if not st.session_state["teacher_authenticated"]:
                                         else:
                                             st.info("💡 등록된 문제 이미지가 없습니다.")
 
-                                        if st.button("접기 ▲", key=f"btn_bot_ans_{ans_exp_key}", use_container_width=True):
-                                            st.session_state[ans_exp_key] = False
-                                            st.rerun(scope="fragment")
 
                                 ans_exp_key = f"toggle_ans_{sess_id}_{prob['item_id']}"
                                 if ans_exp_key not in st.session_state:
