@@ -2314,16 +2314,37 @@ if not st.session_state["teacher_authenticated"]:
                         return (1, "999999", t_title)
 
                     week_sessions = sorted(sessions_by_week[w_key], key=extract_title_date_key)
+                    wk_done_cnt = sum(1 for s in week_sessions if s[3] == 1)
+                    wk_todo_cnt = len(week_sessions) - wk_done_cnt
 
-                    with st.expander(f"📆 [{w_key}] — 등록된 테스트 {len(week_sessions)}개", expanded=False):
+                    with st.expander(
+                        f"📆 [{w_key}] — ✅ 완료 {wk_done_cnt} / 🆕 미제출 {wk_todo_cnt} (총 {len(week_sessions)}개)",
+                        expanded=False
+                    ):
+                        prev_date_prefix = None
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
                             
-                            display_title = s_title
-                            if len(display_title) > 22:
-                                display_title = display_title[:21] + "…"
+                            m_yymmdd = re.search(r"\b(\d{2})(\d{2})(\d{2})\b", str(s_title or ""))
+                            date_prefix = f"{m_yymmdd.group(2)}/{m_yymmdd.group(3)}" if m_yymmdd else ""
 
-                            btn_label = f"{status_badge} {display_title}"
+                            if date_prefix and prev_date_prefix and date_prefix != prev_date_prefix:
+                                st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+                            if date_prefix:
+                                prev_date_prefix = date_prefix
+
+                            formatted_title = str(s_title or "")
+                            if m_yymmdd:
+                                formatted_title = formatted_title.replace(
+                                    m_yymmdd.group(0),
+                                    f"{m_yymmdd.group(2)}/{m_yymmdd.group(3)}",
+                                    1
+                                )
+
+                            if len(formatted_title) > 24:
+                                formatted_title = formatted_title[:23] + "…"
+
+                            btn_label = f"{status_badge} {formatted_title}"
                             
                             if st.button(btn_label, key=f"btn_sess_list_{s_id}", use_container_width=True):
                                 st.session_state[f"active_sess_{selected_student}"] = s_id
