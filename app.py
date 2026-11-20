@@ -2689,14 +2689,10 @@ if not st.session_state["teacher_authenticated"]:
                                     )
                                     user_ans = "셀프채점시대기"
                                 else:
-                                    clean_ans_check = ans_str.replace("@", "").replace("번", "").strip()
-                                    is_multiple_choice = (
-                                        "@" in filename_str or 
-                                        any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                        ans_str in ["1번", "2번", "3번", "4번", "5번"] or
-                                        clean_ans_check in ["1", "2", "3", "4", "5"]
-                                    )
+                                    has_circled_num = any(circ in ans_str or circ in filename_str for circ in ["①", "②", "③", "④", "⑤"])
+                                    has_choice_mark = ("@" in filename_str) or (ans_str in ["1번", "2번", "3번", "4번", "5번"])
+                                    
+                                    is_multiple_choice = has_circled_num or has_choice_mark
 
                                     if is_multiple_choice:
                                         choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
