@@ -10,7 +10,7 @@ import base64
 
 st.set_page_config(page_title="MathPro 학생 맞춤 학습 로드맵", page_icon="📐", layout="centered")
 
-# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 CSS 스타일 (미완료 문구 제거 반영)
+# 💡 카드 외곽선, 체크박스-버튼 완벽한 한 줄 컴팩트 정렬 및 모바일 2열 가로 유지 CSS 스타일
 st.markdown("""
 <style>
 /* st.container(border=True) 카드 외곽선과 배경 */
@@ -44,6 +44,21 @@ div[data-testid="stCheckbox"] label p {
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     font-size: 13px !important;
+}
+
+/* 모바일 화면에서도 st.columns(2)가 세로로 쌓이지 않고 좌/우 2열로 나란히 유지되도록 설정 */
+@media (max-width: 640px) {
+    div[data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        width: 50% !important;
+        flex: 1 1 50% !important;
+        min-width: 0 !important;
+    }
 }
 
 /* 버튼 텍스트 왼쪽 정렬 설정 */
