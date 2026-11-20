@@ -2505,6 +2505,12 @@ if not st.session_state["teacher_authenticated"]:
                 problem_list = st.session_state.get(cache_key_items, [])
                 selected_test_title = current_active_info[1]
                 is_db_completed = (current_active_info[3] == 1)
+
+                # ▼▼▼ 여기에 임시 디버그 출력 추가 ▼▼▼
+                for p in problem_list:
+                    if p["full_code"] in ["A1131062", "A1131153", "A104080", "A104081"]:
+                        st.write(p["full_code"], "answer=", repr(p["answer"]), "filename=", repr(p["filename"]))
+                # ▲▲▲ 여기까지 ▲▲▲
         
                 if not problem_list:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
