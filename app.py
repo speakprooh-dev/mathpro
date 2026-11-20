@@ -3573,33 +3573,90 @@ else:
                     filtered_sessions = []
 
             if filtered_sessions:
-                with st.expander(f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개) — 터치하여 펼치기", expanded=False):
+                with st.expander(
+                    f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개 · 🆕 미제출 {unsubmitted_cnt} / ✅ 완료 {completed_cnt}) — 터치하여 펼치기",
+                    expanded=False
+                ):
                     with st.form("batch_delete_sessions_form"):
                         sessions_to_bulk_delete = []
+                        prev_group_label = None
 
                         for sess_id, s_name, t_title, created_at, is_comp, p_date in filtered_sessions:
-                            status_txt = "✅ 제출완료" if is_comp == 1 else "🆕 미제출"
-                            
-                            date_part = p_date.strftime("%Y-%m-%d") if p_date else (created_at[:10] if created_at else "")
-                            label_str = f"[{s_name}] {t_title} ({status_txt} | {date_part})"
-                            
+                            group_label = (
+                                f"{p_date.strftime('%y%m%d')} ({get_weekday_short_kr(str(p_date))})"
+                                if p_date
+                                else (created_at[:10] if created_at else "날짜 미상")
+                            )
+                            if group_label != prev_group_label:
+                                if prev_group_label is not None:
+                                    st.markdown(
+                                        "<hr style='margin: 8px 0 6px 0; border: none; border-top: 1px solid rgba(148,163,184,0.22);'>",
+                                        unsafe_allow_html=True
+                                    )
+                                day_items = [
+                                    x for x in filtered_sessions
+                                    if (
+                                        (f"{x[5].strftime('%y%m%d')} ({get_weekday_short_kr(str(x[5]))})"
+                                         if x[5] else (x[3][:10] if x[3] else "날짜 미상"))
+                                        == group_label
+                                    )
+                                ]
+                                st.markdown(
+                                    f"<div style='font-size:12px; font-weight:700; color:#38BDF8; margin: 2px 0 4px 2px;'>"
+                                    f"📅 {group_label} · {len(day_items)}건</div>",
+                                    unsafe_allow_html=True
+                                )
+                                prev_group_label = group_label
+
+                            clean_title = re.sub(
+                                r"\s*\[?\d{6}\([월화수목금토일]\)\]?\s*",
+                                " ",
+                                str(t_title or "")
+                            ).strip()
+                            date_tag = (
+                                f"[{p_date.strftime('%y%m%d')}({get_weekday_short_kr(str(p_date))})] "
+                                if p_date else ""
+                            )
+                            status_txt = "제출완료" if is_comp == 1 else "미제출"
+                            status_icon = "✅" if is_comp == 1 else "🆕"
+
+                            label_str = f"[{s_name}] {date_tag}{clean_title}  —  {status_icon} {status_txt}"
+
                             is_checked = st.checkbox(label_str, key=f"form_chk_sess_del_{sess_id}")
                             if is_checked:
                                 sessions_to_bulk_delete.append((sess_id, s_name, t_title))
 
-                        submitted_batch_del = st.form_submit_button("🗑️ 체크한 테스트 목록 일괄 삭제하기", type="primary", use_container_width=True)
+                        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                        submitted_batch_del = st.form_submit_button(
+                            "🗑️ 체크한 테스트 목록 일괄 삭제하기",
+                            type="primary",
+                            use_container_width=True
+                        )
 
                         if submitted_batch_del:
                             if sessions_to_bulk_delete:
                                 try:
                                     for sess_id, s_name, t_title in sessions_to_bulk_delete:
                                         if is_postgres_sub:
-                                            c_sub.execute("DELETE FROM online_test_items WHERE session_id = %s", (sess_id,))
-                                            c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (s_name, t_title))
-                                            c_sub.execute("DELETE FROM online_test_sessions WHERE id = %s", (sess_id,))
+                                            c_sub.execute(
+                                                "DELETE FROM online_test_items WHERE session_id = %s",
+                                                (sess_id,)
+                                            )
+                                            c_sub.execute(
+                                                "DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s",
+                                                (s_name, t_title)
+                                            )
+                                            c_sub.execute(
+                                                "DELETE FROM online_test_sessions WHERE id = %s",
+                                                (sess_id,)
+                                            )
                                         else:
                                             q(c_sub, "DELETE FROM online_test_items WHERE session_id = ?", (sess_id,))
-                                            q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                            q(
+                                                c_sub,
+                                                "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?",
+                                                (s_name, t_title)
+                                            )
                                             q(c_sub, "DELETE FROM online_test_sessions WHERE id = ?", (sess_id,))
                                     conn_sub.commit()
                                     st.cache_data.clear()
@@ -3610,9 +3667,7 @@ else:
                             else:
                                 st.warning("삭제할 테스트를 먼저 하나 이상 체크해 주세요.")
             else:
-                st.info("해당 조건에 맞는 출제된 테스트 목록이 없습니다.")
-        else:
-            st.info("현재 등록된 온라인 테스트 목록이 없습니다.")
+                st.info("선택한 필터 조건에 맞는 출제된 테스트 목록이 없습니다.")
 
         st.divider()
 
