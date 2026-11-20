@@ -86,7 +86,7 @@ div[data-testid="stCheckbox"] label p {
 
 /* PC 온라인 테스트 문제 이미지 크기 제한 */
 @media (min-width: 641px) {
-    div[data-testid="stForm"] div[data-testid="stImage"] img {
+    div[data-testid="stImage"] img {
         max-width: 480px !important;
         max-height: 320px !important;
         width: auto !important;
@@ -2692,36 +2692,36 @@ if not st.session_state["teacher_authenticated"]:
                             prob for prob in prob_list
                             if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
                         ]
-
+                    
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
-
+                    
                         if st.session_state.get(just_submitted_key, False):
                             if len(wrong_items_for_retry) > 0:
                                 st.session_state[retry_stage_key] = "retry"
                             else:
                                 st.session_state[retry_stage_key] = "review"
                             st.session_state[just_submitted_key] = False
-
+                    
                         if retry_stage_key not in st.session_state:
                             st.session_state[retry_stage_key] = "review"
-
+                    
                         reolved_map_key = f"reolved_wrong_map_{sess_id}"
                         if reolved_map_key not in st.session_state:
                             st.session_state[reolved_map_key] = {}
                         reolved_map = st.session_state[reolved_map_key]
-
+                    
                         retry_ans_key = f"retry_ans_map_{sess_id}"
                         if retry_ans_key not in st.session_state:
                             st.session_state[retry_ans_key] = {}
                         retry_ans_map = st.session_state[retry_ans_key]
-
+                    
                         if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
                             done_retry_cnt = sum(
                                 1 for w_prob in wrong_items_for_retry
                                 if reolved_map.get(w_prob["full_code"], False)
                             )
-
+                    
                             st.markdown(f"""
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
                                 <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
@@ -2731,36 +2731,58 @@ if not st.session_state["teacher_authenticated"]:
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-
+                    
                             if st.button("✅ 다시 풀기 완료하고 채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
                                 st.session_state[retry_stage_key] = "review"
                                 st.rerun()
-
+                    
+                            choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
+                    
                             for idx_w, w_prob in enumerate(wrong_items_for_retry, start=1):
                                 w_code = w_prob["full_code"]
+                                w_ans_str = str(w_prob.get("answer", "")).strip()
+                                w_fn_str = str(w_prob.get("filename", "")).strip()
+                                is_mc = detect_multiple_choice(w_ans_str, w_fn_str)
+                    
                                 with st.container(border=True):
+                                    type_badge = "객관식" if is_mc else "주관식/서술형"
                                     st.markdown(
                                         f"<div style='font-size: 14px; font-weight: bold; margin-bottom: 8px;'>"
                                         f"🧩 재도전 {idx_w}/{len(wrong_items_for_retry)} — <b>{w_prob['order']}번 문제</b> "
-                                        f"<span style='color: #9CA3AF; font-size: 11px;'>(`{w_code}`)</span>"
+                                        f"<span style='color: #9CA3AF; font-size: 11px;'>(`{w_code}`)</span> "
+                                        f"<span style='color: #38BDF8; font-size: 11px;'>[{type_badge}]</span>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
-
+                    
                                     if w_prob.get("img_bytes"):
-                                        st.image(w_prob["img_bytes"], use_container_width=True)
+                                        st.image(w_prob["img_bytes"], width=480)
                                     else:
                                         st.info("💡 등록된 문제 이미지가 없습니다.")
-
-                                    prev_re_ans = retry_ans_map.get(w_code, "")
-                                    new_re_ans = st.text_input(
-                                        f"{w_prob['order']}번 다시 풀어본 답 메모 (선택)",
-                                        value=prev_re_ans,
-                                        placeholder="노트에 다시 풀어보고 답이나 풀이 메모를 적어보세요",
-                                        key=f"retry_input_{sess_id}_{w_code}"
-                                    )
-                                    retry_ans_map[w_code] = new_re_ans
-
+                    
+                                    prev_re_val = retry_ans_map.get(w_code, "")
+                    
+                                    if is_mc:
+                                        # 이전 입력값이 1~5 중 하나면 해당 인덱스 선택, 아니면 '잘 모름'(index 5)
+                                        clean_prev = str(prev_re_val).replace("번", "").strip()
+                                        default_radio_idx = choice_options.index(f"{clean_prev}번") if clean_prev in ["1", "2", "3", "4", "5"] else 5
+                                        picked_choice = st.radio(
+                                            f"{w_prob['order']}번 다시 풀어본 답 선택 (객관식):",
+                                            options=choice_options,
+                                            index=default_radio_idx,
+                                            key=f"retry_radio_{sess_id}_{w_code}",
+                                            horizontal=True
+                                        )
+                                        retry_ans_map[w_code] = picked_choice.replace("번", "").strip() if picked_choice != "잘 모름" else ""
+                                    else:
+                                        new_re_ans = st.text_input(
+                                            f"{w_prob['order']}번 다시 풀어본 답 입력 (주관식):",
+                                            value=prev_re_val,
+                                            placeholder="다시 풀어본 답이나 풀이 메모를 입력하세요",
+                                            key=f"retry_input_{sess_id}_{w_code}"
+                                        )
+                                        retry_ans_map[w_code] = new_re_ans
+                    
                                     prev_done = bool(reolved_map.get(w_code, False))
                                     now_done = st.checkbox(
                                         f"🔁 {w_prob['order']}번 다시 풀어봄 완료",
@@ -2770,7 +2792,7 @@ if not st.session_state["teacher_authenticated"]:
                                     if now_done != prev_done:
                                         reolved_map[w_code] = now_done
                                         st.rerun()
-
+                    
                             if st.button("✅ 다시 풀기 마치고 최종 채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
                                 st.session_state[retry_stage_key] = "review"
                                 st.rerun()
@@ -2779,7 +2801,7 @@ if not st.session_state["teacher_authenticated"]:
                                 if st.button("🔁 틀린 문제 다시 풀어보기 단계 열기", use_container_width=True, key=f"btn_reopen_retry_{sess_id}"):
                                     st.session_state[retry_stage_key] = "retry"
                                     st.rerun()
-
+                    
                             render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title)
         
                     if (is_db_completed or st.session_state.get(f"submitted_{selected_session_id}", False)) and not st.session_state.get(f"force_retest_{selected_session_id}", False):
