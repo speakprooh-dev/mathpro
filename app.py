@@ -1159,19 +1159,20 @@ def get_all_student_wrong_entries(student_name):
     q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (student_name,))
     return c.fetchall()
 
-def save_student_wrong_entry(student_name, unit_code, numbers_text):
+def save_student_wrong_entry(student_name, unit_code, numbers_text, target_nums_to_log=None):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
     now_str = get_korean_now_str()
     try:
-        # 1. 저장 전 기존 누적 오답 번호 조회
-        prev_text = get_student_wrong_entry(student_name, unit_code)
-        prev_nums = parse_numbers(prev_text)
+        # 1. 저장할 전체 누적 번호 집합 계산
         new_total_nums = parse_numbers(numbers_text)
 
-        # 2. 이번에 새로 추가된 번호만 추출 (누적 번호 중 기존에 없던 번호)
-        newly_added_nums = sorted(list(new_total_nums - prev_nums))
+        # 2. 방식 A: 같은 날(today_str) 중복만 막고, 다른 날에 다시 등록하면 새 날짜로도 기록
+        if target_nums_to_log is not None:
+            nums_to_log = sorted(list(set(int(n) for n in target_nums_to_log)))
+        else:
+            nums_to_log = sorted(list(new_total_nums))
 
         # 3. 전체 누적 오답 목록은 student_wrong_entries에 저장
         if db_type == "sqlite":
@@ -1180,8 +1181,8 @@ def save_student_wrong_entry(student_name, unit_code, numbers_text):
         else:
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?", (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
         
-        # 4. '새로 추가된 번호'만 당일 로그(student_wrong_logs)에 기록
-        for num in newly_added_nums:
+        # 4. 당일(today_str) 기준 로그(student_wrong_logs)에 기록 (같은 날 중복은 UNIQUE 인덱스로 무시, 다른 날 재등록은 추가 기록)
+        for num in nums_to_log:
             if db_type == "sqlite":
                 q(c, "INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (?, ?, ?, ?, ?)", (student_name, unit_code, int(num), today_str, now_str))
             else:
@@ -1642,8 +1643,15 @@ if not st.session_state["teacher_authenticated"]:
                 if st.button("💾 오답 목록 저장하기", type="primary", use_container_width=True):
                     if entered_unit_code:
                         saved_pre = parse_numbers(get_student_wrong_entry(selected_student, target_code))
-                        final_nums = (saved_pre | parse_numbers(add_txt)) - parse_numbers(del_txt)
-                        save_student_wrong_entry(selected_student, target_code, ", ".join(map(str, sorted(list(final_nums)))))
+                        added_nums = parse_numbers(add_txt)
+                        deleted_nums = parse_numbers(del_txt)
+                        final_nums = (saved_pre | added_nums) - deleted_nums
+                        save_student_wrong_entry(
+                            selected_student,
+                            target_code,
+                            ", ".join(map(str, sorted(list(final_nums)))),
+                            target_nums_to_log=(added_nums - deleted_nums)
+                        )
                         st.success("저장되었습니다!")
                         st.rerun()
                     else:
@@ -1770,7 +1778,7 @@ if not st.session_state["teacher_authenticated"]:
                                         current_nums = parse_numbers(get_student_wrong_entry(selected_student, view_target_code))
                                         updated_nums = current_nums - set(actual_to_delete)
                                         new_nums_text = ", ".join(map(str, sorted(list(updated_nums))))
-                                        save_student_wrong_entry(selected_student, view_target_code, new_nums_text)
+                                        save_student_wrong_entry(selected_student, view_target_code, new_nums_text, target_nums_to_log=set())
                                         st.success("선택하신 오답 목록이 삭제되었습니다!")
                                         st.rerun()
                                     else:
@@ -1953,12 +1961,6 @@ if not st.session_state["teacher_authenticated"]:
     
                         st.markdown(f"### 📝 전체 문항별 채점 결과 및 검토 ({len(prob_list)}개)")
 
-                        existing_wrong_rows = get_all_student_wrong_entries(s_name)
-                        registered_full_codes = set()
-                        for u_code, nums_txt in existing_wrong_rows:
-                            for num in parse_numbers(nums_txt):
-                                registered_full_codes.add(f"{u_code}{num:03d}".upper())
-    
                         selected_wrong_notes = {}
                         
                         all_f_codes = [prob["full_code"] for prob in prob_list]
@@ -2081,10 +2083,7 @@ if not st.session_state["teacher_authenticated"]:
                                             st.session_state[ans_exp_key] = False
                                             st.rerun(scope="fragment")
     
-                                is_item_saved = (
-                                    st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
-                                    or (prob['full_code'].upper() in registered_full_codes)
-                                )
+                                is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
                                 is_checked_default = False
     
                                 if is_item_saved:
@@ -2117,7 +2116,7 @@ if not st.session_state["teacher_authenticated"]:
                                     pre_nums = parse_numbers(existing_txt)
                                     merged_nums = pre_nums | num_set
                                     merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                    save_student_wrong_entry(s_name, u_code, merged_txt)
+                                    save_student_wrong_entry(s_name, u_code, merged_txt, target_nums_to_log=num_set)
                                 
                                 for f_code in current_checked_codes:
                                     st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
