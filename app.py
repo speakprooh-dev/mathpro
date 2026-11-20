@@ -2760,12 +2760,22 @@ if not st.session_state["teacher_authenticated"]:
                                 continue
                             wrong_items_for_retry.append(prob)
                     
-                        # 빠른 확인 대상: 최초 오답(is_correct != 1) 중 주관식 또는 서술형 문항
-                        quick_check_targets = [
-                            prob for prob in prob_list
-                            if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
-                            and _is_essay_or_subjective(prob)
-                        ]
+                        # 빠른 확인 대상:
+                        # - 서술형: 연습장 풀이 셀프채점이 필요하므로 대상
+                        # - 주관식: 실제 답을 입력했는데 오답 처리된 경우만 대상 (미입력은 제외)
+                        quick_check_targets = []
+                        for prob in prob_list:
+                            matched_r = next((r for r in res_list if r["full_code"] == prob["full_code"]), None)
+                            if not matched_r or matched_r.get("is_correct") == 1:
+                                continue
+                            if not _is_essay_or_subjective(prob):
+                                continue
+                            if _is_essay_item(prob):
+                                quick_check_targets.append(prob)
+                            else:
+                                written_ans = str(matched_r.get("user_ans") or "").strip()
+                                if written_ans:
+                                    quick_check_targets.append(prob)
                     
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
