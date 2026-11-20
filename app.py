@@ -1482,20 +1482,32 @@ def parse_numbers(text):
 def check_subjective_answer(user_ans, real_ans):
     if not user_ans or not real_ans:
         return False
-    
+
     def normalize_text(t):
         t = str(t).strip().lower()
-        t = t.replace("번", "")
+        # 각종 마이너스/대시 기호를 일반 '-'로 통일
+        t = re.sub(r'[−－—–]', '-', t)
+        # 곱셈/나눗셈 기호 통일
+        t = t.replace("×", "*").replace("÷", "/")
+        # "번", "제" 제거
+        t = t.replace("번", "").replace("제", "")
+        # 모든 공백 제거
         t = re.sub(r'\s+', '', t)
-        t = t.replace("제", "")
         return t
 
     u_norm = normalize_text(user_ans)
     r_norm = normalize_text(real_ans)
-    
+
     if u_norm == r_norm:
         return True
-        
+
+    # 쉼표로 구분된 복수 답안(예: "2,5" vs "5,2")의 집합 비교
+    if "," in u_norm and "," in r_norm:
+        u_parts = sorted(p for p in u_norm.split(",") if p)
+        r_parts = sorted(p for p in r_norm.split(",") if p)
+        if u_parts and u_parts == r_parts:
+            return True
+
     return False
 
 def detect_multiple_choice(ans_str, filename_str):
