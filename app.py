@@ -2509,6 +2509,8 @@ if not st.session_state["teacher_authenticated"]:
                         all_f_codes = [prob["full_code"] for prob in display_prob_list]
                         batch_review_links = get_batch_problem_link_info(all_f_codes)
 
+                        retry_res_map = st.session_state.get(f"retry_result_map_{sess_id}", {})
+
                         for prob in display_prob_list:
                             matched_res = next((r for r in res_list if r['full_code'] == prob['full_code']), None)
 
@@ -2550,6 +2552,13 @@ if not st.session_state["teacher_authenticated"]:
 
                             is_multiple_choice_item = detect_multiple_choice(ans_str, filename_str)
 
+                            re_status = retry_res_map.get(prob["full_code"])
+                            retry_badge = ""
+                            if re_status == "correct":
+                                retry_badge = " <span style='background-color:rgba(16,185,129,0.18); color:#10B981; border:1px solid #10B981; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>🎯 재풀이 정답</span>"
+                            elif re_status == "wrong":
+                                retry_badge = " <span style='background-color:rgba(239,68,68,0.18); color:#EF4444; border:1px solid #EF4444; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>❌ 재풀이 오답</span>"
+
                             with st.container(border=True):
                                 st.markdown(
                                     f"<div style='display: flex; align-items: center; justify-content: space-between; font-size: 13px; margin-bottom: 6px; padding: 5px 8px; background-color: var(--secondary-background-color); border-radius: 6px;'>"
@@ -2557,6 +2566,7 @@ if not st.session_state["teacher_authenticated"]:
                                     f"    <b>{prob['order']}번 문제</b> "
                                     f"    <span style='color: #9CA3AF; font-size: 11px;'>(`{prob['full_code']}`)</span> "
                                     f"    <span style='color: {ox_color}; font-weight: bold; font-size: 14px;'>({ox_mark})</span>"
+                                    f"    {retry_badge}"
                                     f"  </div>"
                                     f"  <div>{link_btn}</div>"
                                     f"</div>",
@@ -2749,18 +2759,17 @@ if not st.session_state["teacher_authenticated"]:
                             graded_summary = {}
                             for w_item in wrong_items_for_retry:
                                 code = w_item["full_code"]
-                                ans_given = retry_ans_map.get(code, "")
+                                ans_given = str(retry_ans_map.get(code, "")).strip()
                                 status = evaluate_retry_answer(w_item, ans_given)
                                 graded_summary[code] = status
-                                if status == "correct" or str(ans_given).strip() != "":
-                                    reolved_map[code] = True
+                                reolved_map[code] = (ans_given != "")
                             st.session_state[retry_res_key] = graded_summary
                             st.session_state[retry_stage_key] = "review"
                     
                         if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
-                            done_retry_cnt = sum(
+                            attempted_retry_cnt = sum(
                                 1 for w_prob in wrong_items_for_retry
-                                if reolved_map.get(w_prob["full_code"], False)
+                                if str(retry_ans_map.get(w_prob["full_code"], "")).strip() != ""
                             )
                     
                             st.markdown(f"""
@@ -2768,7 +2777,7 @@ if not st.session_state["teacher_authenticated"]:
                                 <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
                                 <p style="font-size: 14px; margin: 0;">
                                     채점 결과를 보기 전에 틀린 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
-                                    (재풀이 체크: <b>{done_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
+                                    (답 입력/선택: <b>{attempted_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -2813,24 +2822,18 @@ if not st.session_state["teacher_authenticated"]:
                                             key=f"retry_radio_{sess_id}_{w_code}",
                                             horizontal=True
                                         )
-                                        retry_ans_map[w_code] = picked_choice.replace("번", "").strip() if picked_choice != "잘 모름" else ""
+                                        new_val = picked_choice.replace("번", "").strip() if picked_choice != "잘 모름" else ""
                                     else:
-                                        new_re_ans = st.text_input(
+                                        new_val = st.text_input(
                                             f"{w_prob['order']}번 다시 풀어본 답 입력 (주관식):",
                                             value=prev_re_val,
                                             placeholder="다시 풀어본 답이나 풀이 메모를 입력하세요",
                                             key=f"retry_input_{sess_id}_{w_code}"
-                                        )
-                                        retry_ans_map[w_code] = new_re_ans
+                                        ).strip()
                     
-                                    prev_done = bool(reolved_map.get(w_code, False))
-                                    now_done = st.checkbox(
-                                        f"🔁 {w_prob['order']}번 다시 풀어봄 완료",
-                                        value=prev_done,
-                                        key=f"retry_step_chk_{sess_id}_{w_code}"
-                                    )
-                                    if now_done != prev_done:
-                                        reolved_map[w_code] = now_done
+                                    if new_val != prev_re_val:
+                                        retry_ans_map[w_code] = new_val
+                                        reolved_map[w_code] = (new_val != "")
                                         st.rerun()
                     
                             if st.button("✅ 다시 풀기 마치고 재채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
@@ -2842,7 +2845,6 @@ if not st.session_state["teacher_authenticated"]:
                                     st.session_state[retry_stage_key] = "retry"
                                     st.rerun()
                     
-                            # 재채점 결과가 있으면 리뷰 상단에 요약 배너 표시
                             if retry_res_map:
                                 re_ok = sum(1 for v in retry_res_map.values() if v == "correct")
                                 re_fail = sum(1 for v in retry_res_map.values() if v == "wrong")
