@@ -1159,29 +1159,91 @@ def get_all_student_wrong_entries(student_name):
     q(c, "SELECT unit_code, numbers_text FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (student_name,))
     return c.fetchall()
 
+@st.cache_data(ttl=60, show_spinner=False)
+def get_student_wrong_repeat_counts(student_name):
+    """(student_name)의 각 문항(full_code)이 서로 다른 날짜(registered_date)에 몇 번 등록되었는지 반환"""
+    if not student_name:
+        return {}
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, """
+                SELECT UPPER(unit_code || LPAD(CAST(prob_num AS TEXT), 3, '0')) AS full_code,
+                       COUNT(DISTINCT registered_date) AS reg_cnt
+                FROM student_wrong_logs
+                WHERE student_name = %s
+                GROUP BY unit_code, prob_num
+            """, (student_name,))
+        else:
+            q(c, """
+                SELECT UPPER(unit_code || printf('%03d', CAST(prob_num AS INTEGER))) AS full_code,
+                       COUNT(DISTINCT registered_date) AS reg_cnt
+                FROM student_wrong_logs
+                WHERE student_name = ?
+                GROUP BY unit_code, prob_num
+            """, (student_name,))
+        return {str(r[0]).upper(): int(r[1]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_all_students_wrong_repeat_counts():
+    """전체 학생 기준 (student_name, full_code)별 서로 다른 등록일 수 반환"""
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    try:
+        if db_type == "postgres":
+            q(c, """
+                SELECT student_name,
+                       UPPER(unit_code || LPAD(CAST(prob_num AS TEXT), 3, '0')) AS full_code,
+                       COUNT(DISTINCT registered_date) AS reg_cnt
+                FROM student_wrong_logs
+                GROUP BY student_name, unit_code, prob_num
+            """, ())
+        else:
+            q(c, """
+                SELECT student_name,
+                       UPPER(unit_code || printf('%03d', CAST(prob_num AS INTEGER))) AS full_code,
+                       COUNT(DISTINCT registered_date) AS reg_cnt
+                FROM student_wrong_logs
+                GROUP BY student_name, unit_code, prob_num
+            """, ())
+        return {(str(r[0]), str(r[1]).upper()): int(r[2]) for r in c.fetchall()}
+    except Exception:
+        return {}
+
+def format_repeat_badge_html(rep_cnt):
+    """반복 등록 횟수(2회 이상)에 따른 HTML 배지 반환"""
+    try:
+        cnt = int(rep_cnt)
+    except Exception:
+        cnt = 0
+    if cnt >= 3:
+        return f"<span style='background-color:rgba(239,68,68,0.18); color:#F87171; border:1px solid #EF4444; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap;'>⚠️ {cnt}회 반복</span>"
+    elif cnt == 2:
+        return "<span style='background-color:rgba(245,158,11,0.18); color:#FBBF24; border:1px solid #F59E0B; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap;'>🔁 2회 등록</span>"
+    return ""
+
 def save_student_wrong_entry(student_name, unit_code, numbers_text, target_nums_to_log=None):
     conn, db_type = get_db_connection()
     c = conn.cursor()
     today_str = str(get_korean_today())
     now_str = get_korean_now_str()
     try:
-        # 1. 저장할 전체 누적 번호 집합 계산
         new_total_nums = parse_numbers(numbers_text)
 
-        # 2. 방식 A: 같은 날(today_str) 중복만 막고, 다른 날에 다시 등록하면 새 날짜로도 기록
         if target_nums_to_log is not None:
             nums_to_log = sorted(list(set(int(n) for n in target_nums_to_log)))
         else:
             nums_to_log = sorted(list(new_total_nums))
 
-        # 3. 전체 누적 오답 목록은 student_wrong_entries에 저장
         if db_type == "sqlite":
             q(c, "DELETE FROM student_wrong_entries WHERE student_name = ? AND unit_code = ?", (student_name, unit_code))
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (?, ?, ?, ?)", (student_name, unit_code, numbers_text, today_str))
         else:
             q(c, "INSERT INTO student_wrong_entries (student_name, unit_code, numbers_text, updated_at) VALUES (%s, %s, %s, %s) ON CONFLICT(student_name, unit_code) DO UPDATE SET numbers_text = ?, updated_at = ?", (student_name, unit_code, numbers_text, today_str, numbers_text, today_str))
         
-        # 4. 당일(today_str) 기준 로그(student_wrong_logs)에 기록 (같은 날 중복은 UNIQUE 인덱스로 무시, 다른 날 재등록은 추가 기록)
         for num in nums_to_log:
             if db_type == "sqlite":
                 q(c, "INSERT OR IGNORE INTO student_wrong_logs (student_name, unit_code, prob_num, registered_date, created_at) VALUES (?, ?, ?, ?, ?)", (student_name, unit_code, int(num), today_str, now_str))
@@ -1446,6 +1508,7 @@ if not st.session_state["teacher_authenticated"]:
 
         saved_wrong_entries = get_all_student_wrong_entries(selected_student)
         solved_map_alert = get_student_wrong_solved_status(selected_student)
+        repeat_count_map = get_student_wrong_repeat_counts(selected_student)
         
         unsolved_total_count = 0
         new_video_count = 0
@@ -1661,6 +1724,7 @@ if not st.session_state["teacher_authenticated"]:
             
             with st.container(border=True):
                 st.markdown("##### 📝 2. 나의 오답노트 및 해설 바로가기")
+                st.caption("🔁 여러 날에 걸쳐 다시 등록된 문제는 복습이 필요한 반복 오답 신호입니다.")
                 saved_units_list = [u_code for u_code, _ in saved_wrong_entries]
                 solved_map_chk = get_student_wrong_solved_status(selected_student)
                 now_datetime_chk = datetime.now()
@@ -1671,8 +1735,11 @@ if not st.session_state["teacher_authenticated"]:
                 for u_code in saved_units_list:
                     p_nums = parsed_entry_dict.get(u_code, set())
                     has_new_unsolved = False
+                    has_repeat_item = False
                     for n in p_nums:
                         f_code = f"{u_code}{n:03d}".upper()
+                        if repeat_count_map.get(f_code, 0) >= 2:
+                            has_repeat_item = True
                         v_url, v_up_at = batch_link_info.get(f_code, ("", ""))
                         is_solved = solved_map_chk.get(f_code, False)
                         if v_url and not is_solved:
@@ -1680,10 +1747,14 @@ if not st.session_state["teacher_authenticated"]:
                                 up_dt = datetime.strptime(v_up_at, "%Y-%m-%d %H:%M:%S")
                                 if (now_datetime_chk - up_dt).total_seconds() <= 30 * 86400:
                                     has_new_unsolved = True
-                                    break
                             except Exception:
                                 pass
-                    display_name = f"{u_code} 🔥 [새해설 대기]" if has_new_unsolved else f"{u_code}"
+                    badges = []
+                    if has_new_unsolved:
+                        badges.append("🔥 [새해설 대기]")
+                    if has_repeat_item:
+                        badges.append("🔁 [반복 오답]")
+                    display_name = f"{u_code} " + " ".join(badges) if badges else f"{u_code}"
                     unit_map_dict[display_name] = u_code
                     unit_display_options.append(display_name)
 
@@ -1720,6 +1791,8 @@ if not st.session_state["teacher_authenticated"]:
                                 full_code = f"{view_target_code}{n:03d}".upper()
                                 v_url, v_updated_at = batch_link_info.get(full_code, ("", ""))
                                 is_solved = solved_map.get(full_code, False)
+                                rep_cnt = repeat_count_map.get(full_code, 0)
+                                rep_badge = format_repeat_badge_html(rep_cnt)
                                 
                                 is_new_alert = False
                                 if v_url and v_updated_at and not is_solved:
@@ -1731,23 +1804,27 @@ if not st.session_state["teacher_authenticated"]:
                                         pass
 
                                 if is_edit_mode:
-                                    col_c1, col_c2 = st.columns([2.3, 1.7])
+                                    col_c1, col_c2 = st.columns([2.2, 1.8])
                                     with col_c1:
                                         st.checkbox(f"삭제 ({full_code})", value=False, key=f"del_num_chk_{selected_student}_{view_target_code}_{n}")
                                     with col_c2:
+                                        right_parts = []
+                                        if rep_badge:
+                                            right_parts.append(rep_badge)
                                         if v_url and v_url.strip():
                                             if is_new_alert:
-                                                st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                                                right_parts.append(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a>")
                                             else:
-                                                st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                                right_parts.append(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a>")
                                         else:
-                                            st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                                            right_parts.append("<span style='font-size:11px; color:gray;'>준비중</span>")
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px; display:flex; justify-content:flex-end; align-items:center; gap:6px;'>{' '.join(right_parts)}</div>", unsafe_allow_html=True)
                                 else:
                                     def on_wrong_solved_change(f_code=full_code, key=f"s_wrong_chk_{selected_student}_{full_code}"):
                                         new_val = st.session_state[key]
                                         save_single_wrong_solved_status(selected_student, f_code, new_val)
 
-                                    col_c1, col_c2 = st.columns([2.3, 1.7])
+                                    col_c1, col_c2 = st.columns([2.2, 1.8])
                                     with col_c1:
                                         st.checkbox(
                                             f"복습 완료 ({full_code})", 
@@ -1756,13 +1833,17 @@ if not st.session_state["teacher_authenticated"]:
                                             on_change=on_wrong_solved_change
                                         )
                                     with col_c2:
+                                        right_parts = []
+                                        if rep_badge:
+                                            right_parts.append(rep_badge)
                                         if v_url and v_url.strip():
                                             if is_new_alert:
-                                                st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a></div>", unsafe_allow_html=True)
+                                                right_parts.append(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:#EF4444; color:white; border:1px solid #DC2626; display:inline-block; white-space: nowrap;'>🔥 새해설</a>")
                                             else:
-                                                st.markdown(f"<div style='text-align: right; margin-top: 4px;'><a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a></div>", unsafe_allow_html=True)
+                                                right_parts.append(f"<a href='{v_url}' target='_blank' style='padding:3px 8px; border-radius:4px; font-size:11px; text-decoration:none; font-weight:bold; background-color:var(--secondary-background-color); border:1px solid rgba(128,128,128,0.3); color:inherit; white-space: nowrap;'>🎥 해설</a>")
                                         else:
-                                            st.markdown("<div style='text-align: right; margin-top: 4px; font-size:11px; color:gray;'>준비중</div>", unsafe_allow_html=True)
+                                            right_parts.append("<span style='font-size:11px; color:gray;'>준비중</span>")
+                                        st.markdown(f"<div style='text-align: right; margin-top: 4px; display:flex; justify-content:flex-end; align-items:center; gap:6px;'>{' '.join(right_parts)}</div>", unsafe_allow_html=True)
                                         
                                 st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
@@ -1796,17 +1877,31 @@ if not st.session_state["teacher_authenticated"]:
                 if search_prob_input:
                     if len(search_prob_input) >= 7:
                         matched_url, _ = get_problem_link_info(search_prob_input)
+                        rep_cnt_search = repeat_count_map.get(search_prob_input, 0)
+                        rep_badge_search = format_repeat_badge_html(rep_cnt_search)
                         if matched_url:
-                            st.success(f"📌 **{search_prob_input}** 문제 해설 링크가 확인되었습니다!")
+                            badge_line = f" &nbsp; {rep_badge_search}" if rep_badge_search else ""
+                            st.markdown(f"<div style='background-color:rgba(16,185,129,0.12); border:1px solid #10B981; padding:10px 12px; border-radius:8px; margin-bottom:10px; font-size:13.5px;'>📌 <b>{search_prob_input}</b> 문제 해설 링크가 확인되었습니다!{badge_line}</div>", unsafe_allow_html=True)
                             st.markdown(f'<a href="{matched_url}" target="_blank" style="display:block; padding:12px; border-radius:8px; text-decoration:none; font-weight:bold; text-align:center; border:1px solid rgba(128,128,128,0.3);">🎥 풀이 영상 바로가기 ➔</a>', unsafe_allow_html=True)
                         else:
-                            st.warning(f"'{search_prob_input}'에 등록된 해설 링크가 없습니다.")
+                            badge_line = f" &nbsp; {rep_badge_search}" if rep_badge_search else ""
+                            st.markdown(f"<div style='background-color:rgba(245,158,11,0.12); border:1px solid #F59E0B; padding:10px 12px; border-radius:8px; font-size:13.5px;'>'{search_prob_input}'에 등록된 해설 링크가 없습니다.{badge_line}</div>", unsafe_allow_html=True)
                     else:
                         unit_results = get_problem_links_by_unit(search_prob_input)
                         if unit_results:
                             st.markdown(f"##### 📂 `{search_prob_input}` 단원 해설 목록 ({len(unit_results)}개)")
                             for f_code, v_url in unit_results:
-                                st.markdown(f'<a href="{v_url}" target="_blank" style="display:block; padding:10px; border-radius:6px; text-decoration:none; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">📌 {f_code} &nbsp;&nbsp;<span style="color:#0284C7;">🎥 해설 영상 ➔</span></a>', unsafe_allow_html=True)
+                                f_code_u = str(f_code).upper()
+                                rep_cnt_u = repeat_count_map.get(f_code_u, 0)
+                                rep_badge_u = format_repeat_badge_html(rep_cnt_u)
+                                badge_html = f" &nbsp;{rep_badge_u}" if rep_badge_u else ""
+                                st.markdown(
+                                    f'<div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-radius:6px; margin-bottom:6px; border:1px solid rgba(128,128,128,0.3);">'
+                                    f'<div>📌 <b>{f_code_u}</b>{badge_html}</div>'
+                                    f'<a href="{v_url}" target="_blank" style="text-decoration:none; font-weight:bold; color:#0284C7; white-space:nowrap;">🎥 해설 영상 ➔</a>'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
                         else:
                             st.info("단원코드 형식으로 올바르게 입력해 주세요.")
 
@@ -2693,15 +2788,20 @@ else:
                         target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
 
             if target_rows:
+                all_rep_counts_map = get_all_students_wrong_repeat_counts()
                 summary_student_counts = {}
                 all_target_full_codes = []
+                repeat_item_total = 0
                 
                 for s_name, u_code, nums_txt, u_date in target_rows:
                     parsed_s = parse_numbers(nums_txt)
                     if parsed_s:
                         summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
                         for n in parsed_s:
-                            all_target_full_codes.append(f"{u_code}{n:03d}".upper())
+                            f_code = f"{u_code}{n:03d}".upper()
+                            all_target_full_codes.append(f_code)
+                            if all_rep_counts_map.get((s_name, f_code), 0) >= 2:
+                                repeat_item_total += 1
                 
                 unique_codes = list(set(all_target_full_codes))
                 batch_link_cache = get_batch_problem_link_info(unique_codes)
@@ -2714,6 +2814,7 @@ else:
                         <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
                         <div style="font-size: 13px; margin-bottom: 8px;">
                             🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
+                            🔁 반복 오답(2회↑): <b style="color: #F59E0B;">{repeat_item_total}건</b> &nbsp;|&nbsp; 
                             📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
                         </div>
                         """,
@@ -2734,12 +2835,13 @@ else:
                             for n in sorted(list(parsed_s)):
                                 f_code = f"{u_code}{n:03d}".upper()
                                 v_url, _ = batch_link_cache.get(f_code, ("", ""))
-                                if v_url and v_url.strip():
-                                    colored_num_tags.append(f"<span style='color: #0284C7; font-weight: bold;'>{n:03d}</span>")
-                                else:
-                                    colored_num_tags.append(f"<span style='color: #DC2626; font-weight: bold;'>{n:03d}</span>")
+                                num_color = "#0284C7" if (v_url and v_url.strip()) else "#DC2626"
+                                rep_cnt_item = all_rep_counts_map.get((s_name, f_code), 0)
+                                rep_badge_item = format_repeat_badge_html(rep_cnt_item)
+                                badge_suffix = f" {rep_badge_item}" if rep_badge_item else ""
+                                colored_num_tags.append(f"<span style='display:inline-flex; align-items:center; gap:4px; margin:2px 4px;'><span style='color: {num_color}; font-weight: bold;'>{n:03d}</span>{badge_suffix}</span>")
 
-                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3);'>{u_code}_({', '.join(colored_num_tags)})</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3); line-height:1.8;'>{u_code}_({''.join(colored_num_tags)})</div>", unsafe_allow_html=True)
             else:
                 st.info("조건에 일치하는 오답노트 기록이 없습니다.")
         else:
@@ -3133,7 +3235,6 @@ else:
                             """, (s_name, t_title, s_name, t_title))
                         raw_detail_rows = c_sub.fetchall()
 
-                        # 동일 문제 코드가 재제출 등으로 DB에 여러 번 남아있을 경우 가장 최신(마지막) 기록 1건만 유지
                         dedup_map = {}
                         for p_id, u_ans, is_chk, img_b64 in raw_detail_rows:
                             dedup_map[p_id] = (p_id, u_ans, is_chk, img_b64)
