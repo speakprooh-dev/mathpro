@@ -471,6 +471,27 @@ def get_week_range_str(date_str):
     except Exception:
         return "주간 미상"
 
+def extract_test_date(title_str, fallback_str=None):
+    m6 = re.search(r"\b(\d{2})(\d{2})(\d{2})\b", str(title_str or ""))
+    if m6:
+        try:
+            yy, mm, dd = int(m6.group(1)), int(m6.group(2)), int(m6.group(3))
+            return date(2000 + yy, mm, dd)
+        except ValueError:
+            pass
+    m8 = re.search(r"(\d{4})[-./]?(\d{2})[-./]?(\d{2})", str(title_str or ""))
+    if m8:
+        try:
+            return date(int(m8.group(1)), int(m8.group(2)), int(m8.group(3)))
+        except ValueError:
+            pass
+    if fallback_str:
+        try:
+            return date.fromisoformat(str(fallback_str)[:10])
+        except ValueError:
+            pass
+    return None
+
 @st.cache_resource(show_spinner=False)
 def init_db():
     try:
@@ -2446,11 +2467,13 @@ if not st.session_state["teacher_authenticated"]:
                             else:
                                 ans_display = f"<img src='{img_url}' style='height: 35px; width: auto; background: white; padding: 2px; border-radius: 4px; vertical-align: middle; border: 1px solid #ccc;' />"
     
+                            clean_ans_review = ans_str.replace("@", "").replace("번", "").strip()
                             is_multiple_choice_item = (
                                 "@" in filename_str or 
                                 any(circ in ans_str for circ in ["①", "②", "③", "④", "⑤"]) or
                                 any(circ in filename_str for circ in ["①", "②", "③", "④", "⑤"]) or
-                                ans_str in ["1번", "2번", "3번", "4번", "5번"]
+                                ans_str in ["1번", "2번", "3번", "4번", "5번"] or
+                                clean_ans_review in ["1", "2", "3", "4", "5"]
                             )
 
                             with st.container(border=True):
@@ -3496,17 +3519,68 @@ else:
                 ["전체 학생 보기"] + student_list, 
                 key="filter_sess_manage_stu"
             )
-            filtered_sessions = all_sessions_rows if filter_sess_stu == "전체 학생 보기" else [r for r in all_sessions_rows if r[1] == filter_sess_stu]
+            student_filtered_sessions = all_sessions_rows if filter_sess_stu == "전체 학생 보기" else [r for r in all_sessions_rows if r[1] == filter_sess_stu]
+
+            sess_view_mode = st.radio(
+                "목록 보기 방식",
+                ["최근 날짜순(전체)", "주간별 보기", "날짜별 보기"],
+                horizontal=True,
+                key="sess_manage_view_mode"
+            )
+
+            enriched_sessions = []
+            for sess_id, s_name, t_title, created_at, is_comp in student_filtered_sessions:
+                p_date = extract_test_date(t_title, created_at)
+                enriched_sessions.append((sess_id, s_name, t_title, created_at, is_comp, p_date))
+
+            # 최근 날짜순 정렬 (날짜가 있는 항목 우선, 그 다음 날짜 내림차순, 세션 ID 내림차순)
+            enriched_sessions.sort(
+                key=lambda x: (x[5] is not None, x[5] or date.min, x[0]),
+                reverse=True
+            )
+
+            filtered_sessions = []
+            if sess_view_mode == "최근 날짜순(전체)":
+                filtered_sessions = enriched_sessions
+            elif sess_view_mode == "주간별 보기":
+                today_k = get_korean_today()
+                this_week_mon = today_k - timedelta(days=today_k.weekday())
+                last_week_mon = this_week_mon - timedelta(days=7)
+
+                week_choice = st.selectbox(
+                    "주간 선택",
+                    [
+                        f"이번 주 ({this_week_mon.strftime('%m/%d')} ~ {(this_week_mon + timedelta(days=6)).strftime('%m/%d')})",
+                        f"지난 주 ({last_week_mon.strftime('%m/%d')} ~ {(last_week_mon + timedelta(days=6)).strftime('%m/%d')})",
+                        "그 이전 주 전체",
+                    ],
+                    key="sess_manage_week_sel"
+                )
+
+                if week_choice.startswith("이번 주"):
+                    filtered_sessions = [x for x in enriched_sessions if x[5] and this_week_mon <= x[5] < this_week_mon + timedelta(days=7)]
+                elif week_choice.startswith("지난 주"):
+                    filtered_sessions = [x for x in enriched_sessions if x[5] and last_week_mon <= x[5] < this_week_mon]
+                else:
+                    filtered_sessions = [x for x in enriched_sessions if not x[5] or x[5] < last_week_mon]
+            else:
+                available_sess_dates = sorted({x[5].strftime("%Y-%m-%d") for x in enriched_sessions if x[5]}, reverse=True)
+                if available_sess_dates:
+                    picked_sess_date = st.selectbox("날짜 선택 (최근 날짜순)", available_sess_dates, key="sess_manage_date_sel")
+                    filtered_sessions = [x for x in enriched_sessions if x[5] and x[5].strftime("%Y-%m-%d") == picked_sess_date]
+                else:
+                    st.info("날짜 정보가 있는 테스트가 없습니다.")
+                    filtered_sessions = []
 
             if filtered_sessions:
                 with st.expander(f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개) — 터치하여 펼치기", expanded=False):
                     with st.form("batch_delete_sessions_form"):
                         sessions_to_bulk_delete = []
 
-                        for sess_id, s_name, t_title, created_at, is_comp in filtered_sessions:
+                        for sess_id, s_name, t_title, created_at, is_comp, p_date in filtered_sessions:
                             status_txt = "✅ 제출완료" if is_comp == 1 else "🆕 미제출"
                             
-                            date_part = created_at[:10] if created_at else ""
+                            date_part = p_date.strftime("%Y-%m-%d") if p_date else (created_at[:10] if created_at else "")
                             label_str = f"[{s_name}] {t_title} ({status_txt} | {date_part})"
                             
                             is_checked = st.checkbox(label_str, key=f"form_chk_sess_del_{sess_id}")
@@ -3536,7 +3610,7 @@ else:
                             else:
                                 st.warning("삭제할 테스트를 먼저 하나 이상 체크해 주세요.")
             else:
-                st.info("해당 학생에게 출제된 테스트 목록이 없습니다.")
+                st.info("해당 조건에 맞는 출제된 테스트 목록이 없습니다.")
         else:
             st.info("현재 등록된 온라인 테스트 목록이 없습니다.")
 
