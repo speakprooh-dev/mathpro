@@ -2318,10 +2318,12 @@ if not st.session_state["teacher_authenticated"]:
                     wk_todo_cnt = len(week_sessions) - wk_done_cnt
 
                     with st.expander(
-                        f"📆 [{w_key} (월~일)]\n✅ 완료 {wk_done_cnt} · 🆕 미제출 {wk_todo_cnt} (총 {len(week_sessions)}개)",
+                        f"📆 [{w_key}] ({len(week_sessions)}개)",
                         expanded=False
                     ):
+                        st.caption(f"✅ 완료 {wk_done_cnt} · 🆕 미제출 {wk_todo_cnt}")
                         prev_date_prefix = None
+                        
                         for s_id, s_title, s_created, s_completed in week_sessions:
                             status_badge = "✅" if s_completed == 1 else "🆕"
                             
