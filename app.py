@@ -1526,18 +1526,23 @@ def detect_multiple_choice(ans_str, filename_str):
     ans_clean = str(ans_str or "").strip()
     fn_clean = str(filename_str or "").strip()
 
+    # 서술형 / 주관식 / 단답 표기가 명시된 경우 무조건 주관식(False)
     is_explicit_subjective = (
         any(k in fn_clean for k in ["서술형", "주관식", "단답"]) or
-        any(k in ans_clean for k in ["서술형", "주관식"])
+        any(k in ans_clean for k in ["서술형", "주관식", "단답"])
     )
+    if is_explicit_subjective:
+        return False
 
+    # 객관식 신호: 정답이 '1번'~'5번'이거나 원문자/골뱅이 표기가 있는 경우
     has_choice_signal = (
-        ("@" in fn_clean) or
-        any(circ in ans_clean or circ in fn_clean for circ in ["①", "②", "③", "④", "⑤"]) or
-        (ans_clean in ["1번", "2번", "3번", "4번", "5번"])
+        ("@" in fn_clean)
+        or ("@" in ans_clean)
+        or any(circ in ans_clean or circ in fn_clean for circ in ["①", "②", "③", "④", "⑤"])
+        or (ans_clean in ["1번", "2번", "3번", "4번", "5번"])
     )
 
-    return (not is_explicit_subjective) and has_choice_signal
+    return has_choice_signal
 
 def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
     quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
