@@ -1123,7 +1123,7 @@ def save_single_milestone_progress(student_name, milestone_id, val):
             q(c, "DELETE FROM milestone_progress WHERE student_name = ? AND milestone_id = ?", (student_name, milestone_id))
             q(c, "INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (?, ?, ?)", (student_name, milestone_id, int(val)))
         else:
-            q(c, "INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?", (student_name, milestone_id, int(val), int(val)))
+            q(c, "INSERT INTO milestone_progress (student_name, milestone_id, is_checked) VALUES (%s, %s, %s) ON CONFLICT(student_name, milestone_id) DO UPDATE SET is_checked = ?", (student_name, milestone_id, int(val), int(val)))
         conn.commit()
         get_milestone_progress.clear()
     except Exception:
@@ -1137,7 +1137,7 @@ def save_single_homework_progress(student_name, student_hw_id, val):
             q(c, "DELETE FROM student_homework_progress WHERE student_name = ? AND student_hw_id = ?", (student_name, student_hw_id))
             q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?)", (student_name, student_hw_id, int(val)))
         else:
-            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (?, ?, ?) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
+            q(c, "INSERT INTO student_homework_progress (student_name, student_hw_id, is_checked) VALUES (%s, %s, %s) ON CONFLICT(student_name, student_hw_id) DO UPDATE SET is_checked = ?", (student_name, student_hw_id, int(val), int(val)))
         conn.commit()
         get_student_homework_progress.clear()
         get_entire_homework_progress_map.clear()
@@ -1270,7 +1270,7 @@ def save_single_wrong_solved_status(student_name, full_code, is_solved_val):
             q(c, "DELETE FROM student_wrong_solved WHERE student_name = ? AND full_code = ?", (student_name, full_code))
             q(c, "INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (?, ?, ?)", (student_name, full_code, int(is_solved_val)))
         else:
-            q(c, "INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (?, ?, ?) ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?", (student_name, full_code, int(is_solved_val), int(is_solved_val)))
+            q(c, "INSERT INTO student_wrong_solved (student_name, full_code, is_solved) VALUES (%s, %s, %s) ON CONFLICT(student_name, full_code) DO UPDATE SET is_solved = ?", (student_name, full_code, int(is_solved_val), int(is_solved_val)))
         conn.commit()
         get_student_wrong_solved_status.clear()
     except Exception:
@@ -1629,41 +1629,64 @@ if not st.session_state["teacher_authenticated"]:
             today_obj = get_korean_today()
             today_str = str(today_obj)
             daily_routines_list = get_student_daily_routines(selected_student)
-            current_day_logs = get_student_daily_logs_by_date(selected_student, today_str)
-            
-            total_routines_cnt = len(daily_routines_list)
-            completed_routines_cnt = sum(1 for r_id, _ in daily_routines_list if current_day_logs.get((str(r_id), today_str), False))
+            today_routine_logs = get_student_daily_logs_by_date(selected_student, today_str)
+            today_hws = get_student_homework_by_date(selected_student, today_str)
 
-            st.markdown("### 🔥 매일 반복 루틴 체크")
-            st.markdown(f"💡 **루틴 진행 상황**: 총 **{total_routines_cnt}개** 중 **{completed_routines_cnt}개** 완료")
-            st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
-            
-            if daily_routines_list:
-                with st.container(border=True):
+            st.markdown(f"### 📚 오늘의 숙제 및 루틴 ({today_str} · {get_weekday_kr(today_str)})")
+
+            # 1) 오늘 개별 숙제 현황
+            actual_today_hws = [h for h in today_hws if not h[1].startswith("💬 [선생님 메시지]:")]
+            total_today_h = len(actual_today_hws)
+            completed_today_h = sum(1 for h_item in actual_today_hws if h_progress.get(h_item[0], False))
+
+            # 2) 오늘 매일 루틴 현황
+            total_today_rt = len(daily_routines_list)
+            completed_today_rt = sum(
+                1 for r_id, _ in daily_routines_list
+                if today_routine_logs.get((str(r_id), today_str), False)
+            )
+
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                st.markdown(f"📚 **오늘 숙제 현황**: 총 **{total_today_h}개** 중 **{completed_today_h}개** 완료")
+            with col_p2:
+                st.markdown(f"🔁 **오늘 루틴 현황**: 총 **{total_today_rt}개** 중 **{completed_today_rt}개** 완료")
+
+            st.markdown(
+                "<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>"
+                "📌 오늘 숙제와 매일 반복 루틴을 완료한 후 체크박스를 꼭 눌러주세요!</p>",
+                unsafe_allow_html=True
+            )
+
+            with st.container(border=True):
+                # 1) 오늘 매일 반복 루틴 통합 표시
+                if daily_routines_list:
+                    st.markdown(
+                        "<div style='font-size:13px; font-weight:bold; color:#F59E0B; margin-bottom:6px;'>🔁 매일 반복 루틴</div>",
+                        unsafe_allow_html=True
+                    )
                     for r_id, r_title in daily_routines_list:
-                        default_val = current_day_logs.get((str(r_id), today_str), False)
-                        chk_key = f"s_daily_{selected_student}_{r_id}"
-                        
-                        def on_routine_change(r_id=r_id, key=chk_key):
+                        rt_default = today_routine_logs.get((str(r_id), today_str), False)
+                        rt_key = f"s_daily_{selected_student}_{today_str}_{r_id}"
+
+                        def on_routine_change(r_id=r_id, key=rt_key):
                             save_single_routine_log(selected_student, str(r_id), today_str, st.session_state[key])
 
-                        st.checkbox(f"{r_title}", value=default_val, key=chk_key, on_change=on_routine_change)
-                        st.divider()
+                        st.checkbox(
+                            f"[루틴] {r_title}",
+                            value=rt_default,
+                            key=rt_key,
+                            on_change=on_routine_change
+                        )
+                    st.divider()
 
-            if hw_dates:
-                st.markdown("### 📚 날짜별 개별 숙제")
-                selected_date = st.selectbox("확인할 숙제 날짜 선택", hw_dates, format_func=lambda x: f"{x} ({get_weekday_kr(x)})")
-                hws = get_student_homework_by_date(selected_student, selected_date)
-                
-                actual_sel_hws = [h for h in hws if not h[1].startswith("💬 [선생님 메시지]:")]
-                total_sel_h = len(actual_sel_hws)
-                completed_sel_h = sum(1 for h_item in actual_sel_hws if h_progress.get(h_item[0], False))
-
-                st.markdown(f"💡 **선택 날짜 숙제 현황**: 총 **{total_sel_h}개** 중 **{completed_sel_h}개** 완료")
-                st.markdown("<p style='color: #0284C7; font-size: 13px; font-weight: bold; margin-bottom: 8px;'>📌 숙제를 완료한 후 체크박스를 꼭 눌러주세요!</p>", unsafe_allow_html=True)
-
-                with st.container(border=True):
-                    for h_idx, hw_tuple in enumerate(hws):
+                # 2) 오늘 날짜 개별 숙제 표시
+                st.markdown(
+                    "<div style='font-size:13px; font-weight:bold; color:#0284C7; margin-bottom:6px;'>📝 오늘의 개별 숙제</div>",
+                    unsafe_allow_html=True
+                )
+                if today_hws:
+                    for h_idx, hw_tuple in enumerate(today_hws):
                         h_id = hw_tuple[0]
                         title = hw_tuple[1]
                         due_date = hw_tuple[2] if len(hw_tuple) > 2 else ""
@@ -1672,8 +1695,8 @@ if not st.session_state["teacher_authenticated"]:
                             st.info(f"📌 **선생님의 한마디**: {title.replace('💬 [선생님 메시지]:', '').strip()}")
                         else:
                             default_val = h_progress.get(h_id, False)
-                            chk_key = f"s_hw_{selected_student}_{selected_date}_{h_id}_{h_idx}"
-                            
+                            chk_key = f"s_hw_{selected_student}_{today_str}_{h_id}_{h_idx}"
+
                             def on_hw_change(h_id=h_id, key=chk_key):
                                 new_val = st.session_state[key]
                                 save_single_homework_progress(selected_student, h_id, new_val)
@@ -1681,16 +1704,22 @@ if not st.session_state["teacher_authenticated"]:
                             cols_hw = st.columns([4, 1])
                             with cols_hw[0]:
                                 st.checkbox(
-                                    f"{title}", 
-                                    value=default_val, 
-                                    key=chk_key, 
+                                    f"{title}",
+                                    value=default_val,
+                                    key=chk_key,
                                     on_change=on_hw_change
                                 )
                             with cols_hw[1]:
                                 if due_date and due_date.strip():
                                     short_wday = get_weekday_short_kr(due_date)
                                     wday_str = f" ({short_wday})" if short_wday else ""
-                                    st.markdown(f"<div style='text-align:right; margin-top:4px;'><span style='background-color:#FEF3C7; color:#D97706; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>마감: {due_date}{wday_str}</span></div>", unsafe_allow_html=True)
+                                    st.markdown(
+                                        f"<div style='text-align:right; margin-top:4px;'>"
+                                        f"<span style='background-color:#FEF3C7; color:#D97706; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>마감: {due_date}{wday_str}</span></div>",
+                                        unsafe_allow_html=True
+                                    )
+                else:
+                    st.caption("오늘 등록된 개별 숙제가 없습니다.")
 
         with tab3:
             st.markdown("### 💬 오답 및 질문 관리")
