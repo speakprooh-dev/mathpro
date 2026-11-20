@@ -1751,7 +1751,7 @@ if not st.session_state["teacher_authenticated"]:
 
                     def render_day_checkbox(r_id, idx_d, d_obj):
                         d_str = str(d_obj)
-                        is_today_mark = "📍" if d_str == today_str else ""
+                        is_today_mark = " 📍" if d_str == today_str else ""
                         chk_default = week_log_map.get((str(r_id), d_str), False)
                         wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
 
@@ -1768,14 +1768,13 @@ if not st.session_state["teacher_authenticated"]:
                     for r_id, r_title in daily_routines_list:
                         st.markdown(f"**• {r_title}**")
 
-                        cols_row1 = st.columns(4)
-                        for idx_d in range(4):
-                            with cols_row1[idx_d]:
+                        # 모바일에서도 2열(좌: 월~목 / 우: 금~일)로 유지되도록 st.columns(2) 사용
+                        cols_2 = st.columns(2)
+                        with cols_2[0]:
+                            for idx_d in range(0, 4):
                                 render_day_checkbox(r_id, idx_d, week_days[idx_d])
-
-                        cols_row2 = st.columns(3)
-                        for idx_d in range(4, 7):
-                            with cols_row2[idx_d - 4]:
+                        with cols_2[1]:
+                            for idx_d in range(4, 7):
                                 render_day_checkbox(r_id, idx_d, week_days[idx_d])
 
                         st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
