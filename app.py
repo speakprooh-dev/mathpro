@@ -3618,7 +3618,35 @@ else:
                                 if img_b64:
                                     try:
                                         decoded_img = base64.b64decode(img_b64)
-                                        st.image(decoded_img, use_container_width=True)
+                                        st.markdown(
+                                            """
+                                            <style>
+                                            .teacher-detail-img img {
+                                                width: auto !important;
+                                                object-fit: contain !important;
+                                                border-radius: 8px !important;
+                                                background-color: #FFFFFF !important;
+                                                padding: 6px !important;
+                                            }
+                                            @media (min-width: 641px) {
+                                                .teacher-detail-img img {
+                                                    max-width: 540px !important;
+                                                    max-height: 360px !important;
+                                                }
+                                            }
+                                            @media (max-width: 640px) {
+                                                .teacher-detail-img img {
+                                                    max-width: 100% !important;
+                                                    max-height: 250px !important;
+                                                }
+                                            }
+                                            </style>
+                                            <div class="teacher-detail-img">
+                                            """,
+                                            unsafe_allow_html=True
+                                        )
+                                        st.image(decoded_img, use_container_width=False)
+                                        st.markdown("</div>", unsafe_allow_html=True)
                                     except Exception:
                                         st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
                                 else:
