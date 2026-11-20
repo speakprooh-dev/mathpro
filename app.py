@@ -442,11 +442,11 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS milestones (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS homework (id SERIAL PRIMARY KEY, hw_date TEXT NOT NULL, title TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, due_date TEXT DEFAULT \'\');')
-            c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL);')
+            c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id SERIAL PRIMARY KEY, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, is_active INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0);')
             c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id SERIAL PRIMARY KEY, title TEXT NOT NULL);')
             c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id));')
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id));')
-            c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, student_hw_id));')
+            c.execute('CREATE TABLE IF NOT EXISTS student_homework_progress (student_name TEXT, student_hw_id INTEGER, is_checked INTEGER);')
             c.execute('CREATE TABLE IF NOT EXISTS daily_routine_logs (student_name TEXT, routine_id TEXT, log_date TEXT, is_checked INTEGER, PRIMARY KEY (student_name, routine_id, log_date));')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_entries (student_name TEXT, unit_code TEXT, numbers_text TEXT, updated_at TEXT DEFAULT \'\', PRIMARY KEY (student_name, unit_code));')
             c.execute('CREATE TABLE IF NOT EXISTS student_wrong_solved (student_name TEXT, full_code TEXT, is_solved INTEGER DEFAULT 0, PRIMARY KEY (student_name, full_code));')
@@ -509,6 +509,14 @@ def init_db():
                 c.execute('ALTER TABLE student_homework ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT \'\';')
             except Exception:
                 pass
+
+            try:
+                c.execute('ALTER TABLE daily_routines ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1;')
+                c.execute('ALTER TABLE daily_routines ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;')
+                c.execute('UPDATE daily_routines SET is_active = 1 WHERE is_active IS NULL;')
+                c.execute('UPDATE daily_routines SET sort_order = id WHERE sort_order IS NULL OR sort_order = 0;')
+            except Exception:
+                pass
             conn.commit()
         else:
             c.execute('CREATE TABLE IF NOT EXISTS students (name TEXT PRIMARY KEY, drive_url TEXT DEFAULT \'\')')
@@ -518,7 +526,7 @@ def init_db():
             c.execute('CREATE TABLE IF NOT EXISTS milestones (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, subject TEXT NOT NULL, chapter TEXT NOT NULL, type_name TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS homework (id INTEGER PRIMARY KEY AUTOINCREMENT, hw_date TEXT NOT NULL, title TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS student_homework (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, hw_date TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, due_date TEXT DEFAULT \'\')')
-            c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL)')
+            c.execute('CREATE TABLE IF NOT EXISTS daily_routines (id INTEGER PRIMARY KEY AUTOINCREMENT, student_name TEXT NOT NULL, title TEXT NOT NULL, parent_id INTEGER DEFAULT NULL, is_active INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0)')
             c.execute('CREATE TABLE IF NOT EXISTS homework_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL)')
             c.execute('CREATE TABLE IF NOT EXISTS milestone_progress (student_name TEXT, milestone_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, milestone_id))')
             c.execute('CREATE TABLE IF NOT EXISTS homework_progress (student_name TEXT, homework_id INTEGER, is_checked INTEGER, PRIMARY KEY (student_name, homework_id))')
@@ -574,6 +582,18 @@ def init_db():
 
             try:
                 c.execute('ALTER TABLE student_homework ADD COLUMN due_date TEXT DEFAULT \'\'')
+            except Exception:
+                pass
+
+            try:
+                c.execute("PRAGMA table_info(daily_routines)")
+                existing_cols = [col[1] for col in c.fetchall()]
+                if "is_active" not in existing_cols:
+                    c.execute("ALTER TABLE daily_routines ADD COLUMN is_active INTEGER DEFAULT 1")
+                if "sort_order" not in existing_cols:
+                    c.execute("ALTER TABLE daily_routines ADD COLUMN sort_order INTEGER DEFAULT 0")
+                c.execute("UPDATE daily_routines SET is_active = 1 WHERE is_active IS NULL")
+                c.execute("UPDATE daily_routines SET sort_order = id WHERE sort_order IS NULL OR sort_order = 0")
             except Exception:
                 pass
             conn.commit()
@@ -833,29 +853,101 @@ def delete_notice(notice_id):
     st.cache_data.clear()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_student_daily_routines(student_name):
+def get_student_daily_routines(student_name, include_inactive=False):
     conn, db_type = get_db_connection()
     c = conn.cursor()
-    if db_type == "postgres":
-        q(c, "SELECT id, title FROM daily_routines WHERE student_name = %s ORDER BY id", (student_name,))
-    else:
-        q(c, "SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id", (student_name,))
-    return c.fetchall()
+    try:
+        if include_inactive:
+            q(
+                c,
+                "SELECT id, title, COALESCE(is_active, 1), COALESCE(sort_order, id) FROM daily_routines WHERE student_name = ? ORDER BY COALESCE(sort_order, id) ASC, id ASC",
+                (student_name,)
+            )
+            rows = c.fetchall()
+            return [(r[0], r[1], bool(r[2]), int(r[3])) for r in rows]
+        else:
+            q(
+                c,
+                "SELECT id, title FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1 ORDER BY COALESCE(sort_order, id) ASC, id ASC",
+                (student_name,)
+            )
+            return [(r[0], r[1]) for r in c.fetchall()]
+    except Exception:
+        q(c, "SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id ASC", (student_name,))
+        rows = c.fetchall()
+        if include_inactive:
+            return [(r[0], r[1], True, idx + 1) for idx, r in enumerate(rows)]
+        return [(r[0], r[1]) for r in rows]
 
 def bulk_insert_daily_routines(student_name, text_data):
     conn, _ = get_db_connection()
     c = conn.cursor()
+    q(c, "SELECT COALESCE(MAX(COALESCE(sort_order, id)), 0) FROM daily_routines WHERE student_name = ?", (student_name,))
+    max_order_row = c.fetchone()
+    next_sort_order = int(max_order_row[0]) if max_order_row and max_order_row[0] is not None else 0
+
     lines = text_data.strip().split('\n')
     added_count = 0
     for line in lines:
         title = line.lstrip('-•*└\t ').strip()
         if not title:
             continue
-        q(c, "INSERT INTO daily_routines (student_name, title) VALUES (?, ?)", (student_name, title))
+        next_sort_order += 1
+        q(
+            c,
+            "INSERT INTO daily_routines (student_name, title, is_active, sort_order) VALUES (?, ?, 1, ?)",
+            (student_name, title, next_sort_order)
+        )
         added_count += 1
     conn.commit()
     st.cache_data.clear()
     return added_count
+
+def update_routine_order(student_name, routine_id, direction):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(
+            c,
+            "SELECT id, COALESCE(sort_order, id) FROM daily_routines WHERE student_name = ? ORDER BY COALESCE(sort_order, id) ASC, id ASC",
+            (student_name,)
+        )
+        items = [(r[0], int(r[1])) for r in c.fetchall()]
+        if not items:
+            return
+
+        # 기존 순서가 모두 동일하거나 중복인 경우 1부터 순번 정규화
+        normalized = []
+        for idx, (r_id, _) in enumerate(items, start=1):
+            normalized.append([r_id, idx])
+
+        target_idx = next((i for i, (r_id, _) in enumerate(normalized) if r_id == routine_id), -1)
+        if target_idx == -1:
+            return
+
+        if direction == "up" and target_idx > 0:
+            normalized[target_idx - 1][1], normalized[target_idx][1] = normalized[target_idx][1], normalized[target_idx - 1][1]
+        elif direction == "down" and target_idx < len(normalized) - 1:
+            normalized[target_idx + 1][1], normalized[target_idx][1] = normalized[target_idx][1], normalized[target_idx + 1][1]
+        else:
+            return
+
+        for r_id, s_order in normalized:
+            q(c, "UPDATE daily_routines SET sort_order = ? WHERE id = ?", (s_order, r_id))
+        conn.commit()
+        st.cache_data.clear()
+    except Exception as e:
+        print(f"루틴 순서 변경 중 예외: {e}")
+
+def toggle_routine_active(routine_id, new_active_bool):
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "UPDATE daily_routines SET is_active = ? WHERE id = ?", (1 if new_active_bool else 0, routine_id))
+        conn.commit()
+        st.cache_data.clear()
+    except Exception as e:
+        print(f"루틴 활성 상태 변경 중 예외: {e}")
 
 def delete_daily_routine(r_id):
     conn, _ = get_db_connection()
@@ -903,14 +995,20 @@ def get_routine_completion_rate(student_name, days_limit=7):
     start_date_str = str(today_obj - timedelta(days=days_limit - 1))
     today_str = str(today_obj)
     
-    q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines_count = c.fetchone()[0]
+    try:
+        q(c, "SELECT id FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+        active_ids = {str(r[0]) for r in c.fetchall()}
+    except Exception:
+        q(c, "SELECT id FROM daily_routines WHERE student_name = ?", (student_name,))
+        active_ids = {str(r[0]) for r in c.fetchall()}
+
+    total_routines_count = len(active_ids)
     if total_routines_count == 0:
         return 0, 0, 0
         
     total_expected = total_routines_count * days_limit
-    q(c, "SELECT COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
-    completed_count = c.fetchone()[0]
+    q(c, "SELECT routine_id FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
+    completed_count = sum(1 for r in c.fetchall() if str(r[0]) in active_ids)
     
     raw_rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     rate = min(100, max(0, raw_rate))
@@ -921,21 +1019,27 @@ def get_routine_completion_rate(student_name, days_limit=7):
 def get_student_routine_streak(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
-    if db_type == "postgres":
-        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = %s", (student_name,))
-    else:
-        q(c, "SELECT COUNT(*) FROM daily_routines WHERE student_name = ?", (student_name,))
-    total_routines = c.fetchone()[0]
+    try:
+        q(c, "SELECT id FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+        active_ids = {str(r[0]) for r in c.fetchall()}
+    except Exception:
+        q(c, "SELECT id FROM daily_routines WHERE student_name = ?", (student_name,))
+        active_ids = {str(r[0]) for r in c.fetchall()}
+
+    total_routines = len(active_ids)
     if total_routines == 0:
         return 0
     today_obj = get_korean_today()
     start_date_obj = today_obj - timedelta(days=60)
     if db_type == "postgres":
-        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
+        q(c, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1", (student_name, str(start_date_obj)))
     else:
-        q(c, "SELECT log_date, COUNT(*) FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1 GROUP BY log_date", (student_name, str(start_date_obj)))
+        q(c, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1", (student_name, str(start_date_obj)))
     rows = c.fetchall()
-    completed_days = {r[0]: r[1] for r in rows}
+    completed_days = {}
+    for l_date, r_id in rows:
+        if str(r_id) in active_ids:
+            completed_days[l_date] = completed_days.get(l_date, 0) + 1
     streak = 0
     check_date = today_obj
     if completed_days.get(str(check_date), 0) < total_routines:
@@ -1487,7 +1591,7 @@ if not st.session_state["teacher_authenticated"]:
         st.markdown('</div>', unsafe_allow_html=True)
 
         today_str_check = str(get_korean_today())
-        routines_chk_list = get_student_daily_routines(selected_student)
+        routines_chk_list = get_student_daily_routines(selected_student, include_inactive=False)
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
         unchecked_count = sum(1 for r_id, _ in routines_chk_list if not today_logs_chk.get((str(r_id), today_str_check), False))
         current_streak = get_student_routine_streak(selected_student)
@@ -1659,7 +1763,7 @@ if not st.session_state["teacher_authenticated"]:
         with tab2:
             today_obj = get_korean_today()
             today_str = str(today_obj)
-            daily_routines_list = get_student_daily_routines(selected_student)
+            daily_routines_list = get_student_daily_routines(selected_student, include_inactive=False)
 
             sorted_hw_dates = sorted(list(set(hw_dates or [])), reverse=True)
             default_target_date = sorted_hw_dates[0] if sorted_hw_dates else today_str
@@ -1688,9 +1792,14 @@ if not st.session_state["teacher_authenticated"]:
             total_target_h = len(actual_target_hws)
             completed_target_h = sum(1 for h_item in actual_target_hws if h_progress.get(h_item[0], False))
 
+            week_offset_key = f"routine_week_offset_{selected_student}"
+            if week_offset_key not in st.session_state:
+                st.session_state[week_offset_key] = 0
+
             base_d = date.fromisoformat(target_date_str)
-            week_start = base_d - timedelta(days=base_d.weekday())
-            week_days = [(week_start + timedelta(days=i)) for i in range(7)]
+            current_week_start = base_d - timedelta(days=base_d.weekday())
+            active_week_start = current_week_start + timedelta(weeks=st.session_state[week_offset_key])
+            week_days = [(active_week_start + timedelta(days=i)) for i in range(7)]
             week_day_strs = [str(d) for d in week_days]
 
             week_log_map = get_student_daily_logs_by_dates(selected_student, week_day_strs)
@@ -1706,7 +1815,8 @@ if not st.session_state["teacher_authenticated"]:
             with col_p1:
                 st.markdown(f"📚 **선택일 숙제 현황**: 총 **{total_target_h}개** 중 **{completed_target_h}개** 완료")
             with col_p2:
-                st.markdown(f"🔁 **이번 주 루틴 현황**: 총 **{total_week_rt}칸** 중 **{completed_week_rt}칸** 완료")
+                week_status_label = "이번 주" if st.session_state[week_offset_key] == 0 else ("지난 주" if st.session_state[week_offset_key] == -1 else ("다음 주" if st.session_state[week_offset_key] == 1 else f"{st.session_state[week_offset_key]:+d}주"))
+                st.markdown(f"🔁 **{week_status_label} 루틴 현황**: 총 **{total_week_rt}칸** 중 **{completed_week_rt}칸** 완료")
 
             with st.container(border=True):
                 st.markdown(
@@ -1752,12 +1862,35 @@ if not st.session_state["teacher_authenticated"]:
 
             @st.fragment
             def render_weekly_routine_grid():
+                wk_offset = st.session_state.get(week_offset_key, 0)
+                w_start = current_week_start + timedelta(weeks=wk_offset)
+                w_days = [(w_start + timedelta(days=i)) for i in range(7)]
+                w_day_strs = [str(d) for d in w_days]
+                w_log_map = get_student_daily_logs_by_dates(selected_student, w_day_strs)
+
                 with st.container(border=True):
                     st.markdown(
                         f"<div style='font-size:13px; font-weight:bold; color:#F59E0B; margin-bottom:8px;'>"
-                        f"🔁 주간 루틴 체크 ({week_days[0]} ~ {week_days[-1]} · 월~일)</div>",
+                        f"🔁 주간 루틴 체크 ({w_days[0]} ~ {w_days[-1]} · 월~일)</div>",
                         unsafe_allow_html=True
                     )
+
+                    col_nav1, col_nav2, col_nav3 = st.columns([1.2, 1.1, 1.2])
+                    with col_nav1:
+                        if st.button("◀ 이전 주", key=f"btn_prev_wk_{selected_student}", use_container_width=True):
+                            st.session_state[week_offset_key] = wk_offset - 1
+                            st.rerun(scope="fragment")
+                    with col_nav2:
+                        if st.button("📍 이번 주", key=f"btn_cur_wk_{selected_student}", use_container_width=True, disabled=(wk_offset == 0)):
+                            st.session_state[week_offset_key] = 0
+                            st.rerun(scope="fragment")
+                    with col_nav3:
+                        if st.button("다음 주 ▶", key=f"btn_next_wk_{selected_student}", use_container_width=True):
+                            st.session_state[week_offset_key] = wk_offset + 1
+                            st.rerun(scope="fragment")
+
+                    st.markdown("<hr style='margin: 8px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
+
                     if not daily_routines_list:
                         st.caption("등록된 매일 반복 루틴이 없습니다.")
                         return
@@ -1789,13 +1922,27 @@ if not st.session_state["teacher_authenticated"]:
                     )
 
                     for r_id, r_title in daily_routines_list:
-                        st.markdown(f"<div style='font-size:13px; font-weight:bold; margin-bottom:6px;'>• {r_title}</div>", unsafe_allow_html=True)
+                        done_in_week = sum(
+                            1 for d_str in w_day_strs
+                            if w_log_map.get((str(r_id), d_str), False)
+                        )
+                        badge_bg = "rgba(16,185,129,0.18)" if done_in_week >= 7 else ("rgba(245,158,11,0.18)" if done_in_week > 0 else "rgba(148,163,184,0.15)")
+                        badge_fg = "#34D399" if done_in_week >= 7 else ("#FBBF24" if done_in_week > 0 else "#CBD5E1")
+                        badge_bd = "#10B981" if done_in_week >= 7 else ("#F59E0B" if done_in_week > 0 else "rgba(148,163,184,0.35)")
+
+                        st.markdown(
+                            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;'>"
+                            f"<div style='font-size:13px; font-weight:bold;'>• {r_title}</div>"
+                            f"<span style='background-color:{badge_bg}; color:{badge_fg}; border:1px solid {badge_bd}; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:bold; white-space:nowrap;'>{done_in_week}/7</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
                         st.markdown("<div class='weekly-vertical-list'>", unsafe_allow_html=True)
 
-                        for idx_d, d_obj in enumerate(week_days):
+                        for idx_d, d_obj in enumerate(w_days):
                             d_str = str(d_obj)
                             is_today_mark = " 📍" if d_str == today_str else ""
-                            chk_default = week_log_map.get((str(r_id), d_str), False)
+                            chk_default = w_log_map.get((str(r_id), d_str), False)
                             wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
 
                             def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
@@ -2650,12 +2797,41 @@ else:
                             st.success("등록되었습니다!")
                             st.rerun()
                 
-                current_routines = get_student_daily_routines(selected_hw_student)
+                current_routines = get_student_daily_routines(selected_hw_student, include_inactive=True)
                 if current_routines:
+                    st.markdown("---")
+                    st.caption("▲/▼로 순서를 변경하고, ⏸/▶로 일시 중단·재개(기존 기록 유지)하거나 삭제할 루틴을 체크하세요.")
                     routines_to_delete = []
-                    for r_id, r_title in current_routines:
-                        if st.checkbox(f"📌 {r_title}", key=f"chk_del_routine_{r_id}"):
-                            routines_to_delete.append(r_id)
+                    total_rt_cnt = len(current_routines)
+
+                    for r_idx, (r_id, r_title, r_active, r_order) in enumerate(current_routines):
+                        row_c1, row_c2, row_c3, row_c4, row_c5 = st.columns([3.8, 0.7, 0.7, 1.3, 0.5])
+                        with row_c1:
+                            status_prefix = "" if r_active else "⏸️ [일시중단] "
+                            title_style = "" if r_active else "opacity: 0.65;"
+                            st.markdown(
+                                f"<div style='font-size:13px; font-weight:bold; padding-top:4px; {title_style}'>{status_prefix}📌 {r_title}</div>",
+                                unsafe_allow_html=True
+                            )
+                        with row_c2:
+                            if st.button("▲", key=f"btn_rt_up_{selected_hw_student}_{r_id}", disabled=(r_idx == 0), use_container_width=True):
+                                update_routine_order(selected_hw_student, r_id, "up")
+                                st.rerun()
+                        with row_c3:
+                            if st.button("▼", key=f"btn_rt_dn_{selected_hw_student}_{r_id}", disabled=(r_idx == total_rt_cnt - 1), use_container_width=True):
+                                update_routine_order(selected_hw_student, r_id, "down")
+                                st.rerun()
+                        with row_c4:
+                            toggle_label = "⏸ 중단" if r_active else "▶ 재개"
+                            if st.button(toggle_label, key=f"btn_rt_act_{selected_hw_student}_{r_id}", use_container_width=True):
+                                toggle_routine_active(r_id, not r_active)
+                                st.rerun()
+                        with row_c5:
+                            if st.checkbox("삭제", key=f"chk_del_routine_{r_id}", label_visibility="collapsed"):
+                                routines_to_delete.append(r_id)
+
+                        st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.12);'>", unsafe_allow_html=True)
+
                     if st.button("🗑️ 선택한 루틴 삭제하기", type="primary"):
                         if routines_to_delete:
                             for r_id in routines_to_delete:
