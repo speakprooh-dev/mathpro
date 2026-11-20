@@ -2687,6 +2687,30 @@ if not st.session_state["teacher_authenticated"]:
                             except Exception as e:
                                 st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
+                    def evaluate_retry_answer(w_prob, raw_retry_ans):
+                        """다시풀기 입력 답안을 문항 정답과 비교해 'correct' / 'wrong' / 'manual' 반환"""
+                        u_ans = str(raw_retry_ans or "").strip()
+                        ans_str = str(w_prob.get("answer", "")).strip()
+                        fn_str = str(w_prob.get("filename", "")).strip()
+                    
+                        is_difficulty_empty = False
+                        if "난이도" in fn_str:
+                            parts_diff = fn_str.split("난이도")
+                            if len(parts_diff) > 1:
+                                after_diff = parts_diff[1]
+                                if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                    is_difficulty_empty = True
+                    
+                        if ans_str == "-" or not ans_str or is_difficulty_empty:
+                            return "manual"
+                    
+                        if not u_ans:
+                            return "wrong"
+                    
+                        real_ans = ans_str.replace("@", "").replace("번", "").strip()
+                        return "correct" if check_subjective_answer(u_ans, real_ans) else "wrong"
+                    
+                    
                     def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
                         wrong_items_for_retry = [
                             prob for prob in prob_list
@@ -2716,6 +2740,23 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[retry_ans_key] = {}
                         retry_ans_map = st.session_state[retry_ans_key]
                     
+                        retry_res_key = f"retry_result_map_{sess_id}"
+                        if retry_res_key not in st.session_state:
+                            st.session_state[retry_res_key] = {}
+                        retry_res_map = st.session_state[retry_res_key]
+                    
+                        def run_retry_grading_and_go_review():
+                            graded_summary = {}
+                            for w_item in wrong_items_for_retry:
+                                code = w_item["full_code"]
+                                ans_given = retry_ans_map.get(code, "")
+                                status = evaluate_retry_answer(w_item, ans_given)
+                                graded_summary[code] = status
+                                if status == "correct" or str(ans_given).strip() != "":
+                                    reolved_map[code] = True
+                            st.session_state[retry_res_key] = graded_summary
+                            st.session_state[retry_stage_key] = "review"
+                    
                         if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
                             done_retry_cnt = sum(
                                 1 for w_prob in wrong_items_for_retry
@@ -2726,14 +2767,14 @@ if not st.session_state["teacher_authenticated"]:
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
                                 <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
                                 <p style="font-size: 14px; margin: 0;">
-                                    채점 결과를 보기 전에 틀린 <b>{len(wrong_items_for_retry)}문항</b>을 한 번 더 고민해 보세요.
+                                    채점 결과를 보기 전에 틀린 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
                                     (재풀이 체크: <b>{done_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
                     
-                            if st.button("✅ 다시 풀기 완료하고 채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
-                                st.session_state[retry_stage_key] = "review"
+                            if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
+                                run_retry_grading_and_go_review()
                                 st.rerun()
                     
                             choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
@@ -2763,7 +2804,6 @@ if not st.session_state["teacher_authenticated"]:
                                     prev_re_val = retry_ans_map.get(w_code, "")
                     
                                     if is_mc:
-                                        # 이전 입력값이 1~5 중 하나면 해당 인덱스 선택, 아니면 '잘 모름'(index 5)
                                         clean_prev = str(prev_re_val).replace("번", "").strip()
                                         default_radio_idx = choice_options.index(f"{clean_prev}번") if clean_prev in ["1", "2", "3", "4", "5"] else 5
                                         picked_choice = st.radio(
@@ -2793,14 +2833,24 @@ if not st.session_state["teacher_authenticated"]:
                                         reolved_map[w_code] = now_done
                                         st.rerun()
                     
-                            if st.button("✅ 다시 풀기 마치고 최종 채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
-                                st.session_state[retry_stage_key] = "review"
+                            if st.button("✅ 다시 풀기 마치고 재채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
+                                run_retry_grading_and_go_review()
                                 st.rerun()
                         else:
                             if len(wrong_items_for_retry) > 0:
                                 if st.button("🔁 틀린 문제 다시 풀어보기 단계 열기", use_container_width=True, key=f"btn_reopen_retry_{sess_id}"):
                                     st.session_state[retry_stage_key] = "retry"
                                     st.rerun()
+                    
+                            # 재채점 결과가 있으면 리뷰 상단에 요약 배너 표시
+                            if retry_res_map:
+                                re_ok = sum(1 for v in retry_res_map.values() if v == "correct")
+                                re_fail = sum(1 for v in retry_res_map.values() if v == "wrong")
+                                st.markdown(f"""
+                                <div style="background-color: rgba(16, 185, 129, 0.08); border: 1px solid #10B981; padding: 12px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 13.5px;">
+                                    🎯 <b>재풀이 채점 결과:</b> 다시 풀어본 문항 중 <b style="color:#10B981;">{re_ok}문항 정답</b> · <b style="color:#EF4444;">{re_fail}문항 재오답</b>
+                                </div>
+                                """, unsafe_allow_html=True)
                     
                             render_problem_review_list(prob_list, res_list, sess_id, s_name, s_title)
         
