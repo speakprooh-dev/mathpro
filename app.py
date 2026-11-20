@@ -84,6 +84,18 @@ div[data-testid="stCheckbox"] label p {
     }
 }
 
+/* PC 온라인 테스트 문제 이미지 크기 제한 */
+@media (min-width: 641px) {
+    .pc-test-img-box div[data-testid="stImage"] img {
+        max-width: 560px !important;
+        max-height: 360px !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain !important;
+        border-radius: 8px !important;
+    }
+}
+
 /* 버튼 텍스트 왼쪽 정렬 설정 */
 div.stButton > button {
     display: block !important;
@@ -2594,7 +2606,9 @@ if not st.session_state["teacher_authenticated"]:
                                 
                                 st.markdown(f"#### **{idx + 1}번 문제** (`{prob['full_code']}`)")
                                 if prob["img_bytes"]:
+                                    st.markdown("<div class='pc-test-img-box'>", unsafe_allow_html=True)
                                     st.image(prob["img_bytes"], use_container_width=True)
+                                    st.markdown("</div>", unsafe_allow_html=True)
                                 else:
                                     st.info("💡 등록된 문제 이미지가 없습니다.")
         
