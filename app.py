@@ -1833,13 +1833,6 @@ if not st.session_state["teacher_authenticated"]:
                 if week_log_map.get((str(r_id), d_str), False)
             )
 
-            col_p1, col_p2 = st.columns(2)
-            with col_p1:
-                st.markdown(f"📚 **선택일 숙제 현황**: 총 **{total_target_h}개** 중 **{completed_target_h}개** 완료")
-            with col_p2:
-                week_status_label = "이번 주" if st.session_state[week_offset_key] == 0 else ("지난 주" if st.session_state[week_offset_key] == -1 else ("다음 주" if st.session_state[week_offset_key] == 1 else f"{st.session_state[week_offset_key]:+d}주"))
-                st.markdown(f"🔁 **{week_status_label} 루틴 현황**: 총 **{total_week_rt}칸** 중 **{completed_week_rt}칸** 완료")
-
             with st.container(border=True):
                 st.markdown(
                     f"<div style='font-size:13px; font-weight:bold; color:#0284C7; margin-bottom:6px;'>"
