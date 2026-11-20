@@ -2721,26 +2721,69 @@ if not st.session_state["teacher_authenticated"]:
                         return "correct" if check_subjective_answer(u_ans, real_ans) else "wrong"
                     
                     
+                    def _is_essay_or_subjective(prob):
+                        """객관식이 아닌 문항(주관식/서술형) 여부 판별"""
+                        ans_str = str(prob.get("answer", "")).strip()
+                        fn_str = str(prob.get("filename", "")).strip()
+                        return not detect_multiple_choice(ans_str, fn_str)
+                    
+                    
+                    def _is_essay_item(prob):
+                        """정답이 '-' 등으로 셀프채점이 필요한 서술형 문항 여부 판별"""
+                        ans_str = str(prob.get("answer", "")).strip()
+                        fn_str = str(prob.get("filename", "")).strip()
+                        is_diff_empty = False
+                        if "난이도" in fn_str:
+                            parts_diff = fn_str.split("난이도")
+                            if len(parts_diff) > 1:
+                                after_diff = parts_diff[1]
+                                if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
+                                    is_diff_empty = True
+                        return (ans_str == "-" or not ans_str or is_diff_empty)
+                    
+                    
                     def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
-                        # 리뷰 화면에서 셀프채점 등으로 정답(is_correct == 1) 처리된 문항은 재풀이 대상에서 제외
-                        wrong_items_for_retry = [
+                        # 정정/셀프채점 결과를 저장할 세션 키 (code -> "O" 또는 "X")
+                        quick_grade_key = f"quick_grade_map_{sess_id}"
+                        if quick_grade_key not in st.session_state:
+                            st.session_state[quick_grade_key] = {}
+                        quick_grade_map = st.session_state[quick_grade_key]
+                    
+                        # 최초 오답 중 '정답(O)'으로 정정/셀프채점된 문항을 제외한 실제 오답 목록
+                        wrong_items_for_retry = []
+                        for prob in prob_list:
+                            code = prob["full_code"]
+                            orig_correct = next((r.get("is_correct") for r in res_list if r["full_code"] == code), 0) == 1
+                            if orig_correct:
+                                continue
+                            if quick_grade_map.get(code) == "O":
+                                continue
+                            wrong_items_for_retry.append(prob)
+                    
+                        # 빠른 확인 대상: 최초 오답(is_correct != 1) 중 주관식 또는 서술형 문항
+                        quick_check_targets = [
                             prob for prob in prob_list
                             if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
+                            and _is_essay_or_subjective(prob)
                         ]
                     
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
                     
-                        # 제출 직후에도 바로 retry로 가지 않고, 먼저 리뷰 화면(표기 확인/셀프채점)을 보여줌
+                        # 제출 직후 분기:
+                        # - 주관식/서술형 오답이 있으면 먼저 심플한 'quick_check' 단계로 진입
+                        # - 객관식 오답만 있으면 바로 'retry' 단계로 진입
+                        # - 오답이 아예 없으면 'review' 단계로 진입
                         if st.session_state.get(just_submitted_key, False):
-                            st.session_state[retry_stage_key] = "review"
+                            if len(quick_check_targets) > 0:
+                                st.session_state[retry_stage_key] = "quick_check"
+                            elif len(wrong_items_for_retry) > 0:
+                                st.session_state[retry_stage_key] = "retry"
+                            else:
+                                st.session_state[retry_stage_key] = "review"
                             st.session_state[just_submitted_key] = False
                     
                         if retry_stage_key not in st.session_state:
-                            st.session_state[retry_stage_key] = "review"
-                    
-                        # 만약 현재 다시풀기 중인데 셀프채점 등으로 남은 오답이 0개가 되었다면 리뷰로 복귀
-                        if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) == 0:
                             st.session_state[retry_stage_key] = "review"
                     
                         reolved_map_key = f"reolved_wrong_map_{sess_id}"
@@ -2769,7 +2812,61 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state[retry_res_key] = graded_summary
                             st.session_state[retry_stage_key] = "review"
                     
-                        if st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
+                        # 1단계: 주관식 표기 확인 & 서술형 셀프채점 (문제번호·문제사진 미표시)
+                        if st.session_state[retry_stage_key] == "quick_check" and len(quick_check_targets) > 0:
+                            st.markdown("""
+                            <div style="background-color: var(--secondary-background-color); border: 2px solid #38BDF8; padding: 14px 16px; border-radius: 12px; margin-bottom: 14px;">
+                                <h3 style="color: #38BDF8; margin: 0 0 4px 0;">⚡ 다시풀기 전 빠른 확인</h3>
+                                <p style="font-size: 13.5px; margin: 0;">
+                                    주관식 표기 차이나 서술형 정답 여부를 빠르게 체크한 뒤, 남은 오답만 다시 풀어보세요.
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                    
+                            for idx_q, q_prob in enumerate(quick_check_targets, start=1):
+                                q_code = q_prob["full_code"]
+                                matched_r = next((r for r in res_list if r["full_code"] == q_code), {})
+                                user_written = str(matched_r.get("user_ans", "")).strip() or "미입력"
+                                real_answer_txt = str(matched_r.get("real_ans") or q_prob.get("answer") or "-").strip()
+                                is_essay = _is_essay_item(q_prob)
+                    
+                                cur_ox = quick_grade_map.get(q_code, "X")
+                                default_idx = 0 if cur_ox == "O" else 1
+                    
+                                with st.container(border=True):
+                                    if is_essay:
+                                        st.markdown(f"**서술형 #{idx_q}**")
+                                        st.markdown(f"- **정답:** `{real_answer_txt}`")
+                                    else:
+                                        st.markdown(f"**주관식 #{idx_q}**")
+                                        st.markdown(f"- **정답:** `{real_answer_txt}`")
+                                        st.markdown(f"- **내가 쓴 답:** `{user_written}`")
+                    
+                                    picked_ox = st.radio(
+                                        "판정 선택",
+                                        options=["⭕ 정답 (O)", "❌ 오답 (X)"],
+                                        index=default_idx,
+                                        key=f"quick_ox_{sess_id}_{q_code}",
+                                        horizontal=True,
+                                        label_visibility="collapsed"
+                                    )
+                                    quick_grade_map[q_code] = "O" if picked_ox.startswith("⭕") else "X"
+                    
+                            if st.button("✅ 확인 완료하고 틀린 문제 다시풀기", type="primary", use_container_width=True, key=f"btn_go_retry_after_quick_{sess_id}"):
+                                # 방금 O로 바꾼 문항을 제외한 최종 오답 재계산
+                                remaining_wrong = [
+                                    prob for prob in prob_list
+                                    if next((r.get("is_correct") for r in res_list if r["full_code"] == prob["full_code"]), 0) != 1
+                                    and quick_grade_map.get(prob["full_code"]) != "O"
+                                ]
+                                if len(remaining_wrong) > 0:
+                                    st.session_state[retry_stage_key] = "retry"
+                                else:
+                                    st.session_state[retry_stage_key] = "review"
+                                st.rerun()
+                    
+                        # 2단계: 틀린 문제 다시 풀기
+                        elif st.session_state[retry_stage_key] == "retry" and len(wrong_items_for_retry) > 0:
                             attempted_retry_cnt = sum(
                                 1 for w_prob in wrong_items_for_retry
                                 if str(retry_ans_map.get(w_prob["full_code"], "")).strip() != ""
@@ -2779,21 +2876,15 @@ if not st.session_state["teacher_authenticated"]:
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
                                 <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
                                 <p style="font-size: 14px; margin: 0;">
-                                    표기 확인 및 셀프채점을 마친 오답 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
+                                    남은 오답 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
                                     (답 입력/선택: <b>{attempted_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
                     
-                            col_top_1, col_top_2 = st.columns([3, 1])
-                            with col_top_1:
-                                if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
-                                    run_retry_grading_and_go_review()
-                                    st.rerun()
-                            with col_top_2:
-                                if st.button("⬅️ 리뷰로 돌아가기", use_container_width=True, key=f"btn_back_to_review_{sess_id}"):
-                                    st.session_state[retry_stage_key] = "review"
-                                    st.rerun()
+                            if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
+                                run_retry_grading_and_go_review()
+                                st.rerun()
                     
                             choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                     
@@ -2848,19 +2939,16 @@ if not st.session_state["teacher_authenticated"]:
                             if st.button("✅ 다시 풀기 마치고 재채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
                                 run_retry_grading_and_go_review()
                                 st.rerun()
+                    
+                        # 3단계: 전체 리뷰 화면
                         else:
-                            # 리뷰 단계: 먼저 주관식 표기 확인 및 서술형 셀프채점을 진행한 뒤, 남은 오답만 다시 풀기 가능
+                            if len(quick_check_targets) > 0:
+                                if st.button("⚡ 주관식/서술형 빠른 확인 다시 열기", use_container_width=True, key=f"btn_reopen_quick_{sess_id}"):
+                                    st.session_state[retry_stage_key] = "quick_check"
+                                    st.rerun()
+                    
                             if len(wrong_items_for_retry) > 0:
-                                st.info(
-                                    f"💡 주관식 표기 확인 및 서술형 셀프채점을 마친 뒤, "
-                                    f"최종 오답 **{len(wrong_items_for_retry)}문항**을 다시 풀어볼 수 있습니다."
-                                )
-                                if st.button(
-                                    f"🔁 최종 오답 {len(wrong_items_for_retry)}문항 다시 풀기",
-                                    type="primary",
-                                    use_container_width=True,
-                                    key=f"btn_reopen_retry_{sess_id}"
-                                ):
+                                if st.button(f"🔁 남은 오답 {len(wrong_items_for_retry)}문항 다시 풀기", type="primary", use_container_width=True, key=f"btn_reopen_retry_{sess_id}"):
                                     st.session_state[retry_stage_key] = "retry"
                                     st.rerun()
                     
