@@ -3033,7 +3033,7 @@ if not st.session_state["teacher_authenticated"]:
                                 if str(retry_ans_map.get(w_prob["full_code"], "")).strip() != ""
                             )
                             wrong_nums_badge = ", ".join(f"{w['order']}번" for w in wrong_items_for_retry)
-                            skip_confirm_key = f"skip_empty_retry_confirm_{sess_id}"
+                            empty_warn_key = f"retry_empty_warn_{sess_id}"
                     
                             st.markdown(f"""
                             <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px;">
@@ -3049,24 +3049,6 @@ if not st.session_state["teacher_authenticated"]:
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-
-                            if attempted_retry_cnt == 0:
-                                st.caption("아직 다시 풀어본 답을 입력하지 않았어요. 답을 적은 뒤 아래 버튼으로 재채점해 보세요.")
-                                skip_empty = st.checkbox(
-                                    "답을 입력하지 않고 결과 페이지로 바로 넘어가기",
-                                    value=st.session_state.get(skip_confirm_key, False),
-                                    key=skip_confirm_key
-                                )
-                            else:
-                                st.session_state[skip_confirm_key] = False
-                                skip_empty = True
-
-                            if st.button("✅ 다시 풀기 완료하고 재채점 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
-                                if attempted_retry_cnt == 0 and not skip_empty:
-                                    st.warning("입력한 답이 없어요. 아래에 답을 적거나 '바로 넘어가기'를 체크해 주세요.")
-                                else:
-                                    run_retry_grading_and_go_review()
-                                    st.rerun()
                     
                             choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                     
@@ -3121,14 +3103,20 @@ if not st.session_state["teacher_authenticated"]:
                                     if new_val != prev_re_val:
                                         retry_ans_map[w_code] = new_val
                                         reolved_map[w_code] = (new_val != "")
+                                        if new_val != "":
+                                            st.session_state[empty_warn_key] = False
                                         st.rerun()
                     
                             if st.button("✅ 다시 풀기 마치고 재채점 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
-                                if attempted_retry_cnt == 0 and not skip_empty:
-                                    st.warning("입력한 답이 없어요. 답을 적거나 위에서 '바로 넘어가기'를 체크해 주세요.")
+                                if attempted_retry_cnt == 0:
+                                    st.session_state[empty_warn_key] = True
                                 else:
+                                    st.session_state[empty_warn_key] = False
                                     run_retry_grading_and_go_review()
                                     st.rerun()
+
+                            if st.session_state.get(empty_warn_key, False):
+                                st.warning("다시풀기 하셨나요? 답을 입력한 뒤 재채점해 주세요!")
                     
                         else:
                             if len(quick_check_targets) > 0:
