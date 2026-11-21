@@ -2840,6 +2840,53 @@ if not st.session_state["teacher_authenticated"]:
                                 if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
                                     is_diff_empty = True
                         return (ans_str == "-" or not ans_str or is_diff_empty)
+
+                    def _is_worth_quick_checking(prob, written_ans):
+                        u_raw = str(written_ans or "").strip()
+                        if not u_raw:
+                            return False
+                        if _is_essay_item(prob):
+                            return True
+
+                        r_raw = str(prob.get("answer") or "").replace("@", "").replace("번", "").strip()
+                        if not r_raw or r_raw == "-":
+                            return False
+
+                        def _norm_compare(t):
+                            t = str(t).strip().lower()
+                            t = re.sub(r"[−－—–]", "-", t)
+                            t = t.replace("×", "*").replace("÷", "/")
+                            t = t.replace("제", "").replace("번", "")
+                            t = re.sub(r"\s+", "", t)
+                            return t
+
+                        u_n = _norm_compare(u_raw)
+                        r_n = _norm_compare(r_raw)
+                        if not u_n or not r_n:
+                            return False
+
+                        u_has_alpha = bool(re.search(r"[a-z가-힣]", u_n))
+                        r_has_alpha = bool(re.search(r"[a-z가-힣]", r_n))
+                        if u_has_alpha != r_has_alpha:
+                            u_nums = set(re.findall(r"\d+(?:\.\d+)?", u_n))
+                            r_nums = set(re.findall(r"\d+(?:\.\d+)?", r_n))
+                            if not (u_nums and r_nums and (u_nums & r_nums)):
+                                return False
+
+                        u_nums = set(re.findall(r"\d+(?:\.\d+)?", u_n))
+                        r_nums = set(re.findall(r"\d+(?:\.\d+)?", r_n))
+                        if u_nums and r_nums and not (u_nums & r_nums):
+                            return False
+
+                        if (u_n in r_n) or (r_n in u_n):
+                            return True
+
+                        u_tokens = set(re.findall(r"[a-z가-힣0-9]+", u_n))
+                        r_tokens = set(re.findall(r"[a-z가-힣0-9]+", r_n))
+                        if u_tokens and r_tokens and (u_tokens & r_tokens):
+                            return True
+
+                        return False
                     
                     def render_retry_then_review(prob_list, res_list, sess_id, s_name, s_title):
                         quick_grade_key = f"quick_grade_map_{sess_id}"
@@ -2864,12 +2911,9 @@ if not st.session_state["teacher_authenticated"]:
                                 continue
                             if not _is_essay_or_subjective(prob):
                                 continue
-                            if _is_essay_item(prob):
+                            written_ans = str(matched_r.get("user_ans") or "").strip()
+                            if _is_worth_quick_checking(prob, written_ans):
                                 quick_check_targets.append(prob)
-                            else:
-                                written_ans = str(matched_r.get("user_ans") or "").strip()
-                                if written_ans:
-                                    quick_check_targets.append(prob)
                     
                         retry_stage_key = f"retry_stage_{sess_id}"
                         just_submitted_key = f"just_submitted_{sess_id}"
