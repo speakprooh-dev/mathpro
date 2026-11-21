@@ -1632,6 +1632,7 @@ def detect_multiple_choice(ans_str, filename_str):
     ans_clean = str(ans_str or "").strip()
     fn_clean = str(filename_str or "").strip()
 
+    # 1. 명시적으로 주관식/서술형/단답인 경우 무조건 주관식
     is_explicit_subjective = (
         any(k in fn_clean for k in ["서술형", "주관식", "단답"])
         or any(k in ans_clean for k in ["서술형", "주관식", "단답"])
@@ -1639,13 +1640,16 @@ def detect_multiple_choice(ans_str, filename_str):
     if is_explicit_subjective:
         return False
 
-    return (
-        ("@" in fn_clean)
-        or ("@" in ans_clean)
-        or ("객관식" in fn_clean)
-        or any(c in ans_clean or c in fn_clean for c in ["①", "②", "③", "④", "⑤"])
-        or (ans_clean in ["1번", "2번", "3번", "4번", "5번"])
-    )
+    # 2. 정답이 '-' 이거나 비어 있으면(셀프채점/서술형) 주관식/셀프채점 처리
+    if not ans_clean or ans_clean == "-":
+        return False
+
+    # 3. 객관식 판별: 파일명에 '@'가 있거나, 원문자(①~⑤) 또는 '1번'~'5번' 형식인 경우만 객관식
+    has_at_mark = ("@" in fn_clean) or ("@" in ans_clean)
+    has_circle_num = any(c in ans_clean for c in ["①", "②", "③", "④", "⑤"])
+    is_choice_num_label = ans_clean in ["1번", "2번", "3번", "4번", "5번"]
+
+    return has_at_mark or has_circle_num or is_choice_num_label
 
 def render_teacher_process_summary(prob_list, res_list, sess_id, s_name):
     quick_grade_map = st.session_state.get(f"quick_grade_map_{sess_id}", {})
