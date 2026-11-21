@@ -561,11 +561,13 @@ def init_db():
                     prob_num TEXT,
                     answer TEXT,
                     img_base64 TEXT,
-                    solution_img_path TEXT
+                    solution_img_path TEXT,
+                    wrong_noted INTEGER DEFAULT 0
                 );
             ''')
             try:
                 c.execute('ALTER TABLE online_test_items ADD COLUMN IF NOT EXISTS solution_img_path TEXT;')
+                c.execute('ALTER TABLE online_test_items ADD COLUMN IF NOT EXISTS wrong_noted INTEGER DEFAULT 0;')
             except Exception:
                 pass
 
@@ -636,11 +638,16 @@ def init_db():
                     prob_num TEXT,
                     answer TEXT,
                     img_base64 TEXT,
-                    solution_img_path TEXT
+                    solution_img_path TEXT,
+                    wrong_noted INTEGER DEFAULT 0
                 );
             ''')
             try:
                 c.execute('ALTER TABLE online_test_items ADD COLUMN solution_img_path TEXT')
+            except Exception:
+                pass
+            try:
+                c.execute('ALTER TABLE online_test_items ADD COLUMN wrong_noted INTEGER DEFAULT 0')
             except Exception:
                 pass
 
@@ -2476,11 +2483,15 @@ if not st.session_state["teacher_authenticated"]:
                 if st.session_state.get("active_form_session_id") != selected_session_id or cache_key_items not in st.session_state:
                     st.session_state["active_form_session_id"] = selected_session_id
                     
-                    q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
-                    raw_items = c_test.fetchall()
+                    try:
+                        q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, solution_img_path, COALESCE(wrong_noted, 0) FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                        raw_items = c_test.fetchall()
+                    except Exception:
+                        q(c_test, "SELECT id, problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC", (selected_session_id,))
+                        raw_items = [(*r, 0) for r in c_test.fetchall()]
         
                     problem_list = []
-                    for item_id, p_order, u_code, p_num, ans, img_b64, sol_path in raw_items:
+                    for item_id, p_order, u_code, p_num, ans, img_b64, sol_path, w_noted in raw_items:
                         full_code = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
                         
                         decoded_img = None
@@ -2498,19 +2509,14 @@ if not st.session_state["teacher_authenticated"]:
                             "prob_num": str(p_num).zfill(3) if p_num else str(p_order),
                             "answer": str(ans).strip() if ans else "",
                             "img_bytes": decoded_img,
-                            "filename": str(sol_path) if sol_path else ""
+                            "filename": str(sol_path) if sol_path else "",
+                            "wrong_noted": bool(w_noted)
                         })
                     st.session_state[cache_key_items] = problem_list
         
                 problem_list = st.session_state.get(cache_key_items, [])
                 selected_test_title = current_active_info[1]
                 is_db_completed = (current_active_info[3] == 1)
-
-                # ▼▼▼ 여기에 임시 디버그 출력 추가 ▼▼▼
-                for p in problem_list:
-                    if p["full_code"] in ["A1131062", "A1131153", "A104080", "A104081"]:
-                        st.write(p["full_code"], "answer=", repr(p["answer"]), "filename=", repr(p["filename"]))
-                # ▲▲▲ 여기까지 ▲▲▲
         
                 if not problem_list:
                     st.warning("이 테스트에 등록된 문항 데이터가 없습니다.")
@@ -2741,7 +2747,10 @@ if not st.session_state["teacher_authenticated"]:
                                         reolved_map[prob["full_code"]] = re_checked
                                         st.rerun(scope="fragment")
 
-                                is_item_saved = st.session_state.get(f"item_saved_{sess_id}_{prob['full_code']}", False)
+                                is_item_saved = (
+                                    bool(prob.get("wrong_noted", False))
+                                    or st.session_state.get(f"item_saved_{sess_id}_{prob['item_id']}", False)
+                                )
 
                                 if is_item_saved:
                                     st.checkbox(
@@ -2751,7 +2760,7 @@ if not st.session_state["teacher_authenticated"]:
                                         key=f"wrong_chk_disabled_{sess_id}_{prob['item_id']}"
                                     )
                                 else:
-                                    selected_wrong_notes[prob['full_code']] = st.checkbox(
+                                    selected_wrong_notes[prob['item_id']] = st.checkbox(
                                         f"📌 {prob['order']}번 오답노트 담기",
                                         value=False,
                                         key=f"wrong_chk_{sess_id}_{prob['item_id']}"
@@ -2759,30 +2768,39 @@ if not st.session_state["teacher_authenticated"]:
 
                         if st.button("📥 선택한 문제들을 오답노트에 등록하기", type="primary", use_container_width=True, key=f"btn_save_wrong_{sess_id}"):
                             manual_wrong_units = {}
-                            current_checked_codes = []
+                            current_checked_item_ids = []
 
                             for prob in display_prob_list:
-                                if selected_wrong_notes.get(prob['full_code'], False):
-                                    current_checked_codes.append(prob['full_code'])
+                                if selected_wrong_notes.get(prob['item_id'], False):
+                                    current_checked_item_ids.append(prob['item_id'])
                                     if prob["unit_code"] != "TEST":
                                         manual_wrong_units.setdefault(prob["unit_code"], set()).add(int(prob["prob_num"]))
 
-                            try:
-                                for u_code, num_set in manual_wrong_units.items():
-                                    existing_txt = get_student_wrong_entry(s_name, u_code)
-                                    pre_nums = parse_numbers(existing_txt)
-                                    merged_nums = pre_nums | num_set
-                                    merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
-                                    save_student_wrong_entry(s_name, u_code, merged_txt, target_nums_to_log=num_set)
+                            if not current_checked_item_ids:
+                                st.warning("오답노트에 담을 문제를 먼저 선택해 주세요.")
+                            else:
+                                try:
+                                    for u_code, num_set in manual_wrong_units.items():
+                                        existing_txt = get_student_wrong_entry(s_name, u_code)
+                                        pre_nums = parse_numbers(existing_txt)
+                                        merged_nums = pre_nums | num_set
+                                        merged_txt = ", ".join(map(str, sorted(list(merged_nums))))
+                                        save_student_wrong_entry(s_name, u_code, merged_txt, target_nums_to_log=num_set)
 
-                                for f_code in current_checked_codes:
-                                    st.session_state[f"item_saved_{sess_id}_{f_code}"] = True
+                                    for item_id_val in current_checked_item_ids:
+                                        q(c_test, "UPDATE online_test_items SET wrong_noted = 1 WHERE id = ?", (item_id_val,))
+                                        st.session_state[f"item_saved_{sess_id}_{item_id_val}"] = True
+                                    conn_test.commit()
 
-                                st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
-                                st.rerun()
+                                    for p_cached in st.session_state.get(f"cached_items_form_{sess_id}", []):
+                                        if p_cached["item_id"] in current_checked_item_ids:
+                                            p_cached["wrong_noted"] = True
 
-                            except Exception as e:
-                                st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
+                                    st.success("✨ 선택하신 문제들이 오답노트에 성공적으로 반영되었습니다!")
+                                    st.rerun()
+
+                                except Exception as e:
+                                    st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
                     def evaluate_retry_answer(w_prob, raw_retry_ans):
                         u_ans = str(raw_retry_ans or "").strip()
