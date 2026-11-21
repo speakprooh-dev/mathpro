@@ -4446,6 +4446,28 @@ else:
                             (r[0] for r in all_sessions_rows if r[1] == s_name and r[2] == t_title),
                             None
                         )
+
+                        # 문항별 문제 이미지(img_base64) 매핑 조회
+                        item_img_map = {}
+                        if matched_sess_id is not None:
+                            try:
+                                if is_postgres_sub:
+                                    c_sub.execute(
+                                        "SELECT problem_order, unit_code, prob_num, img_base64 FROM online_test_items WHERE session_id = %s ORDER BY problem_order ASC",
+                                        (matched_sess_id,)
+                                    )
+                                else:
+                                    q(c_sub,
+                                      "SELECT problem_order, unit_code, prob_num, img_base64 FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC",
+                                      (matched_sess_id,))
+                                for p_order, u_code, p_num, img_b64 in c_sub.fetchall():
+                                    if img_b64:
+                                        f_code_item = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{int(p_order):02d}"
+                                        item_img_map[f_code_item] = img_b64
+                                        item_img_map[f"ORDER_{int(p_order)}"] = img_b64
+                            except Exception:
+                                pass
+
                         if matched_sess_id is not None:
                             proc_probs = [
                                 {"order": p_idx + 1, "full_code": str(r[0]).strip().upper()}
@@ -4473,5 +4495,12 @@ else:
                                 f"- **{p_idx + 1}번 (`{p_id}`)**: 학생 답안 = `{ans_display}`  |  채점 = **{ox_icon}**{noted_badge}{rep_badge_t}",
                                 unsafe_allow_html=True
                             )
+
+                            raw_b64 = item_img_map.get(p_code_u) or item_img_map.get(f"ORDER_{p_idx + 1}")
+                            if raw_b64:
+                                try:
+                                    st.image(base64.b64decode(raw_b64), use_container_width=True)
+                                except Exception:
+                                    pass
         else:
             st.info("아직 제출된 온라인 테스트 기록이 없습니다.")
