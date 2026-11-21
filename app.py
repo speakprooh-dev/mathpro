@@ -185,37 +185,6 @@ def q(c, query, params=None):
         c.execute(query)
     return c
 
-ALL_WEEKDAY_INDICES = [0, 1, 2, 3, 4, 5, 6]
-DEFAULT_ACTIVE_DAYS_STR = "0,1,2,3,4,5,6"
-WEEKDAY_SHORT_NAMES = ["월", "화", "수", "목", "금", "토", "일"]
-
-def parse_active_days(active_days_str):
-    if not active_days_str:
-        return list(ALL_WEEKDAY_INDICES)
-    parsed = []
-    for token in re.split(r"[,\s]+", str(active_days_str).strip()):
-        if token.isdigit():
-            val = int(token)
-            if 0 <= val <= 6 and val not in parsed:
-                parsed.append(val)
-    return sorted(parsed) if parsed else list(ALL_WEEKDAY_INDICES)
-
-def format_active_days_str(weekday_indices):
-    clean_sorted = sorted({int(i) for i in weekday_indices if 0 <= int(i) <= 6})
-    if not clean_sorted:
-        return DEFAULT_ACTIVE_DAYS_STR
-    return ",".join(str(i) for i in clean_sorted)
-
-def format_active_days_label(active_days_str):
-    days = parse_active_days(active_days_str)
-    if len(days) == 7:
-        return "매일(월~일)"
-    if days == [0, 1, 2, 3, 4]:
-        return "평일(월~금)"
-    if days == [5, 6]:
-        return "주말(토·일)"
-    return "·".join(WEEKDAY_SHORT_NAMES[d] for d in days)
-
 @st.cache_data(ttl=300, show_spinner=False)
 def get_all_problem_link_set():
     conn, _ = get_db_connection()
@@ -522,6 +491,45 @@ def extract_test_date(title_str, fallback_str=None):
         except ValueError:
             pass
     return None
+
+# ----------------------------------------------------
+# 🗓️ 루틴 요일 지정 헬퍼 (0=월 ... 6=일)
+# ----------------------------------------------------
+ALL_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6]
+WEEKDAY_NAMES_KR = ["월", "화", "수", "목", "금", "토", "일"]
+DEFAULT_ACTIVE_DAYS_STR = "0,1,2,3,4,5,6"
+
+def parse_active_days(active_days_val):
+    if active_days_val is None:
+        return list(ALL_WEEKDAYS)
+    raw = str(active_days_val).strip()
+    if not raw:
+        return []
+    day_name_to_idx = {name: idx for idx, name in enumerate(WEEKDAY_NAMES_KR)}
+    parsed = set()
+    for token in re.split(r"[\s,·/|]+", raw):
+        t = token.strip()
+        if not t:
+            continue
+        if t.isdigit():
+            val = int(t)
+            if 0 <= val <= 6:
+                parsed.add(val)
+        elif t in day_name_to_idx:
+            parsed.add(day_name_to_idx[t])
+    return sorted(parsed) if parsed else list(ALL_WEEKDAYS)
+
+def format_active_days_str(day_indices):
+    clean_days = sorted({int(d) for d in (day_indices or []) if 0 <= int(d) <= 6})
+    return ",".join(str(d) for d in clean_days)
+
+def format_active_days_label(day_indices):
+    days = parse_active_days(day_indices) if isinstance(day_indices, str) else sorted({int(d) for d in (day_indices or []) if 0 <= int(d) <= 6})
+    if len(days) == 7:
+        return "매일"
+    if not days:
+        return "휴식"
+    return "·".join(WEEKDAY_NAMES_KR[d] for d in days)
 
 @st.cache_resource(show_spinner=False)
 def init_db():
@@ -971,29 +979,32 @@ def get_student_daily_routines(student_name, include_inactive=False):
                 (student_name,)
             )
             rows = c.fetchall()
-            return [(r[0], r[1], bool(r[2]), int(r[3]), str(r[4] or DEFAULT_ACTIVE_DAYS_STR)) for r in rows]
+            return [(r[0], r[1], bool(r[2]), int(r[3]), parse_active_days(r[4])) for r in rows]
         else:
             q(
                 c,
                 "SELECT id, title, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1 ORDER BY COALESCE(sort_order, id) ASC, id ASC",
                 (student_name,)
             )
-            return [(r[0], r[1], str(r[2] or DEFAULT_ACTIVE_DAYS_STR)) for r in c.fetchall()]
+            return [(r[0], r[1], parse_active_days(r[2])) for r in c.fetchall()]
     except Exception:
         q(c, "SELECT id, title FROM daily_routines WHERE student_name = ? ORDER BY id ASC", (student_name,))
         rows = c.fetchall()
         if include_inactive:
-            return [(r[0], r[1], True, idx + 1, DEFAULT_ACTIVE_DAYS_STR) for idx, r in enumerate(rows)]
-        return [(r[0], r[1], DEFAULT_ACTIVE_DAYS_STR) for r in rows]
+            return [(r[0], r[1], True, idx + 1, list(ALL_WEEKDAYS)) for idx, r in enumerate(rows)]
+        return [(r[0], r[1], list(ALL_WEEKDAYS)) for r in rows]
 
-def bulk_insert_daily_routines(student_name, text_data, active_days_str=DEFAULT_ACTIVE_DAYS_STR):
+def bulk_insert_daily_routines(student_name, text_data, active_days=None):
     conn, _ = get_db_connection()
     c = conn.cursor()
     q(c, "SELECT COALESCE(MAX(COALESCE(sort_order, id)), 0) FROM daily_routines WHERE student_name = ?", (student_name,))
     max_order_row = c.fetchone()
     next_sort_order = int(max_order_row[0]) if max_order_row and max_order_row[0] is not None else 0
 
-    clean_days_str = format_active_days_str(parse_active_days(active_days_str))
+    days_str = format_active_days_str(active_days if active_days is not None else ALL_WEEKDAYS)
+    if not days_str:
+        days_str = DEFAULT_ACTIVE_DAYS_STR
+
     lines = text_data.strip().split('\n')
     added_count = 0
     for line in lines:
@@ -1005,7 +1016,7 @@ def bulk_insert_daily_routines(student_name, text_data, active_days_str=DEFAULT_
             q(
                 c,
                 "INSERT INTO daily_routines (student_name, title, is_active, sort_order, active_days) VALUES (?, ?, 1, ?, ?)",
-                (student_name, title, next_sort_order, clean_days_str)
+                (student_name, title, next_sort_order, days_str)
             )
         except Exception:
             q(
@@ -1018,12 +1029,14 @@ def bulk_insert_daily_routines(student_name, text_data, active_days_str=DEFAULT_
     st.cache_data.clear()
     return added_count
 
-def update_routine_active_days(routine_id, weekday_indices):
+def update_routine_active_days(routine_id, day_indices):
     conn, _ = get_db_connection()
     c = conn.cursor()
+    days_str = format_active_days_str(day_indices if day_indices else ALL_WEEKDAYS)
+    if not days_str:
+        days_str = DEFAULT_ACTIVE_DAYS_STR
     try:
-        clean_days_str = format_active_days_str(weekday_indices)
-        q(c, "UPDATE daily_routines SET active_days = ? WHERE id = ?", (clean_days_str, routine_id))
+        q(c, "UPDATE daily_routines SET active_days = ? WHERE id = ?", (days_str, routine_id))
         conn.commit()
         st.cache_data.clear()
     except Exception as e:
@@ -1117,37 +1130,39 @@ def get_routine_completion_rate(student_name, days_limit=7):
     conn, _ = get_db_connection()
     c = conn.cursor()
     today_obj = get_korean_today()
-    start_date_str = str(today_obj - timedelta(days=days_limit - 1))
+    start_date_obj = today_obj - timedelta(days=days_limit - 1)
+    start_date_str = str(start_date_obj)
     today_str = str(today_obj)
     
-    active_routines = get_student_daily_routines(student_name, include_inactive=False)
-    active_days_by_id = {str(r[0]): set(parse_active_days(r[2])) for r in active_routines}
+    try:
+        q(c, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+        active_rows = c.fetchall()
+    except Exception:
+        q(c, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
+        active_rows = c.fetchall()
 
-    if not active_days_by_id:
+    if not active_rows:
         return 0, 0, 0
 
-    date_weekday_map = {}
-    for offset in range(days_limit):
-        d_obj = today_obj - timedelta(days=offset)
-        date_weekday_map[str(d_obj)] = d_obj.weekday()
+    active_days_by_id = {str(r[0]): set(parse_active_days(r[1])) for r in active_rows}
+    date_list = [start_date_obj + timedelta(days=i) for i in range(days_limit)]
+    date_weekday_map = {str(d): d.weekday() for d in date_list}
 
-    total_expected = sum(
-        1
-        for r_id, allowed_wds in active_days_by_id.items()
-        for d_str, wd in date_weekday_map.items()
-        if wd in allowed_wds
-    )
-    if total_expected <= 0:
+    total_expected = 0
+    for r_id, a_days in active_days_by_id.items():
+        total_expected += sum(1 for d in date_list if d.weekday() in a_days)
+
+    if total_expected == 0:
         return 0, 0, 0
 
     q(c, "SELECT routine_id, log_date FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
-    completed_count = sum(
-        1
-        for r_id, l_date in c.fetchall()
-        if str(r_id) in active_days_by_id
-        and str(l_date) in date_weekday_map
-        and date_weekday_map[str(l_date)] in active_days_by_id[str(r_id)]
-    )
+    completed_count = 0
+    for r_id, l_date in c.fetchall():
+        r_key = str(r_id)
+        d_key = str(l_date)
+        if r_key in active_days_by_id and d_key in date_weekday_map:
+            if date_weekday_map[d_key] in active_days_by_id[r_key]:
+                completed_count += 1
     
     raw_rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
     rate = min(100, max(0, raw_rate))
@@ -1158,11 +1173,17 @@ def get_routine_completion_rate(student_name, days_limit=7):
 def get_student_routine_streak(student_name):
     conn, db_type = get_db_connection()
     c = conn.cursor()
-    active_routines = get_student_daily_routines(student_name, include_inactive=False)
-    active_days_by_id = {str(r[0]): set(parse_active_days(r[2])) for r in active_routines}
+    try:
+        q(c, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+        active_rows = c.fetchall()
+    except Exception:
+        q(c, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
+        active_rows = c.fetchall()
 
-    if not active_days_by_id:
+    if not active_rows:
         return 0
+
+    active_days_by_id = {str(r[0]): set(parse_active_days(r[1])) for r in active_rows}
     today_obj = get_korean_today()
     start_date_obj = today_obj - timedelta(days=60)
     if db_type == "postgres":
@@ -1170,27 +1191,28 @@ def get_student_routine_streak(student_name):
     else:
         q(c, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1", (student_name, str(start_date_obj)))
     rows = c.fetchall()
-    done_by_date = {}
-    for l_date, r_id in rows:
-        r_str = str(r_id)
-        if r_str in active_days_by_id:
-            done_by_date.setdefault(str(l_date), set()).add(r_str)
 
-    def is_day_fully_done(d_obj):
-        wd = d_obj.weekday()
-        scheduled_ids = {r_id for r_id, allowed in active_days_by_id.items() if wd in allowed}
-        if not scheduled_ids:
+    completed_by_date = {}
+    for l_date, r_id in rows:
+        r_key = str(r_id)
+        if r_key in active_days_by_id:
+            completed_by_date.setdefault(str(l_date), set()).add(r_key)
+
+    def is_day_completed(d_obj):
+        required_ids = {r_id for r_id, a_days in active_days_by_id.items() if d_obj.weekday() in a_days}
+        if not required_ids:
             return None
-        return scheduled_ids.issubset(done_by_date.get(str(d_obj), set()))
+        done_ids = completed_by_date.get(str(d_obj), set())
+        return required_ids.issubset(done_ids)
 
     streak = 0
     check_date = today_obj
-    today_status = is_day_fully_done(check_date)
+    today_status = is_day_completed(check_date)
     if today_status is False:
         check_date -= timedelta(days=1)
 
     for _ in range(60):
-        day_status = is_day_fully_done(check_date)
+        day_status = is_day_completed(check_date)
         if day_status is None:
             check_date -= timedelta(days=1)
             continue
@@ -1837,16 +1859,14 @@ if not st.session_state["teacher_authenticated"]:
             )
         st.markdown('</div>', unsafe_allow_html=True)
 
-        today_obj_top = get_korean_today()
-        today_str_check = str(today_obj_top)
-        today_wd_check = today_obj_top.weekday()
+        today_obj_check = get_korean_today()
+        today_str_check = str(today_obj_check)
+        today_weekday_idx = today_obj_check.weekday()
         routines_chk_list = get_student_daily_routines(selected_student, include_inactive=False)
         today_logs_chk = get_student_daily_logs_by_date(selected_student, today_str_check)
         unchecked_count = sum(
-            1
-            for r_id, _, r_days_str in routines_chk_list
-            if today_wd_check in parse_active_days(r_days_str)
-            and not today_logs_chk.get((str(r_id), today_str_check), False)
+            1 for r_id, _, a_days in routines_chk_list
+            if today_weekday_idx in a_days and not today_logs_chk.get((str(r_id), today_str_check), False)
         )
         current_streak = get_student_routine_streak(selected_student)
         routine_rate, _, _ = get_routine_completion_rate(selected_student, days_limit=7)
@@ -2058,18 +2078,11 @@ if not st.session_state["teacher_authenticated"]:
 
             week_log_map = get_student_daily_logs_by_dates(selected_student, week_day_strs)
 
-            total_week_rt = sum(
-                1
-                for _, _, r_days_str in daily_routines_list
-                for d_obj in week_days
-                if d_obj.weekday() in parse_active_days(r_days_str)
-            )
+            total_week_rt = sum(len(a_days) for _, _, a_days in daily_routines_list)
             completed_week_rt = sum(
-                1
-                for r_id, _, r_days_str in daily_routines_list
+                1 for r_id, _, a_days in daily_routines_list
                 for d_obj in week_days
-                if d_obj.weekday() in parse_active_days(r_days_str)
-                and week_log_map.get((str(r_id), str(d_obj)), False)
+                if d_obj.weekday() in a_days and week_log_map.get((str(r_id), str(d_obj)), False)
             )
 
             with st.container(border=True):
@@ -2222,24 +2235,26 @@ if not st.session_state["teacher_authenticated"]:
                         unsafe_allow_html=True
                     )
 
-                    for r_id, r_title, r_days_str in daily_routines_list:
-                        allowed_wds = set(parse_active_days(r_days_str))
-                        scheduled_cnt = sum(1 for d_obj in w_days if d_obj.weekday() in allowed_wds)
+                    for r_id, r_title, a_days in daily_routines_list:
+                        active_day_set = set(a_days or ALL_WEEKDAYS)
+                        target_cnt_week = len(active_day_set)
                         done_in_week = sum(
                             1 for d_obj in w_days
-                            if d_obj.weekday() in allowed_wds
-                            and w_log_map.get((str(r_id), str(d_obj)), False)
+                            if d_obj.weekday() in active_day_set and w_log_map.get((str(r_id), str(d_obj)), False)
                         )
-                        is_all_done = (scheduled_cnt > 0 and done_in_week >= scheduled_cnt)
-                        badge_bg = "rgba(16,185,129,0.18)" if is_all_done else ("rgba(245,158,11,0.18)" if done_in_week > 0 else "rgba(148,163,184,0.15)")
-                        badge_fg = "#34D399" if is_all_done else ("#FBBF24" if done_in_week > 0 else "#CBD5E1")
-                        badge_bd = "#10B981" if is_all_done else ("#F59E0B" if done_in_week > 0 else "rgba(148,163,184,0.35)")
-                        days_tag_txt = format_active_days_label(r_days_str)
+                        is_full_week = (target_cnt_week > 0 and done_in_week >= target_cnt_week)
+                        badge_bg = "rgba(16,185,129,0.18)" if is_full_week else ("rgba(245,158,11,0.18)" if done_in_week > 0 else "rgba(148,163,184,0.15)")
+                        badge_fg = "#34D399" if is_full_week else ("#FBBF24" if done_in_week > 0 else "#CBD5E1")
+                        badge_bd = "#10B981" if is_full_week else ("#F59E0B" if done_in_week > 0 else "rgba(148,163,184,0.35)")
+
+                        days_hint = ""
+                        if 0 < len(active_day_set) < 7:
+                            days_hint = f" <span style='font-size:11.5px; color:#94A3B8; font-weight:normal;'>({format_active_days_label(sorted(active_day_set))})</span>"
 
                         st.markdown(
                             f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px; max-width:100%;'>"
-                            f"<div style='font-size:13px; font-weight:bold; min-width:0; flex:1; word-break:break-word;'>• {r_title} <span style='font-size:11px; font-weight:normal; color:#94A3B8;'>({days_tag_txt})</span></div>"
-                            f"<span style='background-color:{badge_bg}; color:{badge_fg}; border:1px solid {badge_bd}; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:bold; white-space:nowrap; flex-shrink:0;'>{done_in_week}/{scheduled_cnt}</span>"
+                            f"<div style='font-size:13px; font-weight:bold; min-width:0; flex:1; word-break:break-word;'>• {r_title}{days_hint}</div>"
+                            f"<span style='background-color:{badge_bg}; color:{badge_fg}; border:1px solid {badge_bd}; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:bold; white-space:nowrap; flex-shrink:0;'>{done_in_week}/{target_cnt_week}</span>"
                             f"</div>",
                             unsafe_allow_html=True
                         )
@@ -2247,15 +2262,16 @@ if not st.session_state["teacher_authenticated"]:
 
                         for idx_d, d_obj in enumerate(w_days):
                             d_str = str(d_obj)
-                            is_scheduled_day = (d_obj.weekday() in allowed_wds)
                             is_today_mark = " 📍" if d_str == today_str else ""
-                            chk_default = w_log_map.get((str(r_id), d_str), False) if is_scheduled_day else False
-                            wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
+                            is_day_active = (idx_d in active_day_set)
 
-                            def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
-                                save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
+                            if is_day_active:
+                                chk_default = w_log_map.get((str(r_id), d_str), False)
+                                wk_key = f"wk_rt_{selected_student}_{r_id}_{d_str}"
 
-                            if is_scheduled_day:
+                                def on_wk_routine_change(r_id=r_id, d_str=d_str, key=wk_key):
+                                    save_single_routine_log(selected_student, str(r_id), d_str, st.session_state[key])
+
                                 st.checkbox(
                                     f"{day_labels[idx_d]}({d_obj.day}일){is_today_mark}",
                                     value=chk_default,
@@ -2263,11 +2279,12 @@ if not st.session_state["teacher_authenticated"]:
                                     on_change=on_wk_routine_change
                                 )
                             else:
-                                st.checkbox(
-                                    f"{day_labels[idx_d]}({d_obj.day}일){is_today_mark} · 휴식",
-                                    value=False,
-                                    disabled=True,
-                                    key=f"{wk_key}_rest"
+                                st.markdown(
+                                    f"<div style='display:flex; align-items:center; gap:8px; padding:2px 4px; margin-top:2px; margin-bottom:2px; font-size:13px; color:#64748B;'>"
+                                    f"<span style='display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid rgba(148,163,184,0.25); background-color:rgba(148,163,184,0.08); text-align:center; line-height:14px; font-size:10px; flex-shrink:0;'>-</span>"
+                                    f"<span>{day_labels[idx_d]}({d_obj.day}일){is_today_mark} <span style='color:#94A3B8;'>· 휴식</span></span>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
                                 )
 
                         st.markdown("</div>", unsafe_allow_html=True)
@@ -3561,39 +3578,37 @@ else:
         if student_list:
             selected_hw_student = st.selectbox("과제를 관리할 학생 선택", student_list, key="tab3_stu_sel")
             
-            with st.expander("🔥 학생별 [반복 루틴 과제 및 요일] 설정", expanded=False):
-                st.caption("등록할 루틴과 수행할 요일(월~일)을 선택한 뒤 일괄 등록하세요. (기본값: 매일 월~일)")
-                wd_cols_new = st.columns(7)
-                new_routine_days = []
-                for wd_i, wd_lbl in enumerate(WEEKDAY_SHORT_NAMES):
-                    with wd_cols_new[wd_i]:
-                        if st.checkbox(wd_lbl, value=True, key=f"new_rt_wd_{selected_hw_student}_{wd_i}"):
-                            new_routine_days.append(wd_i)
-
+            with st.expander("🔥 학생별 [루틴 과제 및 요일 지정] 설정", expanded=False):
                 with st.form("add_teacher_routine_form"):
                     new_routine_txt = st.text_area("루틴 과제 항목 입력", placeholder="- 오답노트 정리\n- 영어 단어 암기")
+                    new_routine_days = st.multiselect(
+                        "진행 요일 선택 (미선택 시 매일)",
+                        options=ALL_WEEKDAYS,
+                        default=ALL_WEEKDAYS,
+                        format_func=lambda idx: f"{WEEKDAY_NAMES_KR[idx]}요일",
+                        key="new_routine_days_ms"
+                    )
                     if st.form_submit_button("➕ 루틴 일괄 등록", type="primary"):
                         if new_routine_txt.strip():
-                            chosen_days_str = format_active_days_str(new_routine_days) if new_routine_days else DEFAULT_ACTIVE_DAYS_STR
-                            bulk_insert_daily_routines(selected_hw_student, new_routine_txt, chosen_days_str)
+                            bulk_insert_daily_routines(selected_hw_student, new_routine_txt, active_days=new_routine_days)
                             st.success("등록되었습니다!")
                             st.rerun()
                 
                 current_routines = get_student_daily_routines(selected_hw_student, include_inactive=True)
                 if current_routines:
                     st.markdown("---")
-                    st.caption("▲/▼로 순서를 변경하고, 요일을 선택해 '요일 저장'을 누르거나, ⏸/▶로 일시 중단·재개하거나 삭제할 루틴을 체크하세요.")
+                    st.caption("▲/▼로 순서를 변경하고, ⏸/▶로 일시 중단·재개(기존 기록 유지)하거나 요일·삭제를 관리하세요.")
                     routines_to_delete = []
                     total_rt_cnt = len(current_routines)
 
-                    for r_idx, (r_id, r_title, r_active, r_order, r_days_str) in enumerate(current_routines):
+                    for r_idx, (r_id, r_title, r_active, r_order, r_days) in enumerate(current_routines):
                         row_c1, row_c2, row_c3, row_c4, row_c5 = st.columns([3.8, 0.7, 0.7, 1.3, 0.5])
+                        days_badge_txt = format_active_days_label(r_days)
                         with row_c1:
                             status_prefix = "" if r_active else "⏸️ [일시중단] "
                             title_style = "" if r_active else "opacity: 0.65;"
-                            days_badge = format_active_days_label(r_days_str)
                             st.markdown(
-                                f"<div style='font-size:13px; font-weight:bold; padding-top:4px; {title_style}'>{status_prefix}📌 {r_title} <span style='font-size:11px; color:#38BDF8;'>[{days_badge}]</span></div>",
+                                f"<div style='font-size:13px; font-weight:bold; padding-top:4px; {title_style}'>{status_prefix}📌 {r_title} <span style='font-size:11px; color:#38BDF8; font-weight:normal;'>[{days_badge_txt}]</span></div>",
                                 unsafe_allow_html=True
                             )
                         with row_c2:
@@ -3613,18 +3628,21 @@ else:
                             if st.checkbox("삭제", key=f"chk_del_routine_{r_id}", label_visibility="collapsed"):
                                 routines_to_delete.append(r_id)
 
-                        parsed_r_days = set(parse_active_days(r_days_str))
-                        wd_edit_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1.4])
-                        picked_edit_days = []
-                        for wd_i, wd_lbl in enumerate(WEEKDAY_SHORT_NAMES):
-                            with wd_edit_cols[wd_i]:
-                                if st.checkbox(wd_lbl, value=(wd_i in parsed_r_days), key=f"edit_rt_wd_{selected_hw_student}_{r_id}_{wd_i}"):
-                                    picked_edit_days.append(wd_i)
-                        with wd_edit_cols[7]:
-                            if st.button("요일 저장", key=f"btn_save_rt_wd_{selected_hw_student}_{r_id}", use_container_width=True):
-                                update_routine_active_days(r_id, picked_edit_days)
-                                st.toast("루틴 요일이 저장되었습니다!", icon="✅")
-                                st.rerun()
+                        with st.popover(f"🗓️ '{r_title}' 요일 설정 ({days_badge_txt})"):
+                            edited_days = st.multiselect(
+                                "진행할 요일 선택",
+                                options=ALL_WEEKDAYS,
+                                default=r_days,
+                                format_func=lambda idx: f"{WEEKDAY_NAMES_KR[idx]}요일",
+                                key=f"edit_rt_days_{selected_hw_student}_{r_id}"
+                            )
+                            if st.button("💾 요일 저장", key=f"btn_save_rt_days_{selected_hw_student}_{r_id}", type="primary", use_container_width=True):
+                                if edited_days:
+                                    update_routine_active_days(r_id, edited_days)
+                                    st.success("요일 설정이 저장되었습니다!")
+                                    st.rerun()
+                                else:
+                                    st.warning("최소 1개 이상의 요일을 선택해 주세요.")
 
                         st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.12);'>", unsafe_allow_html=True)
 
@@ -4370,59 +4388,143 @@ else:
                 selected_test_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_test_weeks, key="sel_test_week")
                 processed_summaries = weeks_test_dict.get(selected_test_week, []) if selected_test_week else []
 
-            st.markdown(f"**총 응시 테스트 세션: {len(processed_summaries)}건**")
+            st.markdown(f"**총 응시 테스트 내역: {len(processed_summaries)}건**")
             st.markdown("---")
 
-            for idx_s, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(processed_summaries):
+            for idx, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(processed_summaries):
+                correct_cnt = int(correct_cnt) if correct_cnt is not None else 0
+                wrong_cnt = total_cnt - correct_cnt
                 score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
-                
-                with st.expander(f"👤 **{s_name}** | 📝 **{t_title}** — **정답 {correct_cnt}/{total_cnt} ({score_pct}%)** | 🕒 {sub_at}"):
+
+                with st.container(border=True):
+                    col_sum1, col_sum2 = st.columns([3.5, 1])
+                    with col_sum1:
+                        st.markdown(f"👤 **학생**: `{s_name}`  |  📋 **테스트명**: **{t_title}**")
+                        st.markdown(f"🕒 **제출일시**: {sub_at}  |  🎯 **점수**: <span style='color:#0284C7; font-weight:bold;'>{correct_cnt}/{total_cnt} ({score_pct}%)</span>", unsafe_allow_html=True)
+                        st.markdown(f"✅ **정답**: `{correct_cnt}개` / ❌ **오답**: `{wrong_cnt}개`")
+                    with col_sum2:
+                        if st.button("🗑️ 제출 내역 초기화", key=f"btn_reset_sub_{idx}_{s_name}_{t_title}", use_container_width=True):
+                            try:
+                                if is_postgres_sub:
+                                    c_sub.execute(
+                                        "DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s",
+                                        (s_name, t_title)
+                                    )
+                                    c_sub.execute(
+                                        "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = %s AND test_title = %s",
+                                        (s_name, t_title)
+                                    )
+                                else:
+                                    q(c_sub,
+                                      "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?",
+                                      (s_name, t_title))
+                                    q(c_sub,
+                                      "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?",
+                                      (s_name, t_title))
+                                conn_sub.commit()
+                                st.cache_data.clear()
+                                st.success(f"🔄 {s_name} 학생의 [{t_title}] 제출 내역이 초기화되었습니다!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"⚠️ 초기화 중 오류 발생: {e}")
+
+                    if is_postgres_sub:
+                        c_sub.execute("SELECT id, created_at FROM online_test_sessions WHERE student_name = %s AND test_title = %s ORDER BY id DESC LIMIT 1", (s_name, t_title))
+                    else:
+                        q(c_sub, "SELECT id, created_at FROM online_test_sessions WHERE student_name = ? AND test_title = ? ORDER BY id DESC LIMIT 1", (s_name, t_title))
+                    sess_row = c_sub.fetchone()
+                    sess_id_for_proc = sess_row[0] if sess_row else idx
+
                     if is_postgres_sub:
                         c_sub.execute(
-                            "SELECT id, problem_id, student_answer, is_checked, solution_img_path FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
+                            "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
                             (s_name, t_title)
                         )
                     else:
-                        q(
-                            c_sub,
-                            "SELECT id, problem_id, student_answer, is_checked, solution_img_path FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
-                            (s_name, t_title)
-                        )
+                        q(c_sub,
+                          "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
+                          (s_name, t_title))
                     detail_rows = c_sub.fetchall()
-                    
-                    st.markdown("##### 📝 문항별 상세 채점 내역")
-                    for d_id, p_id, s_ans, is_chk, sol_path in detail_rows:
-                        col_d1, col_d2, col_d3 = st.columns([2, 2, 1.5])
-                        with col_d1:
-                            st.markdown(f"📌 **{p_id}**")
-                        with col_d2:
-                            u_ans_display = s_ans if s_ans else "*(미입력)*"
-                            st.markdown(f"학생 답: `{u_ans_display}`")
-                        with col_d3:
-                            ox_str = "✅ 정답 (O)" if is_chk == 1 else "❌ 오답 (X)"
-                            st.markdown(f"**{ox_str}**")
-                        st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
-                    st.markdown("---")
-                    if st.button("🗑️ 이 테스트 제출 기록 삭제", key=f"btn_del_sub_{idx_s}_{s_name}_{t_title}", type="primary"):
-                        try:
-                            if is_postgres_sub:
-                                c_sub.execute(
-                                    "DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s",
-                                    (s_name, t_title)
-                                )
-                            else:
-                                q(
-                                    c_sub,
-                                    "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?",
-                                    (s_name, t_title)
-                                )
-                            conn_sub.commit()
-                            st.cache_data.clear()
-                            st.success(f"'{s_name}' 학생의 '{t_title}' 테스트 기록이 삭제되었습니다.")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"⚠️ 삭제 중 오류 발생: {e}")
+                    item_meta_map = {}
+                    if sess_row:
+                        if is_postgres_sub:
+                            c_sub.execute(
+                                "SELECT problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = %s ORDER BY problem_order ASC",
+                                (sess_row[0],)
+                            )
+                        else:
+                            q(c_sub,
+                              "SELECT problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC",
+                              (sess_row[0],))
+                        for p_ord, u_cd, p_nm, ans_v, img_b64_v, sol_p_v in c_sub.fetchall():
+                            f_cd = f"{u_cd}{str(p_nm).zfill(3)}".upper() if u_cd else f"PROB_{p_ord:02d}"
+                            dec_b = None
+                            if img_b64_v:
+                                try:
+                                    dec_b = base64.b64decode(img_b64_v)
+                                except Exception:
+                                    pass
+                            item_meta_map[f_cd] = {
+                                "order": p_ord,
+                                "full_code": f_cd,
+                                "unit_code": u_cd or "TEST",
+                                "prob_num": str(p_nm).zfill(3) if p_nm else str(p_ord),
+                                "answer": str(ans_v).strip() if ans_v else "",
+                                "img_bytes": dec_b,
+                                "filename": str(sol_p_v) if sol_p_v else "",
+                            }
 
+                    proc_prob_list = []
+                    proc_res_list = []
+                    for d_idx, (p_id, s_ans, is_chk) in enumerate(detail_rows, start=1):
+                        f_code_u = str(p_id).upper()
+                        meta = item_meta_map.get(f_code_u, {})
+                        p_order_val = meta.get("order", d_idx)
+                        proc_prob_list.append({
+                            "order": p_order_val,
+                            "full_code": f_code_u,
+                            "unit_code": meta.get("unit_code", "TEST"),
+                            "prob_num": meta.get("prob_num", str(d_idx)),
+                            "answer": meta.get("answer", ""),
+                            "img_bytes": meta.get("img_bytes"),
+                            "filename": meta.get("filename", ""),
+                        })
+                        proc_res_list.append({
+                            "order": p_order_val,
+                            "full_code": f_code_u,
+                            "unit_code": meta.get("unit_code", "TEST"),
+                            "prob_num": meta.get("prob_num", str(d_idx)),
+                            "user_ans": s_ans or "",
+                            "real_ans": meta.get("answer", ""),
+                            "is_correct": 1 if is_chk == 1 else 0,
+                        })
+
+                    if proc_prob_list and proc_res_list:
+                        render_teacher_process_summary(proc_prob_list, proc_res_list, sess_id_for_proc, s_name)
+
+                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
+                        for d_idx, (p_id, s_ans, is_chk) in enumerate(detail_rows, start=1):
+                            f_code_u = str(p_id).upper()
+                            status_icon = "⭕ 정답" if is_chk == 1 else "❌ 오답"
+                            ans_display_txt = s_ans if s_ans else "(미입력)"
+                            st.markdown(f"• **{d_idx}번 문제 (`{f_code_u}`)** — 내 답: `{ans_display_txt}` | **{status_icon}**")
+                            if sess_row:
+                                if is_postgres_sub:
+                                    c_sub.execute(
+                                        "SELECT img_base64 FROM online_test_items WHERE session_id = %s AND (unit_code || LPAD(COALESCE(prob_num, ''), 3, '0')) = %s",
+                                        (sess_row[0], f_code_u)
+                                    )
+                                else:
+                                    q(c_sub,
+                                      "SELECT img_base64 FROM online_test_items WHERE session_id = ? AND (unit_code || substr('000' || COALESCE(prob_num, ''), -3, 3)) = ?",
+                                      (sess_row[0], f_code_u))
+                                img_row = c_sub.fetchone()
+                                if img_row and img_row[0]:
+                                    try:
+                                        img_bytes = base64.b64decode(img_row[0])
+                                        st.image(img_bytes, width=320)
+                                    except Exception:
+                                        pass
         else:
-            st.info("아직 학생들이 제출한 온라인 테스트 내역이 없습니다.")
+            st.info("아직 제출된 온라인 테스트 결과가 없습니다.")
