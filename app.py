@@ -3032,20 +3032,41 @@ if not st.session_state["teacher_authenticated"]:
                                 1 for w_prob in wrong_items_for_retry
                                 if str(retry_ans_map.get(w_prob["full_code"], "")).strip() != ""
                             )
+                            wrong_nums_badge = ", ".join(f"{w['order']}번" for w in wrong_items_for_retry)
+                            skip_confirm_key = f"skip_empty_retry_confirm_{sess_id}"
                     
                             st.markdown(f"""
-                            <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 16px; border-radius: 12px; margin-bottom: 14px;">
-                                <h3 style="color: #F59E0B; margin: 0 0 6px 0;">🔁 틀린 문제 먼저 다시 풀어보기</h3>
-                                <p style="font-size: 14px; margin: 0;">
-                                    남은 오답 <b>{len(wrong_items_for_retry)}문항</b>을 다시 풀어보고 재채점해 보세요.
-                                    (답 입력/선택: <b>{attempted_retry_cnt} / {len(wrong_items_for_retry)}문항</b>)
+                            <div style="background-color: var(--secondary-background-color); border: 2px solid #F59E0B; padding: 14px 16px; border-radius: 12px; margin-bottom: 12px;">
+                                <div style="font-size: 12px; font-weight: bold; color: #F59E0B; margin-bottom: 4px;">
+                                    🔁 [2단계: 오답 다시풀기] 첫 화면으로 돌아간 게 아니에요!
+                                </div>
+                                <h3 style="margin: 0 0 6px 0; font-size: 18px;">틀린 문제만 골라 다시 풀기 ({len(wrong_items_for_retry)}문항)</h3>
+                                <p style="font-size: 13px; margin: 0 0 6px 0; color: #D1D5DB;">
+                                    방금 틀린 <b>{wrong_nums_badge}</b>를 노트에 다시 풀어보고 답을 적어주세요.
+                                </p>
+                                <p style="font-size: 12.5px; margin: 0; color: #FBBF24;">
+                                    입력 완료: <b>{attempted_retry_cnt} / {len(wrong_items_for_retry)}문항</b>
                                 </p>
                             </div>
                             """, unsafe_allow_html=True)
-                    
-                            if st.button("✅ 다시 풀기 완료하고 재채점/리뷰 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
-                                run_retry_grading_and_go_review()
-                                st.rerun()
+
+                            if attempted_retry_cnt == 0:
+                                st.caption("아직 다시 풀어본 답을 입력하지 않았어요. 답을 적은 뒤 아래 버튼으로 재채점해 보세요.")
+                                skip_empty = st.checkbox(
+                                    "답을 입력하지 않고 결과 페이지로 바로 넘어가기",
+                                    value=st.session_state.get(skip_confirm_key, False),
+                                    key=skip_confirm_key
+                                )
+                            else:
+                                st.session_state[skip_confirm_key] = False
+                                skip_empty = True
+
+                            if st.button("✅ 다시 풀기 완료하고 재채점 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_{sess_id}"):
+                                if attempted_retry_cnt == 0 and not skip_empty:
+                                    st.warning("입력한 답이 없어요. 아래에 답을 적거나 '바로 넘어가기'를 체크해 주세요.")
+                                else:
+                                    run_retry_grading_and_go_review()
+                                    st.rerun()
                     
                             choice_options = ["1번", "2번", "3번", "4번", "5번", "잘 모름"]
                     
@@ -3054,14 +3075,19 @@ if not st.session_state["teacher_authenticated"]:
                                 w_ans_str = str(w_prob.get("answer", "")).strip()
                                 w_fn_str = str(w_prob.get("filename", "")).strip()
                                 is_mc = detect_multiple_choice(w_ans_str, w_fn_str)
+                                prev_matched = next((r for r in res_list if r["full_code"] == w_code), {})
+                                prev_given = str(prev_matched.get("user_ans") or "").strip()
+                                prev_given_txt = prev_given if prev_given else "미입력"
                     
                                 with st.container(border=True):
                                     type_badge = "객관식" if is_mc else "주관식/서술형"
                                     st.markdown(
-                                        f"<div style='font-size: 14px; font-weight: bold; margin-bottom: 8px;'>"
-                                        f"🧩 재도전 {idx_w}/{len(wrong_items_for_retry)} — <b>{w_prob['order']}번 문제</b> "
-                                        f"<span style='color: #9CA3AF; font-size: 11px;'>(`{w_code}`)</span> "
+                                        f"<div style='display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;'>"
+                                        f"<div style='font-size: 14px; font-weight: bold;'>"
+                                        f"🔁 재도전 {idx_w}/{len(wrong_items_for_retry)} · <b>{w_prob['order']}번 문제</b> "
                                         f"<span style='color: #38BDF8; font-size: 11px;'>[{type_badge}]</span>"
+                                        f"</div>"
+                                        f"<div style='font-size: 12px; color: #9CA3AF;'>직전 답: <b>{prev_given_txt}</b></div>"
                                         f"</div>",
                                         unsafe_allow_html=True
                                     )
@@ -3088,7 +3114,7 @@ if not st.session_state["teacher_authenticated"]:
                                         new_val = st.text_input(
                                             f"{w_prob['order']}번 다시 풀어본 답 입력 (주관식):",
                                             value=prev_re_val,
-                                            placeholder="다시 풀어본 답이나 풀이 메모를 입력하세요",
+                                            placeholder="다시 풀어본 답을 입력하세요",
                                             key=f"retry_input_{sess_id}_{w_code}"
                                         ).strip()
                     
@@ -3097,9 +3123,12 @@ if not st.session_state["teacher_authenticated"]:
                                         reolved_map[w_code] = (new_val != "")
                                         st.rerun()
                     
-                            if st.button("✅ 다시 풀기 마치고 재채점 결과 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
-                                run_retry_grading_and_go_review()
-                                st.rerun()
+                            if st.button("✅ 다시 풀기 마치고 재채점 보기", type="primary", use_container_width=True, key=f"btn_finish_retry_bottom_{sess_id}"):
+                                if attempted_retry_cnt == 0 and not skip_empty:
+                                    st.warning("입력한 답이 없어요. 답을 적거나 위에서 '바로 넘어가기'를 체크해 주세요.")
+                                else:
+                                    run_retry_grading_and_go_review()
+                                    st.rerun()
                     
                         else:
                             if len(quick_check_targets) > 0:
@@ -4401,11 +4430,8 @@ else:
                                         )
                                         st.image(decoded_img, width=320)
                                     except Exception:
-                                        st.caption("💡 이미지 디코딩 중 오류가 발생했습니다.")
-                                else:
-                                    st.caption("💡 등록된 문제 사진이 없습니다.")
-                                st.markdown("---")
+                                        pass
                         else:
-                            st.info("세부 제출 문항 내역이 없습니다.")
+                            st.caption("문항별 답안 상세 내역이 없습니다.")
         else:
-            st.info("현재 학생들의 온라인 테스트 제출 내역이 없습니다.")
+            st.info("📭 아직 제출된 테스트 결과가 없습니다.")
