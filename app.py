@@ -2279,12 +2279,11 @@ if not st.session_state["teacher_authenticated"]:
                                     on_change=on_wk_routine_change
                                 )
                             else:
-                                st.markdown(
-                                    f"<div style='display:flex; align-items:center; gap:8px; padding:2px 4px; margin-top:2px; margin-bottom:2px; font-size:13px; color:#64748B;'>"
-                                    f"<span style='display:inline-block; width:16px; height:16px; border-radius:4px; border:1px solid rgba(148,163,184,0.25); background-color:rgba(148,163,184,0.08); text-align:center; line-height:14px; font-size:10px; flex-shrink:0;'>-</span>"
-                                    f"<span>{day_labels[idx_d]}({d_obj.day}일){is_today_mark} <span style='color:#94A3B8;'>· 휴식</span></span>"
-                                    f"</div>",
-                                    unsafe_allow_html=True
+                                st.checkbox(
+                                    f"{day_labels[idx_d]}({d_obj.day}일){is_today_mark} · 휴식",
+                                    value=False,
+                                    disabled=True,
+                                    key=f"wk_rt_rest_{selected_student}_{r_id}_{d_str}"
                                 )
 
                         st.markdown("</div>", unsafe_allow_html=True)
@@ -4423,108 +4422,56 @@ else:
                                       (s_name, t_title))
                                 conn_sub.commit()
                                 st.cache_data.clear()
-                                st.success(f"🔄 {s_name} 학생의 [{t_title}] 제출 내역이 초기화되었습니다!")
+                                st.success(f"🎉 '{s_name}' 학생의 '{t_title}' 제출 내역이 초기화되었습니다!")
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"⚠️ 초기화 중 오류 발생: {e}")
+                                st.error(f"초기화 실패: {e}")
 
-                    if is_postgres_sub:
-                        c_sub.execute("SELECT id, created_at FROM online_test_sessions WHERE student_name = %s AND test_title = %s ORDER BY id DESC LIMIT 1", (s_name, t_title))
-                    else:
-                        q(c_sub, "SELECT id, created_at FROM online_test_sessions WHERE student_name = ? AND test_title = ? ORDER BY id DESC LIMIT 1", (s_name, t_title))
-                    sess_row = c_sub.fetchone()
-                    sess_id_for_proc = sess_row[0] if sess_row else idx
+                    with st.expander("🔍 문항별 상세 채점 내역 보기"):
+                        try:
+                            if is_postgres_sub:
+                                c_sub.execute(
+                                    "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
+                                    (s_name, t_title)
+                                )
+                            else:
+                                q(c_sub,
+                                  "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
+                                  (s_name, t_title))
+                            detail_rows = c_sub.fetchall()
+                        except Exception:
+                            detail_rows = []
 
-                    if is_postgres_sub:
-                        c_sub.execute(
-                            "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
-                            (s_name, t_title)
+                        matched_sess_id = next(
+                            (r[0] for r in all_sessions_rows if r[1] == s_name and r[2] == t_title),
+                            None
                         )
-                    else:
-                        q(c_sub,
-                          "SELECT problem_id, student_answer, is_checked FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
-                          (s_name, t_title))
-                    detail_rows = c_sub.fetchall()
+                        if matched_sess_id is not None:
+                            proc_probs = [
+                                {"order": p_idx + 1, "full_code": str(r[0]).strip().upper()}
+                                for p_idx, r in enumerate(detail_rows)
+                            ]
+                            proc_res = [
+                                {"full_code": str(r[0]).strip().upper(), "is_correct": r[2]}
+                                for r in detail_rows
+                            ]
+                            render_teacher_process_summary(proc_probs, proc_res, matched_sess_id, s_name)
 
-                    item_meta_map = {}
-                    if sess_row:
-                        if is_postgres_sub:
-                            c_sub.execute(
-                                "SELECT problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = %s ORDER BY problem_order ASC",
-                                (sess_row[0],)
+                        wrong_note_codes_t = get_student_wrong_note_codes(s_name)
+                        all_rep_counts_t = get_all_students_wrong_repeat_counts()
+                        for p_idx, (p_id, s_ans, is_chk) in enumerate(detail_rows):
+                            p_code_u = str(p_id).strip().upper()
+                            ox_icon = "✅ O" if is_chk == 1 else "❌ X"
+                            ans_display = s_ans if s_ans else "미입력"
+                            noted_badge = (
+                                " <span style='background-color:rgba(245,158,11,0.18); color:#FBBF24; border:1px solid #F59E0B; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:bold;'>📌 오답노트 등록됨</span>"
+                                if p_code_u in wrong_note_codes_t else ""
                             )
-                        else:
-                            q(c_sub,
-                              "SELECT problem_order, unit_code, prob_num, answer, img_base64, solution_img_path FROM online_test_items WHERE session_id = ? ORDER BY problem_order ASC",
-                              (sess_row[0],))
-                        for p_ord, u_cd, p_nm, ans_v, img_b64_v, sol_p_v in c_sub.fetchall():
-                            f_cd = f"{u_cd}{str(p_nm).zfill(3)}".upper() if u_cd else f"PROB_{p_ord:02d}"
-                            dec_b = None
-                            if img_b64_v:
-                                try:
-                                    dec_b = base64.b64decode(img_b64_v)
-                                except Exception:
-                                    pass
-                            item_meta_map[f_cd] = {
-                                "order": p_ord,
-                                "full_code": f_cd,
-                                "unit_code": u_cd or "TEST",
-                                "prob_num": str(p_nm).zfill(3) if p_nm else str(p_ord),
-                                "answer": str(ans_v).strip() if ans_v else "",
-                                "img_bytes": dec_b,
-                                "filename": str(sol_p_v) if sol_p_v else "",
-                            }
-
-                    proc_prob_list = []
-                    proc_res_list = []
-                    for d_idx, (p_id, s_ans, is_chk) in enumerate(detail_rows, start=1):
-                        f_code_u = str(p_id).upper()
-                        meta = item_meta_map.get(f_code_u, {})
-                        p_order_val = meta.get("order", d_idx)
-                        proc_prob_list.append({
-                            "order": p_order_val,
-                            "full_code": f_code_u,
-                            "unit_code": meta.get("unit_code", "TEST"),
-                            "prob_num": meta.get("prob_num", str(d_idx)),
-                            "answer": meta.get("answer", ""),
-                            "img_bytes": meta.get("img_bytes"),
-                            "filename": meta.get("filename", ""),
-                        })
-                        proc_res_list.append({
-                            "order": p_order_val,
-                            "full_code": f_code_u,
-                            "unit_code": meta.get("unit_code", "TEST"),
-                            "prob_num": meta.get("prob_num", str(d_idx)),
-                            "user_ans": s_ans or "",
-                            "real_ans": meta.get("answer", ""),
-                            "is_correct": 1 if is_chk == 1 else 0,
-                        })
-
-                    if proc_prob_list and proc_res_list:
-                        render_teacher_process_summary(proc_prob_list, proc_res_list, sess_id_for_proc, s_name)
-
-                    with st.expander("🔍 학생이 제출한 문항별 답안 상세 보기", expanded=False):
-                        for d_idx, (p_id, s_ans, is_chk) in enumerate(detail_rows, start=1):
-                            f_code_u = str(p_id).upper()
-                            status_icon = "⭕ 정답" if is_chk == 1 else "❌ 오답"
-                            ans_display_txt = s_ans if s_ans else "(미입력)"
-                            st.markdown(f"• **{d_idx}번 문제 (`{f_code_u}`)** — 내 답: `{ans_display_txt}` | **{status_icon}**")
-                            if sess_row:
-                                if is_postgres_sub:
-                                    c_sub.execute(
-                                        "SELECT img_base64 FROM online_test_items WHERE session_id = %s AND (unit_code || LPAD(COALESCE(prob_num, ''), 3, '0')) = %s",
-                                        (sess_row[0], f_code_u)
-                                    )
-                                else:
-                                    q(c_sub,
-                                      "SELECT img_base64 FROM online_test_items WHERE session_id = ? AND (unit_code || substr('000' || COALESCE(prob_num, ''), -3, 3)) = ?",
-                                      (sess_row[0], f_code_u))
-                                img_row = c_sub.fetchone()
-                                if img_row and img_row[0]:
-                                    try:
-                                        img_bytes = base64.b64decode(img_row[0])
-                                        st.image(img_bytes, width=320)
-                                    except Exception:
-                                        pass
+                            rep_cnt_t = all_rep_counts_t.get((s_name, p_code_u), 0)
+                            rep_badge_t = f" {format_repeat_badge_html(rep_cnt_t)}" if rep_cnt_t >= 2 else ""
+                            st.markdown(
+                                f"- **{p_idx + 1}번 (`{p_id}`)**: 학생 답안 = `{ans_display}`  |  채점 = **{ox_icon}**{noted_badge}{rep_badge_t}",
+                                unsafe_allow_html=True
+                            )
         else:
-            st.info("아직 제출된 온라인 테스트 결과가 없습니다.")
+            st.info("아직 제출된 온라인 테스트 기록이 없습니다.")
