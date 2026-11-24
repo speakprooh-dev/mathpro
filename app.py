@@ -2133,7 +2133,7 @@ if not st.session_state["teacher_authenticated"]:
             if week_offset_key not in st.session_state:
                 st.session_state[week_offset_key] = 0
 
-            base_d = date.fromisoformat(target_date_str)
+            base_d = today_obj
             current_week_start = base_d - timedelta(days=base_d.weekday())
             active_week_start = current_week_start + timedelta(weeks=st.session_state[week_offset_key])
             week_days = [(active_week_start + timedelta(days=i)) for i in range(7)]
