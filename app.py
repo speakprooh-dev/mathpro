@@ -3677,7 +3677,7 @@ if not st.session_state["teacher_authenticated"]:
 
         with tab5:
             st.subheader("🗓️ 나의 테스트 일정 달력")
-            st.caption("월간 달력에서 날짜를 선택하거나 주간 보기로 이번 주 테스트 일정을 확인하세요.")
+            st.caption("주간 보기로 이번 주 일정을 확인하거나, 월간 달력에서 날짜를 골라 테스트 일정을 확인하세요.")
 
             import calendar as py_calendar
 
@@ -3689,6 +3689,8 @@ if not st.session_state["teacher_authenticated"]:
                 st.session_state.stu_cal_month = today_kst.month
             if "stu_selected_date" not in st.session_state:
                 st.session_state.stu_selected_date = today_kst.strftime("%Y-%m-%d")
+            if "stu_ts_view_mode" not in st.session_state:
+                st.session_state.stu_ts_view_mode = "📆 주간 보기"
 
             view_mode = st.radio(
                 "보기 방식 선택",
@@ -3698,21 +3700,6 @@ if not st.session_state["teacher_authenticated"]:
             )
 
             if view_mode == "📅 월간 달력":
-                from urllib.parse import urlencode
-
-                # URL 쿼리 파라미터로 전달된 달력 날짜 선택 처리
-                picked_cal_date = st.query_params.get("cal_date", None)
-                if picked_cal_date:
-                    try:
-                        datetime.strptime(picked_cal_date, "%Y-%m-%d")
-                        st.session_state.stu_selected_date = picked_cal_date
-                    except ValueError:
-                        pass
-                    try:
-                        del st.query_params["cal_date"]
-                    except Exception:
-                        pass
-
                 yr = st.session_state.stu_cal_year
                 mo = st.session_state.stu_cal_month
 
@@ -3750,9 +3737,7 @@ if not st.session_state["teacher_authenticated"]:
                     for _, r in stu_ts_df.iterrows():
                         date_to_rows.setdefault(str(r["test_date"]), []).append(r)
 
-                st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 누르면 아래에 상세 일정이 표시됩니다)")
-
-                current_student = st.query_params.get("student", None)
+                st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험")
 
                 cal_weeks = py_calendar.monthcalendar(yr, mo)
                 grid_cells_html = []
@@ -3765,7 +3750,7 @@ if not st.session_state["teacher_authenticated"]:
                 for week in cal_weeks:
                     for day_num in week:
                         if day_num == 0:
-                            grid_cells_html.append("<div style='min-height:48px;'></div>")
+                            grid_cells_html.append("<div style='min-height:46px;'></div>")
                         else:
                             d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
                             day_items = date_to_rows.get(d_str, [])
@@ -3785,37 +3770,50 @@ if not st.session_state["teacher_authenticated"]:
                             bg_col = "rgba(2,132,199,0.28)" if is_sel else "rgba(15,23,42,0.55)"
                             text_col = "#FFFFFF" if is_sel else "#E2E8F0"
 
-                            params_dict = {"cal_date": d_str}
-                            if current_student:
-                                params_dict["student"] = current_student
-                            href_url = "?" + urlencode(params_dict)
-
-                            cell_html = (
-                                f"<a href='{href_url}' target='_self' style='"
-                                f"display:flex; flex-direction:column; align-items:center; justify-content:center; "
-                                f"min-height:48px; border-radius:8px; text-decoration:none; "
-                                f"border:1.5px solid {border_col}; background-color:{bg_col}; color:{text_col}; "
-                                f"box-sizing:border-box; padding:3px 2px;'>"
+                            grid_cells_html.append(
+                                f"<div style='display:flex; flex-direction:column; align-items:center; justify-content:center; "
+                                f"min-height:46px; border-radius:8px; border:1.5px solid {border_col}; "
+                                f"background-color:{bg_col}; color:{text_col}; box-sizing:border-box; padding:3px 2px;'>"
                                 f"<span style='font-size:12.5px; font-weight:{'700' if is_sel else '500'}; line-height:1.15;'>{day_num}</span>"
-                                f"{badge_html}"
-                                f"</a>"
+                                f"{badge_html}</div>"
                             )
-                            grid_cells_html.append(cell_html)
 
                 st.markdown(
                     f"""
-                    <div style="
-                        display: grid;
-                        grid-template-columns: repeat(7, minmax(0, 1fr));
-                        gap: 4px;
-                        width: 100%;
-                        margin: 6px 0 10px 0;
-                    ">
+                    <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; width:100%; margin:6px 0 10px 0;">
                         {''.join(grid_cells_html)}
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
+
+                scheduled_dates = sorted(date_to_rows.keys())
+                if scheduled_dates:
+                    quick_options = [f"{d} ({len(date_to_rows[d])}건)" for d in scheduled_dates]
+                    curr_idx = 0
+                    if st.session_state.stu_selected_date in scheduled_dates:
+                        curr_idx = scheduled_dates.index(st.session_state.stu_selected_date)
+                    picked_quick = st.selectbox(
+                        "📌 테스트 있는 날짜 바로 선택",
+                        options=range(len(scheduled_dates)),
+                        format_func=lambda idx: quick_options[idx],
+                        index=curr_idx,
+                        key="stu_cal_quick_date_pick",
+                    )
+                    st.session_state.stu_selected_date = scheduled_dates[picked_quick]
+
+                try:
+                    cur_dt = datetime.strptime(st.session_state.stu_selected_date, "%Y-%m-%d").date()
+                except Exception:
+                    cur_dt = datetime.strptime(f"{yr:04d}-{mo:02d}-01", "%Y-%m-%d").date()
+
+                picked_dt = st.date_input(
+                    "또는 날짜 직접 선택",
+                    value=cur_dt,
+                    key="stu_cal_date_input",
+                )
+                if picked_dt:
+                    st.session_state.stu_selected_date = picked_dt.strftime("%Y-%m-%d")
 
                 sel_str = st.session_state.stu_selected_date
                 try:
