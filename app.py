@@ -3975,9 +3975,9 @@ else:
 
                 if target_rows:
                     all_rep_counts_map = get_all_students_wrong_repeat_counts(chk_student_choice)
-                    # ... 기존 target_rows 출력 및 전체복사 코드는 그대로 유지 ...
-            else:
-                st.info("조건에 일치하는 오답노트 기록이 없습니다.")
+                    # 기존에 있던 target_rows 출력(카드/목록/전체복사 버튼 등) 코드를 여기에 그대로 두세요.
+                else:
+                    st.info("조건에 일치하는 오답노트 기록이 없습니다.")
 
             render_wrong_viewer_fragment()
         else:
