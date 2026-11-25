@@ -1332,19 +1332,81 @@ def get_student_daily_logs_by_dates(student_name, date_strs):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_routine_completion_rate(student_name, days_limit=7):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
     today_obj = get_korean_today()
     start_date_obj = today_obj - timedelta(days=days_limit - 1)
     start_date_str = str(start_date_obj)
     today_str = str(today_obj)
-    
+
+    def _fetch_active_rows():
+        conn_inner, _ = get_db_connection()
+        cur_inner = conn_inner.cursor()
+        try:
+            q(cur_inner, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+            return cur_inner.fetchall()
+        except Exception:
+            cur_inner2 = conn_inner.cursor()
+            q(cur_inner2, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
+            rows_fallback = cur_inner2.fetchall()
+            cur_inner2.close()
+            return rows_fallback
+        finally:
+            try:
+                cur_inner.close()
+            except Exception:
+                pass
+
     try:
-        q(c, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
-        active_rows = c.fetchall()
+        active_rows = _fetch_active_rows()
     except Exception:
-        q(c, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
-        active_rows = c.fetchall()
+        st.cache_resource.clear()
+        try:
+            active_rows = _fetch_active_rows()
+        except Exception:
+            return 0, 0, 0
+
+    if not active_rows:
+        return 0, 0, 0
+
+    active_days_by_id = {str(r[0]): set(parse_active_days(r[1])) for r in active_rows}
+    date_list = [start_date_obj + timedelta(days=i) for i in range(days_limit)]
+    date_weekday_map = {str(d): d.weekday() for d in date_list}
+
+    total_expected = 0
+    for r_id, a_days in active_days_by_id.items():
+        total_expected += sum(1 for d in date_list if d.weekday() in a_days)
+
+    if total_expected == 0:
+        return 0, 0, 0
+
+    conn, _ = get_db_connection()
+    c = conn.cursor()
+    try:
+        q(c, "SELECT routine_id, log_date FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
+        log_rows = c.fetchall()
+    except Exception:
+        st.cache_resource.clear()
+        conn, _ = get_db_connection()
+        c = conn.cursor()
+        q(c, "SELECT routine_id, log_date FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND log_date <= ? AND is_checked = 1", (student_name, start_date_str, today_str))
+        log_rows = c.fetchall()
+    finally:
+        try:
+            c.close()
+        except Exception:
+            pass
+
+    completed_count = 0
+    for r_id, l_date in log_rows:
+        r_key = str(r_id)
+        d_key = str(l_date)
+        if r_key in active_days_by_id and d_key in date_weekday_map:
+            if date_weekday_map[d_key] in active_days_by_id[r_key]:
+                completed_count += 1
+
+    raw_rate = int((completed_count / total_expected) * 100) if total_expected > 0 else 0
+    rate = min(100, max(0, raw_rate))
+
+    return rate, completed_count, total_expected
 
     if not active_rows:
         return 0, 0, 0
