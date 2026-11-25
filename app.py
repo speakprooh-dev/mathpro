@@ -770,6 +770,7 @@ def get_test_schedules_by_range(start_date_str: str, end_date_str: str) -> pd.Da
         return pd.DataFrame(columns=cols)
 
 
+@st.cache_data(ttl=45, show_spinner=False)
 def get_student_test_schedules(student_name: str, start_date_str: str = None, end_date_str: str = None) -> pd.DataFrame:
     cols = ["id", "student_name", "test_date", "title", "scope", "test_type", "status", "memo", "created_at"]
     try:
@@ -803,10 +804,11 @@ def get_student_test_schedules(student_name: str, start_date_str: str = None, en
 
 
 def clear_test_schedule_cache():
-    try:
-        get_test_schedules_by_range.clear()
-    except Exception:
-        pass
+    for fn in (get_student_test_schedules, get_test_schedules_by_range):
+        try:
+            fn.clear()
+        except Exception:
+            pass
 
 
 def _ts_weekday_short_kr(d_obj) -> str:
