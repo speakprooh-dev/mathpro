@@ -3975,7 +3975,11 @@ else:
 
                 if target_rows:
                     all_rep_counts_map = get_all_students_wrong_repeat_counts(chk_student_choice)
-                    # 기존에 있던 target_rows 출력(카드/목록/전체복사 버튼 등) 코드를 여기에 그대로 두세요.
+
+                    # ▼ 원래 있던 오답 목록 출력 및 전체복사 코드를 여기에 그대로 넣으세요 ▼
+                    # 예:
+                    # for s_name, u_code, nums_txt, u_date in target_rows:
+                    #     ...
                 else:
                     st.info("조건에 일치하는 오답노트 기록이 없습니다.")
 
