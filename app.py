@@ -308,7 +308,8 @@ def create_excel_backup():
             "homework_progress", "student_homework_progress", "student_wrong_entries", 
             "student_wrong_solved", "problem_links", "homework_templates",
             "daily_routines", "daily_routine_logs", "notices", "visitor_logs", "student_wrong_logs",
-            "student_test_submissions", "online_test_sessions", "online_test_items"
+            "student_test_submissions", "online_test_sessions", "online_test_items",
+            "test_schedules"
         ]
         success_count = 0
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -605,6 +606,21 @@ def init_db():
                     wrong_noted INTEGER DEFAULT 0
                 );
             ''')
+
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS test_schedules (
+                    id SERIAL PRIMARY KEY,
+                    student_name TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    scope TEXT DEFAULT '',
+                    test_type TEXT DEFAULT '정규 테스트',
+                    status TEXT DEFAULT 'scheduled',
+                    memo TEXT DEFAULT '',
+                    created_at TEXT DEFAULT ''
+                );
+            ''')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_test_schedules_date_student ON test_schedules (test_date, student_name);')
             try:
                 c.execute('ALTER TABLE online_test_items ADD COLUMN IF NOT EXISTS solution_img_path TEXT;')
                 c.execute('ALTER TABLE online_test_items ADD COLUMN IF NOT EXISTS wrong_noted INTEGER DEFAULT 0;')
@@ -715,6 +731,153 @@ def init_db():
             conn.commit()
     except Exception as e:
         print(f"DB 초기화 예외: {e}")
+
+
+@st.cache_data(ttl=60)
+def get_test_schedules_by_range(start_date_str: str, end_date_str: str) -> pd.DataFrame:
+    cols = ["id", "student_name", "test_date", "title", "scope", "test_type", "status", "memo", "created_at"]
+    try:
+        conn, db_type = get_db_connection()
+        c = conn.cursor()
+        ph = "%s" if db_type == "postgres" else "?"
+        sql = f"""
+            SELECT id, student_name, test_date, title, scope, test_type, status, memo, created_at
+            FROM test_schedules
+            WHERE test_date >= {ph} AND test_date <= {ph}
+            ORDER BY test_date ASC, id ASC
+        """
+        c.execute(sql, (start_date_str, end_date_str))
+        rows = c.fetchall()
+        conn.close()
+        if not rows:
+            return pd.DataFrame(columns=cols)
+        return pd.DataFrame([dict(r) if hasattr(r, "keys") else dict(zip(cols, r)) for r in rows], columns=cols)
+    except Exception:
+        return pd.DataFrame(columns=cols)
+
+
+def get_student_test_schedules(student_name: str, start_date_str: str = None, end_date_str: str = None) -> pd.DataFrame:
+    cols = ["id", "student_name", "test_date", "title", "scope", "test_type", "status", "memo", "created_at"]
+    try:
+        conn, db_type = get_db_connection()
+        c = conn.cursor()
+        ph = "%s" if db_type == "postgres" else "?"
+        if start_date_str and end_date_str:
+            sql = f"""
+                SELECT id, student_name, test_date, title, scope, test_type, status, memo, created_at
+                FROM test_schedules
+                WHERE (student_name = {ph} OR student_name = 'ALL')
+                  AND test_date >= {ph} AND test_date <= {ph}
+                ORDER BY test_date ASC, id ASC
+            """
+            c.execute(sql, (student_name, start_date_str, end_date_str))
+        else:
+            sql = f"""
+                SELECT id, student_name, test_date, title, scope, test_type, status, memo, created_at
+                FROM test_schedules
+                WHERE (student_name = {ph} OR student_name = 'ALL')
+                ORDER BY test_date ASC, id ASC
+            """
+            c.execute(sql, (student_name,))
+        rows = c.fetchall()
+        conn.close()
+        if not rows:
+            return pd.DataFrame(columns=cols)
+        return pd.DataFrame([dict(r) if hasattr(r, "keys") else dict(zip(cols, r)) for r in rows], columns=cols)
+    except Exception:
+        return pd.DataFrame(columns=cols)
+
+
+def clear_test_schedule_cache():
+    try:
+        get_test_schedules_by_range.clear()
+    except Exception:
+        pass
+
+
+def _ts_weekday_short_kr(d_obj) -> str:
+    return ["월", "화", "수", "목", "금", "토", "일"][d_obj.weekday()]
+
+
+def _ts_week_range_str(monday_obj) -> str:
+    sunday_obj = monday_obj + timedelta(days=6)
+    return f"{monday_obj.strftime('%Y-%m-%d')} ({_ts_weekday_short_kr(monday_obj)}) ~ {sunday_obj.strftime('%Y-%m-%d')} ({_ts_weekday_short_kr(sunday_obj)})"
+
+
+def add_test_schedule_entries(
+    targets: list,
+    test_dates: list,
+    title: str,
+    scope: str = "",
+    test_type: str = "정규 테스트",
+    status: str = "scheduled",
+    memo: str = "",
+) -> int:
+    clean_title = (title or "").strip()
+    if not clean_title or not targets or not test_dates:
+        return 0
+    now_str = get_korean_now_str() if "get_korean_now_str" in globals() else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    inserted = 0
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    ph = "%s" if db_type == "postgres" else "?"
+    sql = f"""
+        INSERT INTO test_schedules
+        (student_name, test_date, title, scope, test_type, status, memo, created_at)
+        VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+    """
+    for target in targets:
+        t_name = str(target).strip()
+        if not t_name:
+            continue
+        for d_str in sorted(set(test_dates)):
+            c.execute(sql, (t_name, d_str, clean_title, (scope or "").strip(), test_type, status, (memo or "").strip(), now_str))
+            inserted += 1
+    conn.commit()
+    conn.close()
+    clear_test_schedule_cache()
+    return inserted
+
+
+def update_test_schedule_item(
+    schedule_id: int,
+    test_date: str,
+    title: str,
+    scope: str,
+    test_type: str,
+    status: str,
+    memo: str,
+):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    ph = "%s" if db_type == "postgres" else "?"
+    sql = f"""
+        UPDATE test_schedules
+        SET test_date = {ph}, title = {ph}, scope = {ph}, test_type = {ph}, status = {ph}, memo = {ph}
+        WHERE id = {ph}
+    """
+    c.execute(sql, (test_date, title.strip(), scope.strip(), test_type, status, memo.strip(), int(schedule_id)))
+    conn.commit()
+    conn.close()
+    clear_test_schedule_cache()
+
+
+def delete_test_schedule_item(schedule_id: int):
+    conn, db_type = get_db_connection()
+    c = conn.cursor()
+    ph = "%s" if db_type == "postgres" else "?"
+    c.execute(f"DELETE FROM test_schedules WHERE id = {ph}", (int(schedule_id),))
+    conn.commit()
+    conn.close()
+    clear_test_schedule_cache()
+
+
+def get_test_status_label(status: str) -> str:
+    return {
+        "scheduled": "예정",
+        "completed": "완료",
+        "retest": "재시험",
+    }.get(status, "예정")
 
 init_db()
 
@@ -2043,7 +2206,7 @@ if not st.session_state["teacher_authenticated"]:
             with cols_r[0]: st.progress(safe_routine_progress)
             with cols_r[1]: st.markdown(f"<div style='text-align:right; font-weight:bold; color:#F59E0B;'>{routine_rate}%</div>", unsafe_allow_html=True)
 
-        tab1, tab2, tab3, tab4 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리", "📝 온라인 테스트"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📘 개념 진도", "📚 날짜별 숙제", "💬 오답·질문 관리", "📝 온라인 테스트", "🗓️ 테스트 일정"])
 
         with tab1:
             st.markdown("### 📘 나의 개념 학습 목록")
@@ -3498,6 +3661,171 @@ if not st.session_state["teacher_authenticated"]:
                             st.balloons()
                             st.rerun()
 
+with tab5:
+    st.subheader("🗓️ 나의 테스트 일정 달력")
+    st.caption("월간 달력에서 날짜를 선택하거나 주간 보기로 이번 주 테스트 일정을 확인하세요.")
+
+    import calendar as py_calendar
+
+    stu_target_name = selected_student if "selected_student" in locals() else student_name
+    today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
+    if "stu_cal_year" not in st.session_state:
+        st.session_state.stu_cal_year = today_kst.year
+    if "stu_cal_month" not in st.session_state:
+        st.session_state.stu_cal_month = today_kst.month
+    if "stu_selected_date" not in st.session_state:
+        st.session_state.stu_selected_date = today_kst.strftime("%Y-%m-%d")
+
+    view_mode = st.radio(
+        "보기 방식 선택",
+        ["📅 월간 달력", "📆 주간 보기"],
+        horizontal=True,
+        key="stu_ts_view_mode",
+    )
+
+    if view_mode == "📅 월간 달력":
+        m_prev, m_title, m_next = st.columns([1, 2, 1])
+        with m_prev:
+            if st.button("◀ 이전 달", key="stu_cal_prev", use_container_width=True):
+                if st.session_state.stu_cal_month == 1:
+                    st.session_state.stu_cal_year -= 1
+                    st.session_state.stu_cal_month = 12
+                else:
+                    st.session_state.stu_cal_month -= 1
+                st.rerun()
+        with m_title:
+            st.markdown(
+                f"<div style='text-align:center; font-weight:700; font-size:1.05rem; padding-top:6px;'>"
+                f"{st.session_state.stu_cal_year}년 {st.session_state.stu_cal_month}월</div>",
+                unsafe_allow_html=True,
+            )
+        with m_next:
+            if st.button("다음 달 ▶", key="stu_cal_next", use_container_width=True):
+                if st.session_state.stu_cal_month == 12:
+                    st.session_state.stu_cal_year += 1
+                    st.session_state.stu_cal_month = 1
+                else:
+                    st.session_state.stu_cal_month += 1
+                st.rerun()
+
+        yr = st.session_state.stu_cal_year
+        mo = st.session_state.stu_cal_month
+        last_day = py_calendar.monthrange(yr, mo)[1]
+        m_start = f"{yr:04d}-{mo:02d}-01"
+        m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
+
+        stu_ts_df = get_student_test_schedules(stu_target_name, m_start, m_end)
+        date_to_rows = {}
+        if not stu_ts_df.empty:
+            for _, r in stu_ts_df.iterrows():
+                date_to_rows.setdefault(str(r["test_date"]), []).append(r)
+
+        st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜 버튼을 누르면 아래에 상세 일정이 표시됩니다)")
+
+        st.markdown(
+            """
+            <style>
+            .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+                gap: 4px !important;
+            }
+            .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+            .stu-cal-grid-wrap button {
+                padding: 4px 2px !important;
+                min-height: 44px !important;
+                font-size: 0.78rem !important;
+                line-height: 1.15 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown('<div class="stu-cal-grid-wrap">', unsafe_allow_html=True)
+        dow_cols = st.columns(7)
+        for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
+            with dow_cols[i]:
+                st.markdown(
+                    f"<div style='text-align:center; font-size:0.78rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        cal_weeks = py_calendar.monthcalendar(yr, mo)
+        for w_idx, week in enumerate(cal_weeks):
+            cols = st.columns(7)
+            for d_idx, day_num in enumerate(week):
+                with cols[d_idx]:
+                    if day_num == 0:
+                        st.markdown("<div style='height:44px;'></div>", unsafe_allow_html=True)
+                    else:
+                        d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
+                        day_items = date_to_rows.get(d_str, [])
+                        badge = ""
+                        if day_items:
+                            statuses = [str(x["status"]) for x in day_items]
+                            if "retest" in statuses:
+                                badge = f"\n🔴{len(day_items)}"
+                            elif "scheduled" in statuses:
+                                badge = f"\n🔵{len(day_items)}"
+                            else:
+                                badge = f"\n🟢{len(day_items)}"
+                        is_sel = (st.session_state.stu_selected_date == d_str)
+                        btn_label = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
+                        if st.button(
+                            btn_label,
+                            key=f"stu_cal_btn_{yr}_{mo}_{day_num}",
+                            use_container_width=True,
+                            type="primary" if is_sel else "secondary",
+                        ):
+                            st.session_state.stu_selected_date = d_str
+                            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        sel_str = st.session_state.stu_selected_date
+        try:
+            sel_obj = datetime.strptime(sel_str, "%Y-%m-%d").date()
+            sel_title = f"{sel_obj.month}월 {sel_obj.day}일 ({_ts_weekday_short_kr(sel_obj)}) 테스트 상세"
+        except Exception:
+            sel_title = f"{sel_str} 테스트 상세"
+
+        st.markdown("---")
+        st.markdown(f"### 📌 {sel_title}")
+        selected_items = date_to_rows.get(sel_str, [])
+        if not selected_items:
+            st.info("선택한 날짜에 예정된 테스트 일정이 없습니다.")
+        else:
+            for item in selected_items:
+                st_label = get_test_status_label(item["status"])
+                with st.container(border=True):
+                    st.markdown(f"**[{st_label}] {item['title']}** · `{item['test_type']}`")
+                    if item["scope"]:
+                        st.write(f"**출제 범위:** {item['scope']}")
+                    if item["memo"]:
+                        st.caption(f"**안내 메모:** {item['memo']}")
+
+    else:
+        mon = today_kst - timedelta(days=today_kst.weekday())
+        sun = mon + timedelta(days=6)
+        st.info(f"📆 이번 주간: **{_ts_week_range_str(mon)}**")
+        wk_df = get_student_test_schedules(stu_target_name, mon.strftime("%Y-%m-%d"), sun.strftime("%Y-%m-%d"))
+        if wk_df.empty:
+            st.info("이번 주에 등록된 테스트 일정이 없습니다.")
+        else:
+            for _, item in wk_df.iterrows():
+                d_obj = datetime.strptime(str(item["test_date"]), "%Y-%m-%d").date()
+                st_label = get_test_status_label(item["status"])
+                with st.container(border=True):
+                    st.markdown(
+                        f"**{d_obj.strftime('%m/%d')} ({_ts_weekday_short_kr(d_obj)}) · [{st_label}] {item['title']}**"
+                    )
+                    st.caption(f"구분: {item['test_type']}" + (f" | 범위: {item['scope']}" if item["scope"] else ""))
+                    if item["memo"]:
+                        st.caption(f"안내: {item['memo']}")
+
 # ====================================================
 # 2. [선생님 전용 관리 모드]
 # ====================================================
@@ -3531,7 +3859,7 @@ else:
     st.divider()
     st.markdown("### ⚙️ 통합 관리 대시보드")
 
-    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests = st.tabs([
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests, t_cfg_schedule = st.tabs([
         "👤 1. [개별] 학생 진도 관리", 
         "📢 2. 공지사항 관리",
         "📅 3. 개별 과제 관리", 
@@ -3540,7 +3868,8 @@ else:
         "📊 6. 전체 숙제 매트릭스",
         "🎥 7. 해설 링크 관리",
         "📈 8. 실시간 학습 참여 현황",
-        "📋 9. 학생 제출물 및 풀이 검사"
+        "📋 9. 학생 제출물 및 풀이 검사",
+        "🗓️ 10. 테스트 일정 관리"
     ])
 
     with t_cfg_student:
@@ -4609,3 +4938,224 @@ else:
                                             st.image(img_path, use_container_width=True)
         else:
             st.info("아직 제출된 온라인 테스트 내역이 없습니다.")
+
+    with t_cfg_schedule:
+        st.markdown("#### 🗓️ 주간·요일별 테스트 일정 관리")
+        st.caption("주간 단위로 대상 학생과 요일을 선택해 테스트 일정을 한 번에 등록·관리합니다.")
+
+        if "ts_week_offset" not in st.session_state:
+            st.session_state.ts_week_offset = 0
+
+        nav1, nav2, nav3 = st.columns([1, 2, 1])
+        with nav1:
+            if st.button("◀ 이전 주", key="ts_prev_week", use_container_width=True):
+                st.session_state.ts_week_offset -= 1
+                st.rerun()
+        with nav2:
+            if st.button("이번 주로 이동", key="ts_this_week", use_container_width=True):
+                st.session_state.ts_week_offset = 0
+                st.rerun()
+        with nav3:
+            if st.button("다음 주 ▶", key="ts_next_week", use_container_width=True):
+                st.session_state.ts_week_offset += 1
+                st.rerun()
+
+        today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
+        base_monday = today_kst - timedelta(days=today_kst.weekday()) + timedelta(weeks=st.session_state.ts_week_offset)
+        week_dates = [base_monday + timedelta(days=i) for i in range(7)]
+        week_date_strs = [d.strftime("%Y-%m-%d") for d in week_dates]
+        prev_monday = base_monday - timedelta(days=7)
+        prev_week_strs = [(prev_monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+
+        st.info(f"📅 선택 주간: **{_ts_week_range_str(base_monday)}**")
+
+        student_names_list = list(student_list) if "student_list" in globals() and student_list else []
+
+        with st.container(border=True):
+            st.markdown("##### ➕ 주간·요일별 테스트 일괄 등록")
+            assign_all = st.checkbox("전체 학생 공통 일정으로 등록 (ALL)", value=False, key="ts_assign_all")
+
+            if assign_all:
+                selected_targets = ["ALL"]
+                st.caption("전체 학생(`ALL`)에게 해당 요일 테스트 일정이 표시됩니다.")
+            else:
+                selected_targets = st.multiselect(
+                    "대상 학생 선택 (복수 선택 가능)",
+                    options=student_names_list,
+                    default=student_names_list[:1] if student_names_list else [],
+                    key="ts_target_students",
+                )
+
+            st.markdown("**등록할 요일 선택 (해당 주의 날짜로 자동 매핑)**")
+            day_cols = st.columns(7)
+            selected_day_indices = []
+            for idx, d_obj in enumerate(week_dates):
+                with day_cols[idx]:
+                    chk = st.checkbox(
+                        f"{_ts_weekday_short_kr(d_obj)}\n({d_obj.strftime('%m/%d')})",
+                        value=(idx in [0, 2, 4]),
+                        key=f"ts_day_chk_{st.session_state.ts_week_offset}_{idx}",
+                    )
+                    if chk:
+                        selected_day_indices.append(idx)
+
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                ts_title = st.text_input(
+                    "테스트명 *",
+                    placeholder="예: 수1 삼각함수 주간테스트 / 단원평가",
+                    key="ts_title_input",
+                )
+            with c2:
+                ts_type = st.selectbox(
+                    "테스트 구분",
+                    ["정규 테스트", "재시험", "클리닉/보충", "온라인 테스트"],
+                    key="ts_type_select",
+                )
+
+            ts_scope = st.text_input(
+                "출제 범위 / 단원",
+                placeholder="예: 삼각함수 그래프 ~ 삼각방정식",
+                key="ts_scope_input",
+            )
+            ts_memo = st.text_input(
+                "응시 안내 / 메모",
+                placeholder="예: 수업 시작 15분 전 착석, 오답 3회 이상 재시험",
+                key="ts_memo_input",
+            )
+
+            btn_col1, btn_col2 = st.columns([2, 1])
+            with btn_col1:
+                if st.button("✅ 선택 주간·요일에 테스트 등록", type="primary", use_container_width=True, key="ts_save_btn"):
+                    if not ts_title.strip():
+                        st.error("테스트명을 입력해 주세요.")
+                    elif not selected_targets:
+                        st.error("대상 학생을 1명 이상 선택하거나 '전체 학생'을 체크해 주세요.")
+                    elif not selected_day_indices:
+                        st.error("등록할 요일을 1개 이상 선택해 주세요.")
+                    else:
+                        target_date_strs = [week_date_strs[i] for i in selected_day_indices]
+                        cnt = add_test_schedule_entries(
+                            targets=selected_targets,
+                            test_dates=target_date_strs,
+                            title=ts_title,
+                            scope=ts_scope,
+                            test_type=ts_type,
+                            status="scheduled",
+                            memo=ts_memo,
+                        )
+                        st.success(f"총 {cnt}건의 테스트 일정이 등록되었습니다.")
+                        st.rerun()
+
+            with btn_col2:
+                if st.button("📋 전주 일정 그대로 복사", use_container_width=True, key="ts_copy_prev_btn"):
+                    prev_df = get_test_schedules_by_range(prev_week_strs[0], prev_week_strs[-1])
+                    if prev_df.empty:
+                        st.warning("전주에 등록된 테스트 일정이 없습니다.")
+                    else:
+                        copied_count = 0
+                        for _, r in prev_df.iterrows():
+                            try:
+                                p_date = datetime.strptime(str(r["test_date"]), "%Y-%m-%d").date()
+                                day_offset = (p_date - prev_monday).days
+                                if 0 <= day_offset <= 6:
+                                    new_date_str = week_date_strs[day_offset]
+                                    copied_count += add_test_schedule_entries(
+                                        targets=[r["student_name"]],
+                                        test_dates=[new_date_str],
+                                        title=str(r["title"]),
+                                        scope=str(r["scope"] or ""),
+                                        test_type=str(r["test_type"] or "정규 테스트"),
+                                        status="scheduled",
+                                        memo=str(r["memo"] or ""),
+                                    )
+                            except Exception:
+                                pass
+                        st.success(f"전주 일정 {copied_count}건을 이번 주에 복사했습니다.")
+                        st.rerun()
+
+        st.markdown("---")
+        st.markdown("##### 📋 이번 주 등록된 테스트 일정 현황")
+
+        week_schedules_df = get_test_schedules_by_range(week_date_strs[0], week_date_strs[-1])
+        filter_student = st.selectbox(
+            "학생별 필터",
+            ["전체 보기", "전체학생공통(ALL)"] + student_names_list,
+            key="ts_filter_student",
+        )
+
+        if week_schedules_df.empty:
+            st.info("선택한 주간에 등록된 테스트 일정이 없습니다.")
+        else:
+            view_df = week_schedules_df.copy()
+            if filter_student == "전체학생공통(ALL)":
+                view_df = view_df[view_df["student_name"] == "ALL"]
+            elif filter_student != "전체 보기":
+                view_df = view_df[view_df["student_name"].isin([filter_student, "ALL"])]
+
+            if view_df.empty:
+                st.info("해당 조건에 맞는 테스트 일정이 없습니다.")
+            else:
+                for d_str in week_date_strs:
+                    day_rows = view_df[view_df["test_date"] == d_str]
+                    if day_rows.empty:
+                        continue
+                    d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+                    st.markdown(f"**📌 {d_obj.strftime('%m/%d')} ({_ts_weekday_short_kr(d_obj)}) — {len(day_rows)}건**")
+                    for _, item in day_rows.iterrows():
+                        item_id = int(item["id"])
+                        target_label = "전체 학생" if item["student_name"] == "ALL" else item["student_name"]
+                        st_label = get_test_status_label(item["status"])
+                        with st.container(border=True):
+                            st.markdown(
+                                f"**[{st_label}] {item['title']}** · 대상: `{target_label}` · 구분: `{item['test_type']}`"
+                            )
+                            if item["scope"]:
+                                st.caption(f"출제 범위: {item['scope']}")
+                            if item["memo"]:
+                                st.caption(f"안내 메모: {item['memo']}")
+
+                            act1, act2, act3, act4 = st.columns([2, 1.5, 1.5, 1])
+                            status_options = ["scheduled", "completed", "retest"]
+                            cur_idx = status_options.index(item["status"]) if item["status"] in status_options else 0
+                            with act1:
+                                new_status = st.selectbox(
+                                    "상태",
+                                    status_options,
+                                    index=cur_idx,
+                                    format_func=get_test_status_label,
+                                    key=f"ts_status_{item_id}",
+                                    label_visibility="collapsed",
+                                )
+                            with act2:
+                                if st.button("상태 저장", key=f"ts_upd_{item_id}", use_container_width=True):
+                                    update_test_schedule_item(
+                                        schedule_id=item_id,
+                                        test_date=str(item["test_date"]),
+                                        title=str(item["title"]),
+                                        scope=str(item["scope"] or ""),
+                                        test_type=str(item["test_type"] or "정규 테스트"),
+                                        status=new_status,
+                                        memo=str(item["memo"] or ""),
+                                    )
+                                    st.success("상태가 저장되었습니다.")
+                                    st.rerun()
+                            with act3:
+                                if st.button("재시험 추가", key=f"ts_retest_{item_id}", use_container_width=True):
+                                    next_day = (d_obj + timedelta(days=1)).strftime("%Y-%m-%d")
+                                    add_test_schedule_entries(
+                                        targets=[str(item["student_name"])],
+                                        test_dates=[next_day],
+                                        title=f"[재시험] {item['title']}",
+                                        scope=str(item["scope"] or ""),
+                                        test_type="재시험",
+                                        status="retest",
+                                        memo=str(item["memo"] or ""),
+                                    )
+                                    st.success("익일 재시험 일정이 추가되었습니다.")
+                                    st.rerun()
+                            with act4:
+                                if st.button("삭제", key=f"ts_del_{item_id}", use_container_width=True):
+                                    delete_test_schedule_item(item_id)
+                                    st.success("삭제되었습니다.")
+                                    st.rerun()
