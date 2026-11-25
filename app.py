@@ -746,6 +746,31 @@ def init_db():
     except Exception as e:
         print(f"DB 초기화 예외: {e}")
 
+def _prefetch_adjacent_months_student(student_name: str, yr: int, mo: int):
+    import calendar as py_calendar
+
+    prev_y, prev_m = (yr - 1, 12) if mo == 1 else (yr, mo - 1)
+    next_y, next_m = (yr + 1, 1) if mo == 12 else (yr, mo + 1)
+    for y, m in ((prev_y, prev_m), (next_y, next_m)):
+        last_d = py_calendar.monthrange(y, m)[1]
+        get_student_test_schedules(
+            student_name,
+            f"{y:04d}-{m:02d}-01",
+            f"{y:04d}-{m:02d}-{last_d:02d}",
+        )
+
+
+def _prefetch_adjacent_months_teacher(yr: int, mo: int):
+    import calendar as py_calendar
+
+    prev_y, prev_m = (yr - 1, 12) if mo == 1 else (yr, mo - 1)
+    next_y, next_m = (yr + 1, 1) if mo == 12 else (yr, mo + 1)
+    for y, m in ((prev_y, prev_m), (next_y, next_m)):
+        last_d = py_calendar.monthrange(y, m)[1]
+        get_test_schedules_by_range(
+            f"{y:04d}-{m:02d}-01",
+            f"{y:04d}-{m:02d}-{last_d:02d}",
+        )
 
 @st.cache_data(ttl=60)
 def get_test_schedules_by_range(start_date_str: str, end_date_str: str) -> pd.DataFrame:
@@ -3839,6 +3864,8 @@ if not st.session_state["teacher_authenticated"]:
                             if item["memo"]:
                                 st.caption(f"**안내 메모:** {item['memo']}")
 
+                _prefetch_adjacent_months_student(stu_target_name, yr, mo)
+
             else:
                 mon = today_kst - timedelta(days=today_kst.weekday())
                 sun = mon + timedelta(days=6)
@@ -4734,7 +4761,7 @@ else:
         all_students = get_students()
 
         # 1. 테스트 일정 등록 / 일괄 배정 폼
-        with st.expander("➕ 새 테스트 일정 등록 / 여러 학생·날짜 일괄 배정", expanded=True):
+        with st.expander("➕ 새 테스트 일정 등록 / 여러 학생·날짜 일괄 배정", expanded=False):
             with st.form("teacher_add_test_schedule_form", clear_on_submit=True):
                 c1, c2 = st.columns([2, 1])
                 with c1:
@@ -4972,7 +4999,7 @@ else:
                     sid = int(item["id"])
                     who = "🌐 전체 학생(ALL)" if item["student_name"] == "ALL" else f"👤 {item['student_name']}"
                     st_lbl = get_test_status_label(item["status"])
-                    with st.expander(f"{who} · [{st_lbl}] {item['title']} ({item['test_type']})", expanded=True):
+                    with st.expander(f"{who} · [{st_lbl}] {item['title']} ({item['test_type']})", expanded=False):
                         with st.form(f"edit_ts_day_{sid}"):
                             ec1, ec2, ec3 = st.columns([1.2, 1.5, 1])
                             with ec1:
@@ -5001,10 +5028,12 @@ else:
                                     st.success("수정되었습니다.")
                                     st.rerun()
                             with b2:
-                                if st.form_submit_button("🗑️ 삭제", use_container_width=True):
-                                    delete_test_schedule_item(sid)
-                                    st.warning("삭제되었습니다.")
-                                    st.rerun()
+                                    if st.form_submit_button("🗑️ 삭제", use_container_width=True):
+                                        delete_test_schedule_item(sid)
+                                        st.warning("삭제되었습니다.")
+                                        st.rerun()
+
+            _prefetch_adjacent_months_teacher(yr, mo)
 
         # --- 보기 2: 주간 일정표 ---
         elif t_view_mode == "📆 주간 일정표":
