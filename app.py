@@ -4697,15 +4697,26 @@ else:
                         f"👤 {s_name} | 📝 {t_title}  —  점수: {correct_cnt}/{total_cnt} ({score_pct}%)  [제출: {sub_at}]",
                         expanded=False
                     ):
-                        conn_sub, _ = get_db_connection()
-                        c_sub = conn_sub.cursor()
-                        q(c_sub, """
-                            SELECT problem_id, student_answer, is_checked 
-                            FROM student_test_submissions 
-                            WHERE student_name = ? AND test_title = ? 
-                            ORDER BY id ASC
-                        """, (s_name, t_title))
-                        detail_rows = c_sub.fetchall()
+                        detail_rows = []
+                        c_sub = None
+                        try:
+                            conn_sub, _ = get_db_connection()
+                            c_sub = conn_sub.cursor()
+                            q(c_sub, """
+                                SELECT problem_id, student_answer, is_checked 
+                                FROM student_test_submissions 
+                                WHERE student_name = ? AND test_title = ? 
+                                ORDER BY id ASC
+                            """, (s_name, t_title))
+                            detail_rows = c_sub.fetchall()
+                        except Exception as e_sub:
+                            st.error(f"제출 상세 조회 중 오류가 발생했습니다: {e_sub}")
+                        finally:
+                            if c_sub is not None:
+                                try:
+                                    c_sub.close()
+                                except Exception:
+                                    pass
 
                         if detail_rows:
                             df_details = pd.DataFrame(detail_rows, columns=["문항 코드", "학생 제출 답안", "정답 여부"])
@@ -4717,12 +4728,24 @@ else:
                                 st.markdown(f"<div style='color:#EF4444; font-size:13px; font-weight:bold; margin-top:6px;'>❌ 틀린 문항 코드 ({len(wrong_codes_only)}개): {', '.join(wrong_codes_only)}</div>", unsafe_allow_html=True)
 
                         if st.button("🗑️ 이 제출 기록 삭제", key=f"del_sub_rec_{s_name}_{t_title}_{sub_at}"):
-                            q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                            q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                            conn_sub.commit()
-                            st.cache_data.clear()
-                            st.success("제출 기록이 삭제되고 미제출 상태로 복원되었습니다!")
-                            st.rerun()
+                            c_del_sub = None
+                            try:
+                                conn_del_sub, _ = get_db_connection()
+                                c_del_sub = conn_del_sub.cursor()
+                                q(c_del_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                q(c_del_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                                conn_del_sub.commit()
+                                st.cache_data.clear()
+                                st.success("제출 기록이 삭제되고 미제출 상태로 복원되었습니다!")
+                                st.rerun()
+                            except Exception as e_del:
+                                st.error(f"제출 기록 삭제 중 오류가 발생했습니다: {e_del}")
+                            finally:
+                                if c_del_sub is not None:
+                                    try:
+                                        c_del_sub.close()
+                                    except Exception:
+                                        pass
             else:
                 st.info("아직 제출 완료된 온라인 테스트 기록이 없습니다.")
 
