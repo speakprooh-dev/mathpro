@@ -3713,9 +3713,12 @@ if not st.session_state["teacher_authenticated"]:
                     except Exception:
                         pass
 
+                yr = st.session_state.stu_cal_year
+                mo = st.session_state.stu_cal_month
+
                 m_prev, m_title, m_next = st.columns([1.25, 1.5, 1.25])
                 with m_prev:
-                    if st.button("◀ 이전", key="stu_cal_prev_month", use_container_width=True):
+                    if st.button("◀ 이전", key="stu_cal_prev", use_container_width=True):
                         if mo == 1:
                             st.session_state.stu_cal_year = yr - 1
                             st.session_state.stu_cal_month = 12
@@ -3724,11 +3727,12 @@ if not st.session_state["teacher_authenticated"]:
                         st.rerun()
                 with m_title:
                     st.markdown(
-                        f"<div style='text-align:center; font-size:0.98rem; font-weight:700; padding-top:7px; white-space:nowrap;'>{yr}.{mo:02d}</div>",
+                        f"<div style='text-align:center; font-weight:700; font-size:0.98rem; padding-top:7px; white-space:nowrap;'>"
+                        f"{yr}.{mo:02d}</div>",
                         unsafe_allow_html=True,
                     )
                 with m_next:
-                    if st.button("다음 ▶", key="stu_cal_next_month", use_container_width=True):
+                    if st.button("다음 ▶", key="stu_cal_next", use_container_width=True):
                         if mo == 12:
                             st.session_state.stu_cal_year = yr + 1
                             st.session_state.stu_cal_month = 1
@@ -3736,9 +3740,18 @@ if not st.session_state["teacher_authenticated"]:
                             st.session_state.stu_cal_month = mo + 1
                         st.rerun()
 
+                last_day = py_calendar.monthrange(yr, mo)[1]
+                m_start = f"{yr:04d}-{mo:02d}-01"
+                m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
+
+                stu_ts_df = get_student_test_schedules(stu_target_name, m_start, m_end)
+                date_to_rows = {}
+                if not stu_ts_df.empty:
+                    for _, r in stu_ts_df.iterrows():
+                        date_to_rows.setdefault(str(r["test_date"]), []).append(r)
+
                 st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 누르면 아래에 상세 일정이 표시됩니다)")
 
-                # 기존 student 파라미터가 있다면 함께 유지
                 current_student = st.query_params.get("student", None)
 
                 cal_weeks = py_calendar.monthcalendar(yr, mo)
