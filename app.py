@@ -3734,70 +3734,78 @@ if not st.session_state["teacher_authenticated"]:
                     for _, r in stu_ts_df.iterrows():
                         date_to_rows.setdefault(str(r["test_date"]), []).append(r)
 
-                st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜 버튼을 누르면 아래에 상세 일정이 표시됩니다)")
+                # URL 쿼리 파라미터로 전달된 달력 날짜 선택 처리
+                picked_cal_date = st.query_params.get("cal_date", None)
+                if picked_cal_date:
+                    try:
+                        datetime.strptime(picked_cal_date, "%Y-%m-%d")
+                        st.session_state.stu_selected_date = picked_cal_date
+                    except ValueError:
+                        pass
+                    try:
+                        del st.query_params["cal_date"]
+                    except Exception:
+                        pass
+
+                st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 누르면 아래에 상세 일정이 표시됩니다)")
+
+                cal_weeks = py_calendar.monthcalendar(yr, mo)
+                grid_cells_html = []
+
+                for d_lbl in ["월", "화", "수", "목", "금", "토", "일"]:
+                    grid_cells_html.append(
+                        f"<div style='text-align:center; font-size:12px; font-weight:700; color:#94A3B8; padding:4px 0;'>{d_lbl}</div>"
+                    )
+
+                for week in cal_weeks:
+                    for day_num in week:
+                        if day_num == 0:
+                            grid_cells_html.append("<div style='min-height:48px;'></div>")
+                        else:
+                            d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
+                            day_items = date_to_rows.get(d_str, [])
+                            badge_html = ""
+                            if day_items:
+                                statuses = [str(x["status"]) for x in day_items]
+                                if "retest" in statuses:
+                                    b_icon = "🔴"
+                                elif "scheduled" in statuses:
+                                    b_icon = "🔵"
+                                else:
+                                    b_icon = "🟢"
+                                badge_html = f"<div style='font-size:10px; line-height:1.1; margin-top:2px;'>{b_icon}{len(day_items)}</div>"
+
+                            is_sel = (st.session_state.stu_selected_date == d_str)
+                            border_col = "#38BDF8" if is_sel else "rgba(148,163,184,0.25)"
+                            bg_col = "rgba(2,132,199,0.28)" if is_sel else "rgba(15,23,42,0.55)"
+                            text_col = "#FFFFFF" if is_sel else "#E2E8F0"
+
+                            cell_html = (
+                                f"<a href='?cal_date={d_str}' target='_self' style='"
+                                f"display:flex; flex-direction:column; align-items:center; justify-content:center; "
+                                f"min-height:48px; border-radius:8px; text-decoration:none; "
+                                f"border:1.5px solid {border_col}; background-color:{bg_col}; color:{text_col}; "
+                                f"box-sizing:border-box; padding:3px 2px;'>"
+                                f"<span style='font-size:12.5px; font-weight:{'700' if is_sel else '500'}; line-height:1.15;'>{day_num}</span>"
+                                f"{badge_html}"
+                                f"</a>"
+                            )
+                            grid_cells_html.append(cell_html)
 
                 st.markdown(
-                    """
-                    <style>
-                    .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
-                        display: grid !important;
-                        grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-                        gap: 4px !important;
-                    }
-                    .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
-                        width: 100% !important;
-                        min-width: 0 !important;
-                    }
-                    .stu-cal-grid-wrap button {
-                        padding: 4px 2px !important;
-                        min-height: 44px !important;
-                        font-size: 0.78rem !important;
-                        line-height: 1.15 !important;
-                    }
-                    </style>
+                    f"""
+                    <div style="
+                        display: grid;
+                        grid-template-columns: repeat(7, minmax(0, 1fr));
+                        gap: 4px;
+                        width: 100%;
+                        margin: 6px 0 10px 0;
+                    ">
+                        {''.join(grid_cells_html)}
+                    </div>
                     """,
                     unsafe_allow_html=True,
                 )
-
-                st.markdown('<div class="stu-cal-grid-wrap">', unsafe_allow_html=True)
-                dow_cols = st.columns(7)
-                for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
-                    with dow_cols[i]:
-                        st.markdown(
-                            f"<div style='text-align:center; font-size:0.78rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
-                            unsafe_allow_html=True,
-                        )
-
-                cal_weeks = py_calendar.monthcalendar(yr, mo)
-                for w_idx, week in enumerate(cal_weeks):
-                    cols = st.columns(7)
-                    for d_idx, day_num in enumerate(week):
-                        with cols[d_idx]:
-                            if day_num == 0:
-                                st.markdown("<div style='height:44px;'></div>", unsafe_allow_html=True)
-                            else:
-                                d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
-                                day_items = date_to_rows.get(d_str, [])
-                                badge = ""
-                                if day_items:
-                                    statuses = [str(x["status"]) for x in day_items]
-                                    if "retest" in statuses:
-                                        badge = f"\n🔴{len(day_items)}"
-                                    elif "scheduled" in statuses:
-                                        badge = f"\n🔵{len(day_items)}"
-                                    else:
-                                        badge = f"\n🟢{len(day_items)}"
-                                is_sel = (st.session_state.stu_selected_date == d_str)
-                                btn_label = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
-                                if st.button(
-                                    btn_label,
-                                    key=f"stu_cal_btn_{yr}_{mo}_{day_num}",
-                                    use_container_width=True,
-                                    type="primary" if is_sel else "secondary",
-                                ):
-                                    st.session_state.stu_selected_date = d_str
-                                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
 
                 sel_str = st.session_state.stu_selected_date
                 try:
