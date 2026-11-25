@@ -568,8 +568,6 @@ def init_db():
                 );
             ''')
             c.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_student_wrong_logs_unique ON student_wrong_logs (student_name, unit_code, prob_num, registered_date);')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_student_wrong_entries_student ON student_wrong_entries (student_name, unit_code);')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_student_wrong_logs_student_date ON student_wrong_logs (student_name, registered_date);')
             
             c.execute('''
                 CREATE TABLE IF NOT EXISTS student_test_submissions (
@@ -1514,31 +1512,7 @@ def get_student_wrong_repeat_counts(student_name):
         return {}
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_cached_wrong_entries(student_filter):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    if student_filter == "전체 학생 (모두 보기)":
-        q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != '' ORDER BY student_name, unit_code", ())
-    else:
-        q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != '' ORDER BY unit_code", (student_filter,))
-    return c.fetchall()
-
-@st.cache_data(ttl=60, show_spinner=False)
-def get_cached_wrong_logs(student_filter):
-    conn, _ = get_db_connection()
-    c = conn.cursor()
-    if student_filter == "전체 학생 (모두 보기)":
-        q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
-    else:
-        q(c, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (student_filter,))
-    return c.fetchall()
-
-@st.cache_data(ttl=60, show_spinner=False)
-def get_all_students_wrong_repeat_counts(student_filter="전체 학생 (모두 보기)"):
-    if student_filter and student_filter != "전체 학생 (모두 보기)":
-        single_map = get_student_wrong_repeat_counts(student_filter)
-        return {(student_filter, f_code): cnt for f_code, cnt in single_map.items()}
-
+def get_all_students_wrong_repeat_counts():
     conn, db_type = get_db_connection()
     c = conn.cursor()
     try:
@@ -3890,100 +3864,208 @@ else:
                     else:
                         st.error(msg_clean)
 
-            @st.fragment
-            def render_wrong_viewer_fragment():
-                chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
-                wrong_view_mode = st.radio(
-                    "모아보기 방식 선택",
-                    ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"],
-                    horizontal=True,
-                    key="wrong_view_mode_radio"
-                )
-                
-                target_rows = []
-                
-                if wrong_view_mode == "📂 단원별 보기":
-                    target_rows = get_cached_wrong_entries(chk_student_choice)
-
-                elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
-                    log_rows = get_cached_wrong_logs(chk_student_choice)
-
-                    if log_rows:
-                        if wrong_view_mode == "📅 날짜별 보기":
-                            available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
-                            selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates, key="wrong_date_filter_sel")
-                            filtered_logs = log_rows if selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
-                            
-                            grouped_map = {}
-                            for s_name, u_code, p_num, reg_date in filtered_logs:
-                                key = (s_name, u_code, reg_date)
-                                grouped_map.setdefault(key, []).append(p_num)
-                            
-                            for (s_name, u_code, reg_date), num_list in grouped_map.items():
-                                nums_txt = ", ".join(map(str, sorted(num_list)))
-                                target_rows.append((s_name, u_code, nums_txt, reg_date))
-                        else:
-                            def get_week_range_str_local(date_str):
-                                try:
-                                    d = date.fromisoformat(date_str[:10])
-                                    start_week = d - timedelta(days=d.weekday())
-                                    end_week = start_week + timedelta(days=6)
-                                    return f"{start_week} ~ {end_week} (월~일)"
-                                except Exception:
-                                    return "날짜 미상 주간"
-                            
-                            weeks_dict = {}
-                            for s_name, u_code, p_num, reg_date in log_rows:
-                                weeks_dict.setdefault(get_week_range_str_local(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
-                            
-                            sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
-                            selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks, key="wrong_week_filter_sel")
-                            filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
-
-                            grouped_week_map = {}
-                            for s_name, u_code, p_num, reg_date in filtered_logs:
-                                key = (s_name, u_code)
-                                if key not in grouped_week_map:
-                                    grouped_week_map[key] = {"nums": set(), "dates": []}
-                                grouped_week_map[key]["nums"].add(int(p_num))
-                                if reg_date:
-                                    grouped_week_map[key]["dates"].append(reg_date)
-                            
-                            for (s_name, u_code), info in grouped_week_map.items():
-                                nums_txt = ", ".join(map(str, sorted(list(info["nums"]))))
-                                date_span_str = f"{min(info['dates'])} ~ {max(info['dates'])}" if info["dates"] else (selected_week or "")
-                                target_rows.append((s_name, u_code, nums_txt, date_span_str))
+            chk_student_choice = st.selectbox("조회할 학생 선택", ["전체 학생 (모두 보기)"] + student_list, key="chk_wrong_student_choice")
+            wrong_view_mode = st.radio("모아보기 방식 선택", ["📂 단원별 보기", "📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기", "🚨 해설 링크 없는 문제 모아보기"], horizontal=True)
+            
+            conn, db_type = get_db_connection()
+            c = conn.cursor()
+            target_rows = []
+            
+            if wrong_view_mode == "📂 단원별 보기":
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
                 else:
-                    all_raw_rows = get_cached_wrong_entries(chk_student_choice)
-                    
-                    all_check_codes = []
-                    for s_name, u_code, nums_txt, u_date in all_raw_rows:
-                        for n in parse_numbers(nums_txt):
-                            all_check_codes.append(f"{u_code}{n:03d}".upper())
-                    batch_link_map = get_batch_problem_link_info(all_check_codes)
-                    
-                    for s_name, u_code, nums_txt, u_date in all_raw_rows:
-                        parsed_s = parse_numbers(nums_txt)
-                        missing_nums = []
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                target_rows = c.fetchall()
+
+            elif wrong_view_mode in ["📅 날짜별 보기", "📆 주간별(월~일) 한 주 모아보기"]:
+                @st.cache_data(ttl=60, show_spinner=False)
+                def get_cached_wrong_logs(student_name_filter):
+                    conn_c, db_t = get_db_connection()
+                    cursor = conn_c.cursor()
+                    if student_name_filter == "전체 학생 (모두 보기)":
+                        q(cursor, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs ORDER BY registered_date DESC, unit_code, prob_num", ())
+                    else:
+                        q(cursor, "SELECT student_name, unit_code, prob_num, registered_date FROM student_wrong_logs WHERE student_name = ? ORDER BY registered_date DESC, unit_code, prob_num", (student_name_filter,))
+                    return cursor.fetchall()
+
+                log_rows = get_cached_wrong_logs(chk_student_choice)
+
+                if log_rows:
+                    if wrong_view_mode == "📅 날짜별 보기":
+                        available_dates = sorted(list(set(r[3] for r in log_rows if r[3])), reverse=True)
+                        selected_date_filter = st.selectbox("📅 확인하고 싶은 날짜 선택", ["전체 날짜 보기 (최근순)"] + available_dates)
+                        filtered_logs = log_rows if selected_date_filter == "전체 날짜 보기 (최근순)" else [r for r in log_rows if r[3] == selected_date_filter]
+                        
+                        grouped_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code, reg_date)
+                            grouped_map.setdefault(key, []).append(p_num)
+                        
+                        for (s_name, u_code, reg_date), num_list in grouped_map.items():
+                            nums_txt = ", ".join(map(str, sorted(num_list)))
+                            target_rows.append((s_name, u_code, nums_txt, reg_date))
+                    else:
+                        def get_week_range_str_local(date_str):
+                            try:
+                                d = date.fromisoformat(date_str[:10])
+                                start_week = d - timedelta(days=d.weekday())
+                                end_week = start_week + timedelta(days=6)
+                                return f"{start_week} ~ {end_week} (월~일)"
+                            except Exception:
+                                return "날짜 미상 주간"
+                        
+                        weeks_dict = {}
+                        for s_name, u_code, p_num, reg_date in log_rows:
+                            weeks_dict.setdefault(get_week_range_str_local(reg_date) if reg_date else "날짜 미상 주간", []).append((s_name, u_code, p_num, reg_date))
+                        
+                        sorted_weeks = sorted(weeks_dict.keys(), reverse=True)
+                        selected_week = st.selectbox("📆 확인할 주간 선택 (월요일~일요일)", sorted_weeks)
+                        filtered_logs = weeks_dict.get(selected_week, []) if selected_week else []
+
+                        grouped_week_map = {}
+                        for s_name, u_code, p_num, reg_date in filtered_logs:
+                            key = (s_name, u_code)
+                            if key not in grouped_week_map:
+                                grouped_week_map[key] = {"nums": set(), "dates": []}
+                            grouped_week_map[key]["nums"].add(int(p_num))
+                            if reg_date:
+                                grouped_week_map[key]["dates"].append(reg_date)
+                        
+                        for (s_name, u_code), info in grouped_week_map.items():
+                            nums_txt = ", ".join(map(str, sorted(list(info["nums"]))))
+                            date_span_str = f"{min(info['dates'])} ~ {max(info['dates'])}" if info["dates"] else (selected_week or "")
+                            target_rows.append((s_name, u_code, nums_txt, date_span_str))
+            else:
+                if chk_student_choice == "전체 학생 (모두 보기)":
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE numbers_text != ''", ())
+                else:
+                    q(c, "SELECT student_name, unit_code, numbers_text, updated_at FROM student_wrong_entries WHERE student_name = ? AND numbers_text != ''", (chk_student_choice,))
+                all_raw_rows = c.fetchall()
+                
+                all_check_codes = []
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    for n in parse_numbers(nums_txt):
+                        all_check_codes.append(f"{u_code}{n:03d}".upper())
+                batch_link_map = get_batch_problem_link_info(all_check_codes)
+                
+                for s_name, u_code, nums_txt, u_date in all_raw_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    missing_nums = []
+                    for n in parsed_s:
+                        f_code = f"{u_code}{n:03d}".upper()
+                        v_url, _ = batch_link_map.get(f_code, ("", ""))
+                        if not v_url or not v_url.strip():
+                            missing_nums.append(n)
+                    if missing_nums:
+                        target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
+
+            if target_rows:
+                all_rep_counts_map = get_all_students_wrong_repeat_counts()
+                summary_student_counts = {}
+                all_target_full_codes = []
+                repeat_item_total = 0
+                
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        summary_student_counts[s_name] = summary_student_counts.get(s_name, 0) + len(parsed_s)
                         for n in parsed_s:
                             f_code = f"{u_code}{n:03d}".upper()
-                            v_url, _ = batch_link_map.get(f_code, ("", ""))
-                            if not v_url or not v_url.strip():
-                                missing_nums.append(n)
-                        if missing_nums:
-                            target_rows.append((s_name, u_code, ", ".join(map(str, sorted(missing_nums))), u_date))
+                            all_target_full_codes.append(f_code)
+                            if all_rep_counts_map.get((s_name, f_code), 0) >= 2:
+                                repeat_item_total += 1
+                
+                unique_codes = list(set(all_target_full_codes))
+                batch_link_cache = get_batch_problem_link_info(unique_codes)
+                search_missing_total = sum(1 for f_code in unique_codes if not batch_link_cache.get(f_code, ("", ""))[0])
 
-                if target_rows:
-                    all_rep_counts_map = get_all_students_wrong_repeat_counts(chk_student_choice)
+                with st.container(border=True):
+                    total_sum_all = sum(summary_student_counts.values())
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 14px; font-weight: bold; margin-bottom: 6px;">📈 현재 검색 조건 통계 요약</div>
+                        <div style="font-size: 13px; margin-bottom: 8px;">
+                            🚨 해설 링크 누락(빨간색): <b style="color: #EF4444;">{search_missing_total}개</b> &nbsp;|&nbsp; 
+                            🔁 반복 오답(2회↑): <b style="color: #F59E0B;">{repeat_item_total}건</b> &nbsp;|&nbsp; 
+                            📚 전체 오답 문제: <b style="color: #0284C7;">{total_sum_all}개</b>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    if summary_student_counts:
+                        st.markdown("<div style='font-size: 12px; color: gray; margin-bottom: 4px;'>👤 학생별 총 오답 문제 수</div>", unsafe_allow_html=True)
+                        st.markdown(" | ".join([f"`{s}`: **{c}개**" for s, c in summary_student_counts.items()]))
 
-                    # ▼ 원래 있던 오답 목록 출력 및 전체복사 코드를 여기에 그대로 넣으세요 ▼
-                    # 예:
-                    # for s_name, u_code, nums_txt, u_date in target_rows:
-                    #     ...
-                else:
-                    st.info("조건에 일치하는 오답노트 기록이 없습니다.")
+                # 📋 전체복사용 단원별 코드 문자열 수집 (예: A116_(027,101,...),116_(164,...))
+                copy_chunks_all = []
+                copy_chunks_by_student = {}
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        sorted_3digit = ",".join(f"{n:03d}" for n in sorted(list(parsed_s)))
+                        chunk_str = f"{u_code}_({sorted_3digit})"
+                        copy_chunks_all.append(chunk_str)
+                        copy_chunks_by_student.setdefault(s_name, []).append(chunk_str)
 
-            render_wrong_viewer_fragment()
+                if copy_chunks_all:
+                    with st.container(border=True):
+                        st.markdown("##### 📋 단원별 오답 코드 전체복사")
+                        if chk_student_choice == "전체 학생 (모두 보기)" and len(copy_chunks_by_student) > 1:
+                            copy_target_opt = st.selectbox(
+                                "복사 대상 선택",
+                                ["전체 조회 결과 한 줄로 합치기"] + list(copy_chunks_by_student.keys()),
+                                key="wrong_bulk_copy_target_sel"
+                            )
+                            if copy_target_opt == "전체 조회 결과 한 줄로 합치기":
+                                full_copy_text = ",".join(copy_chunks_all)
+                            else:
+                                full_copy_text = ",".join(copy_chunks_by_student.get(copy_target_opt, []))
+                        else:
+                            full_copy_text = ",".join(copy_chunks_all)
+
+                        render_clipboard_copy_button(
+                            full_copy_text,
+                            key_suffix=f"wrong_{chk_student_choice}_{wrong_view_mode}",
+                            btn_label="📋 전체복사"
+                        )
+                        st.code(full_copy_text, language=None)
+
+                st.markdown("---")
+
+                for s_name, u_code, nums_txt, u_date in target_rows:
+                    parsed_s = parse_numbers(nums_txt)
+                    if parsed_s:
+                        with st.container(border=True):
+                            st.markdown(f"##### 👤 **{s_name}** | 📖 단원코드: `{u_code}` <span style='font-size:12px; color:gray;'>(등록일: {u_date})</span>", unsafe_allow_html=True)
+                            
+                            num_items_html = []
+                            repeat_badges_html = []
+                            for n in sorted(list(parsed_s)):
+                                f_code = f"{u_code}{n:03d}".upper()
+                                v_url, _ = batch_link_cache.get(f_code, ("", ""))
+                                num_color = "#0284C7" if (v_url and v_url.strip()) else "#DC2626"
+                                num_items_html.append(f"<span style='color: {num_color}; font-weight: bold;'>{n:03d}</span>")
+
+                                rep_cnt_item = all_rep_counts_map.get((s_name, f_code), 0)
+                                rep_badge_item = format_repeat_badge_html(rep_cnt_item)
+                                if rep_badge_item:
+                                    repeat_badges_html.append(f"<span style='display:inline-flex; align-items:center; gap:3px;'><span style='color:{num_color}; font-weight:bold; font-size:12px;'>{n:03d}</span>{rep_badge_item}</span>")
+
+                            joined_nums_str = ",".join(num_items_html)
+                            repeat_summary_html = (
+                                f"<div style='margin-top: 6px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;'>{''.join(repeat_badges_html)}</div>"
+                                if repeat_badges_html else ""
+                            )
+
+                            st.markdown(
+                                f"<div style='padding: 10px; border-radius: 6px; font-family: monospace; font-size: 15px; border:1px solid rgba(128,128,128,0.3); line-height:1.6; user-select:text;'>"
+                                f"<span>{u_code}_({joined_nums_str})</span>{repeat_summary_html}"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
+            else:
+                st.info("조건에 일치하는 오답노트 기록이 없습니다.")
         else:
             st.warning("등록된 학생이 없습니다.")
 
