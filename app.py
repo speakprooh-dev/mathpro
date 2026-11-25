@@ -1646,20 +1646,42 @@ def get_student_homework_dates(student_name):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_student_homework_by_date(student_name, hw_date):
-    conn, db_type = get_db_connection()
-    c = conn.cursor()
+    def _run_hw_query():
+        conn_inner, db_t = get_db_connection()
+        cur_inner = conn_inner.cursor()
+        try:
+            if db_t == "postgres":
+                q(cur_inner, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
+            else:
+                q(cur_inner, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
+            return cur_inner.fetchall()
+        except Exception:
+            cur_fallback = conn_inner.cursor()
+            try:
+                if db_t == "postgres":
+                    q(cur_fallback, "SELECT id, title, '' FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
+                else:
+                    q(cur_fallback, "SELECT id, title, '' FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
+                return cur_fallback.fetchall()
+            finally:
+                try:
+                    cur_fallback.close()
+                except Exception:
+                    pass
+        finally:
+            try:
+                cur_inner.close()
+            except Exception:
+                pass
+
     try:
-        if db_type == "postgres":
-            q(c, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
-        else:
-            q(c, "SELECT id, title, COALESCE(due_date, '') FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
-        return c.fetchall()
+        return _run_hw_query()
     except Exception:
-        if db_type == "postgres":
-            q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = %s AND hw_date = %s ORDER BY id", (student_name, hw_date))
-        else:
-            q(c, "SELECT id, title, '' FROM student_homework WHERE student_name = ? AND hw_date = ? ORDER BY id", (student_name, hw_date))
-        return c.fetchall()
+        st.cache_resource.clear()
+        try:
+            return _run_hw_query()
+        except Exception:
+            return []
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_all_students_homework_map(hw_date):
