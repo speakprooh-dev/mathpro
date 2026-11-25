@@ -4847,32 +4847,33 @@ else:
             if "t_selected_date" not in st.session_state:
                 st.session_state.t_selected_date = today_kst.strftime("%Y-%m-%d")
 
-            nav1, nav2, nav3 = st.columns([1, 2, 1])
+            yr = st.session_state.t_cal_year
+            mo = st.session_state.t_cal_month
+
+            nav1, nav2, nav3 = st.columns([1.25, 1.5, 1.25])
             with nav1:
-                if st.button("◀ 이전 달", key="t_cal_prev", use_container_width=True):
-                    if st.session_state.t_cal_month == 1:
-                        st.session_state.t_cal_year -= 1
+                if st.button("◀ 이전", key="t_cal_prev", use_container_width=True):
+                    if mo == 1:
+                        st.session_state.t_cal_year = yr - 1
                         st.session_state.t_cal_month = 12
                     else:
-                        st.session_state.t_cal_month -= 1
+                        st.session_state.t_cal_month = mo - 1
                     st.rerun()
             with nav2:
                 st.markdown(
-                    f"<div style='text-align:center; font-weight:700; font-size:1.1rem; padding-top:6px;'>"
-                    f"{st.session_state.t_cal_year}년 {st.session_state.t_cal_month}월 테스트 캘린더</div>",
+                    f"<div style='text-align:center; font-weight:700; font-size:0.98rem; padding-top:7px; white-space:nowrap;'>"
+                    f"{yr}.{mo:02d} 캘린더</div>",
                     unsafe_allow_html=True,
                 )
             with nav3:
-                if st.button("다음 달 ▶", key="t_cal_next", use_container_width=True):
-                    if st.session_state.t_cal_month == 12:
-                        st.session_state.t_cal_year += 1
+                if st.button("다음 ▶", key="t_cal_next", use_container_width=True):
+                    if mo == 12:
+                        st.session_state.t_cal_year = yr + 1
                         st.session_state.t_cal_month = 1
                     else:
-                        st.session_state.t_cal_month += 1
+                        st.session_state.t_cal_month = mo + 1
                     st.rerun()
 
-            yr = st.session_state.t_cal_year
-            mo = st.session_state.t_cal_month
             last_day = py_calendar.monthrange(yr, mo)[1]
             m_start = f"{yr:04d}-{mo:02d}-01"
             m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
@@ -4885,69 +4886,78 @@ else:
                 for _, r in month_df.iterrows():
                     date_map.setdefault(str(r["test_date"]), []).append(r)
 
-            st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 클릭하면 하단에서 즉시 수정·삭제할 수 있습니다)")
+            st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험")
+
+            cal_weeks = py_calendar.monthcalendar(yr, mo)
+            grid_cells_html = []
+
+            for d_lbl in ["월", "화", "수", "목", "금", "토", "일"]:
+                grid_cells_html.append(
+                    f"<div style='text-align:center; font-size:12px; font-weight:700; color:#94A3B8; padding:4px 0;'>{d_lbl}</div>"
+                )
+
+            for week in cal_weeks:
+                for day_num in week:
+                    if day_num == 0:
+                        grid_cells_html.append("<div style='min-height:46px;'></div>")
+                    else:
+                        d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
+                        items = date_map.get(d_str, [])
+                        badge_html = ""
+                        if items:
+                            sts = [str(x["status"]) for x in items]
+                            b_icon = "🔴" if "retest" in sts else ("🔵" if "scheduled" in sts else "🟢")
+                            badge_html = f"<div style='font-size:10px; line-height:1.1; margin-top:2px;'>{b_icon}{len(items)}</div>"
+
+                        is_sel = (st.session_state.t_selected_date == d_str)
+                        border_col = "#38BDF8" if is_sel else "rgba(148,163,184,0.25)"
+                        bg_col = "rgba(2,132,199,0.28)" if is_sel else "rgba(15,23,42,0.55)"
+                        text_col = "#FFFFFF" if is_sel else "#E2E8F0"
+
+                        grid_cells_html.append(
+                            f"<div style='display:flex; flex-direction:column; align-items:center; justify-content:center; "
+                            f"min-height:46px; border-radius:8px; border:1.5px solid {border_col}; "
+                            f"background-color:{bg_col}; color:{text_col}; box-sizing:border-box; padding:3px 2px;'>"
+                            f"<span style='font-size:12.5px; font-weight:{'700' if is_sel else '500'}; line-height:1.15;'>{day_num}</span>"
+                            f"{badge_html}</div>"
+                        )
 
             st.markdown(
-                """
-                <style>
-                .t-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
-                    display: grid !important;
-                    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-                    gap: 4px !important;
-                }
-                .t-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
-                    width: 100% !important;
-                    min-width: 0 !important;
-                }
-                .t-cal-grid-wrap button {
-                    padding: 4px 2px !important;
-                    min-height: 46px !important;
-                    font-size: 0.78rem !important;
-                    line-height: 1.15 !important;
-                }
-                </style>
+                f"""
+                <div style="display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; width:100%; margin:6px 0 10px 0;">
+                    {''.join(grid_cells_html)}
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="t-cal-grid-wrap">', unsafe_allow_html=True)
-            dow_cols = st.columns(7)
-            for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
-                with dow_cols[i]:
-                    st.markdown(
-                        f"<div style='text-align:center; font-size:0.8rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
-                        unsafe_allow_html=True,
-                    )
+            scheduled_dates = sorted(date_map.keys())
+            if scheduled_dates:
+                quick_options = [f"{d} ({len(date_map[d])}건)" for d in scheduled_dates]
+                curr_idx = 0
+                if st.session_state.t_selected_date in scheduled_dates:
+                    curr_idx = scheduled_dates.index(st.session_state.t_selected_date)
+                picked_quick = st.selectbox(
+                    "📌 일정 있는 날짜 바로 선택",
+                    options=range(len(scheduled_dates)),
+                    format_func=lambda idx: quick_options[idx],
+                    index=curr_idx,
+                    key="t_cal_quick_date_pick",
+                )
+                st.session_state.t_selected_date = scheduled_dates[picked_quick]
 
-            for week in py_calendar.monthcalendar(yr, mo):
-                cols = st.columns(7)
-                for d_idx, day_num in enumerate(week):
-                    with cols[d_idx]:
-                        if day_num == 0:
-                            st.markdown("<div style='height:46px;'></div>", unsafe_allow_html=True)
-                        else:
-                            d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
-                            items = date_map.get(d_str, [])
-                            badge = ""
-                            if items:
-                                sts = [str(x["status"]) for x in items]
-                                if "retest" in sts:
-                                    badge = f"\n🔴{len(items)}"
-                                elif "scheduled" in sts:
-                                    badge = f"\n🔵{len(items)}"
-                                else:
-                                    badge = f"\n🟢{len(items)}"
-                            is_sel = (st.session_state.t_selected_date == d_str)
-                            lbl = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
-                            if st.button(
-                                lbl,
-                                key=f"t_cal_btn_{yr}_{mo}_{day_num}",
-                                use_container_width=True,
-                                type="primary" if is_sel else "secondary",
-                            ):
-                                st.session_state.t_selected_date = d_str
-                                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
+            try:
+                cur_dt = datetime.strptime(st.session_state.t_selected_date, "%Y-%m-%d").date()
+            except Exception:
+                cur_dt = datetime.strptime(f"{yr:04d}-{mo:02d}-01", "%Y-%m-%d").date()
+
+            picked_dt = st.date_input(
+                "또는 수정·삭제할 날짜 직접 선택",
+                value=cur_dt,
+                key="t_cal_date_input",
+            )
+            if picked_dt:
+                st.session_state.t_selected_date = picked_dt.strftime("%Y-%m-%d")
 
             sel_d_str = st.session_state.t_selected_date
             st.markdown("---")
