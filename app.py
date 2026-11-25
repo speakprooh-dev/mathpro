@@ -3698,41 +3698,7 @@ if not st.session_state["teacher_authenticated"]:
             )
 
             if view_mode == "📅 월간 달력":
-                m_prev, m_title, m_next = st.columns([1, 2, 1])
-                with m_prev:
-                    if st.button("◀ 이전 달", key="stu_cal_prev", use_container_width=True):
-                        if st.session_state.stu_cal_month == 1:
-                            st.session_state.stu_cal_year -= 1
-                            st.session_state.stu_cal_month = 12
-                        else:
-                            st.session_state.stu_cal_month -= 1
-                        st.rerun()
-                with m_title:
-                    st.markdown(
-                        f"<div style='text-align:center; font-weight:700; font-size:1.05rem; padding-top:6px;'>"
-                        f"{st.session_state.stu_cal_year}년 {st.session_state.stu_cal_month}월</div>",
-                        unsafe_allow_html=True,
-                    )
-                with m_next:
-                    if st.button("다음 달 ▶", key="stu_cal_next", use_container_width=True):
-                        if st.session_state.stu_cal_month == 12:
-                            st.session_state.stu_cal_year += 1
-                            st.session_state.stu_cal_month = 1
-                        else:
-                            st.session_state.stu_cal_month += 1
-                        st.rerun()
-
-                yr = st.session_state.stu_cal_year
-                mo = st.session_state.stu_cal_month
-                last_day = py_calendar.monthrange(yr, mo)[1]
-                m_start = f"{yr:04d}-{mo:02d}-01"
-                m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
-
-                stu_ts_df = get_student_test_schedules(stu_target_name, m_start, m_end)
-                date_to_rows = {}
-                if not stu_ts_df.empty:
-                    for _, r in stu_ts_df.iterrows():
-                        date_to_rows.setdefault(str(r["test_date"]), []).append(r)
+                from urllib.parse import urlencode
 
                 # URL 쿼리 파라미터로 전달된 달력 날짜 선택 처리
                 picked_cal_date = st.query_params.get("cal_date", None)
@@ -3747,7 +3713,33 @@ if not st.session_state["teacher_authenticated"]:
                     except Exception:
                         pass
 
+                m_prev, m_title, m_next = st.columns([1.25, 1.5, 1.25])
+                with m_prev:
+                    if st.button("◀ 이전", key="stu_cal_prev_month", use_container_width=True):
+                        if mo == 1:
+                            st.session_state.stu_cal_year = yr - 1
+                            st.session_state.stu_cal_month = 12
+                        else:
+                            st.session_state.stu_cal_month = mo - 1
+                        st.rerun()
+                with m_title:
+                    st.markdown(
+                        f"<div style='text-align:center; font-size:0.98rem; font-weight:700; padding-top:7px; white-space:nowrap;'>{yr}.{mo:02d}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with m_next:
+                    if st.button("다음 ▶", key="stu_cal_next_month", use_container_width=True):
+                        if mo == 12:
+                            st.session_state.stu_cal_year = yr + 1
+                            st.session_state.stu_cal_month = 1
+                        else:
+                            st.session_state.stu_cal_month = mo + 1
+                        st.rerun()
+
                 st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 누르면 아래에 상세 일정이 표시됩니다)")
+
+                # 기존 student 파라미터가 있다면 함께 유지
+                current_student = st.query_params.get("student", None)
 
                 cal_weeks = py_calendar.monthcalendar(yr, mo)
                 grid_cells_html = []
@@ -3780,8 +3772,13 @@ if not st.session_state["teacher_authenticated"]:
                             bg_col = "rgba(2,132,199,0.28)" if is_sel else "rgba(15,23,42,0.55)"
                             text_col = "#FFFFFF" if is_sel else "#E2E8F0"
 
+                            params_dict = {"cal_date": d_str}
+                            if current_student:
+                                params_dict["student"] = current_student
+                            href_url = "?" + urlencode(params_dict)
+
                             cell_html = (
-                                f"<a href='?cal_date={d_str}' target='_self' style='"
+                                f"<a href='{href_url}' target='_self' style='"
                                 f"display:flex; flex-direction:column; align-items:center; justify-content:center; "
                                 f"min-height:48px; border-radius:8px; text-decoration:none; "
                                 f"border:1.5px solid {border_col}; background-color:{bg_col}; color:{text_col}; "
