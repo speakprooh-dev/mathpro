@@ -700,6 +700,20 @@ def init_db():
                     wrong_noted INTEGER DEFAULT 0
                 );
             ''')
+            c.execute('''
+                CREATE TABLE IF NOT EXISTS test_schedules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_name TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    scope TEXT DEFAULT '',
+                    test_type TEXT DEFAULT '정규 테스트',
+                    status TEXT DEFAULT 'scheduled',
+                    memo TEXT DEFAULT '',
+                    created_at TEXT DEFAULT ''
+                );
+            ''')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_test_schedules_date_student ON test_schedules (test_date, student_name)')
             try:
                 c.execute('ALTER TABLE online_test_items ADD COLUMN solution_img_path TEXT')
             except Exception:
@@ -3661,13 +3675,13 @@ if not st.session_state["teacher_authenticated"]:
                             st.balloons()
                             st.rerun()
 
-    with tab5:
+        with tab5:
             st.subheader("🗓️ 나의 테스트 일정 달력")
             st.caption("월간 달력에서 날짜를 선택하거나 주간 보기로 이번 주 테스트 일정을 확인하세요.")
 
             import calendar as py_calendar
 
-            stu_target_name = selected_student if "selected_student" in locals() else student_name
+            stu_target_name = selected_student if "selected_student" in locals() else ""
             today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
             if "stu_cal_year" not in st.session_state:
                 st.session_state.stu_cal_year = today_kst.year
@@ -3825,53 +3839,53 @@ if not st.session_state["teacher_authenticated"]:
                             st.caption(f"구분: {item['test_type']}" + (f" | 범위: {item['scope']}" if item["scope"] else ""))
                             if item["memo"]:
                                 st.caption(f"안내: {item['memo']}")
-    
-    
-    # ====================================================
-    # 2. [선생님 전용 관리 모드]
-    # ====================================================
-    else:
-        with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
-            col_s2, col_s3 = st.columns(2)
-            with col_s2:
-                with st.form("add_student_inline_form"):
-                    new_s_name = st.text_input("새 학생 이름")
-                    if st.form_submit_button("➕ 학생 등록", type="primary"):
-                        if new_s_name.strip() and add_student(new_s_name.strip()):
-                            st.success("등록 완료!")
-                            st.rerun()
-            with col_s3:
-                if student_list:
-                    del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
-                    if st.button("🗑️ 선택 학생 삭제"):
-                        delete_student(del_target_student)
-                        st.success("삭제되었습니다!")
+
+
+# ====================================================
+# 2. [선생님 전용 관리 모드]
+# ====================================================
+else:
+    with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
+        col_s2, col_s3 = st.columns(2)
+        with col_s2:
+            with st.form("add_student_inline_form"):
+                new_s_name = st.text_input("새 학생 이름")
+                if st.form_submit_button("➕ 학생 등록", type="primary"):
+                    if new_s_name.strip() and add_student(new_s_name.strip()):
+                        st.success("등록 완료!")
                         st.rerun()
-    
+        with col_s3:
             if student_list:
-                st.divider()
-                base_url = get_base_url()
-                for s in student_list:
-                    personal_link = f"{base_url}/?student={s}"
-                    with st.container(border=True):
-                        st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
-                        st.code(personal_link, language="text")
-    
-        st.divider()
-        st.markdown("### ⚙️ 통합 관리 대시보드")
-    
-        t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests, t_cfg_schedule = st.tabs([
-            "👤 1. [개별] 학생 진도 관리", 
-            "📢 2. 공지사항 관리",
-            "📅 3. 개별 과제 관리", 
-            "📚 4. 커리큘럼 진도 배정", 
-            "🔍 5. 오답노트 모아보기",
-            "📊 6. 전체 숙제 매트릭스",
-            "🎥 7. 해설 링크 관리",
-            "📈 8. 실시간 학습 참여 현황",
-            "📋 9. 학생 제출물 및 풀이 검사",
-            "🗓️ 10. 테스트 일정 관리"
-        ])
+                del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
+                if st.button("🗑️ 선택 학생 삭제"):
+                    delete_student(del_target_student)
+                    st.success("삭제되었습니다!")
+                    st.rerun()
+
+        if student_list:
+            st.divider()
+            base_url = get_base_url()
+            for s in student_list:
+                personal_link = f"{base_url}/?student={s}"
+                with st.container(border=True):
+                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                    st.code(personal_link, language="text")
+
+    st.divider()
+    st.markdown("### ⚙️ 통합 관리 대시보드")
+
+    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests, t_cfg_schedule = st.tabs([
+        "👤 1. [개별] 학생 진도 관리", 
+        "📢 2. 공지사항 관리",
+        "📅 3. 개별 과제 관리", 
+        "📚 4. 커리큘럼 진도 배정", 
+        "🔍 5. 오답노트 모아보기",
+        "📊 6. 전체 숙제 매트릭스",
+        "🎥 7. 해설 링크 관리",
+        "📈 8. 실시간 학습 참여 현황",
+        "📋 9. 학생 제출물 및 풀이 검사",
+        "🗓️ 10. 테스트 일정 관리"
+    ])
 
     with t_cfg_student:
         st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
@@ -4465,698 +4479,564 @@ if not st.session_state["teacher_authenticated"]:
                                         key=chk_key,
                                         on_change=on_mat_hw_change
                                     )
-                                    st.markdown("<hr style='margin: 4px 0; border: none; border-top: 1px solid rgba(128,128,128,0.15);'>", unsafe_allow_html=True)
 
-                            with st.popover("✏️ 이 날짜 숙제 수정 / 편집"):
-                                with st.form(f"matrix_bulk_edit_form_{s_idx_main}_{sel_date}"):
-                                    edited_bulk_hw_text = st.text_area("숙제 내용 편집", value=initial_mat_text, height=120)
+                            with st.form(f"matrix_edit_form_{s_idx_main}_{sel_date}"):
+                                edited_mat_text = st.text_area("이 학생의 숙제 일괄 편집", value=initial_mat_text, height=110)
+                                col_m1, col_m2 = st.columns(2)
+                                with col_m1:
                                     if st.form_submit_button("💾 수정 저장", type="primary"):
-                                        update_student_homework_by_date(s_name, sel_date, edited_bulk_hw_text.strip())
-                                        st.success("수정 완료!")
+                                        update_student_homework_by_date(s_name, sel_date, edited_mat_text.strip())
+                                        st.success("수정되었습니다!")
+                                        st.rerun()
+                                with col_m2:
+                                    if st.form_submit_button("🗑️ 이 날 숙제 전체 삭제"):
+                                        delete_student_homework_date(s_name, sel_date)
+                                        st.success("삭제되었습니다!")
                                         st.rerun()
                 else:
-                    st.info("해당 날짜에 배정된 숙제가 없습니다.")
+                    st.info("선택하신 날짜에 배정된 숙제가 있는 학생이 없습니다.")
 
             render_homework_matrix_section(selected_matrix_date, student_list)
 
     with t_cfg_links:
-        st.markdown("#### 🎥 문제별 풀이해설 링크 통합 관리")
-        col_link_tab1, col_link_tab2 = st.tabs(["➕ 개별 및 일괄 링크 등록", "📋 단원별 드롭다운 및 검색 관리"])
-        
-        with col_link_tab1:
-            with st.form("add_problem_link_form"):
-                col_pl1, col_pl2 = st.columns([1, 2])
-                with col_pl1: f_code_in = st.text_input("문제 번호 (예: B1353015)")
-                with col_pl2: v_url_in = st.text_input("네이버 카페 URL")
-                if st.form_submit_button("➕ 개별 등록", type="primary"):
-                    if f_code_in.strip() and v_url_in.strip():
-                        if save_problem_link(f_code_in.strip(), v_url_in.strip()):
-                            st.toast("🎥 해설 링크가 안전하게 등록되었습니다!", icon="✅")
-                            st.success("저장되었습니다!")
-                            st.rerun()
-                        else:
-                            st.error("등록 실패: 문제 번호가 4자리 이상인지 확인해 주세요.")
-                    else:
-                        st.warning("모두 입력해 주세요.")
-            
-            with st.form("bulk_problem_link_form"):
-                bulk_txt = st.text_area("일괄 등록 (줄바꿈 입력)", placeholder="B1353015 https://cafe.naver.com/.../123")
-                if st.form_submit_button("📥 일괄 등록 실행", type="primary"):
-                    if bulk_txt.strip():
-                        s_cnt, f_cnt = bulk_save_problem_links(bulk_txt)
-                        st.toast(f"🎥 성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)", icon="✅")
-                        st.success(f"성공 {s_cnt}개 등록됨! (실패: {f_cnt}개)")
+        st.markdown("#### 🎥 문제별 풀이 영상 링크 등록 및 관리")
+        with st.form("single_prob_link_form"):
+            col_l1, col_l2 = st.columns([1.5, 2.5])
+            with col_l1: p_code_input = st.text_input("문제 코드", placeholder="B1353015")
+            with col_l2: p_url_input = st.text_input("영상 URL", placeholder="https://cafe.naver.com/...")
+            if st.form_submit_button("🔗 단일 등록", type="primary"):
+                if p_code_input.strip() and p_url_input.strip():
+                    if save_problem_link(p_code_input, p_url_input):
+                        st.success("등록되었습니다!")
                         st.rerun()
+        with st.form("bulk_prob_link_form"):
+            bulk_links_txt = st.text_area("일괄 등록 (코드 링크 줄바꿈 입력)", height=150)
+            if st.form_submit_button("🚀 일괄 등록", type="primary"):
+                if bulk_links_txt.strip():
+                    s_cnt, f_cnt = bulk_save_problem_links(bulk_links_txt)
+                    st.success(f"완료: {s_cnt}건")
+                    st.rerun()
 
-        with col_link_tab2:
-            st.markdown("##### 📂 단원별 드롭다운 선택 또는 직접 검색")
-            unit_summaries = get_unit_code_summary_list()
-            dropdown_options = ["-- 단원을 선택하세요 (등록된 링크 개수 표시) --"] + [f"{u_code} (총 {cnt}개 해설 링크)" for u_code, cnt in unit_summaries]
-            unit_count_map = {f"{u_code} (총 {cnt}개 해설 링크)": u_code for u_code, cnt in unit_summaries}
+        st.divider()
+        st.markdown("#### 📊 등록된 단원코드별 문항 현황 요약")
+        
+        unit_summary_rows = get_unit_code_summary_list()
+        if unit_summary_rows:
+            total_links_count = sum(r[1] for r in unit_summary_rows)
+            st.markdown(f"**📌 현재까지 총 `{len(unit_summary_rows)}개` 단원코드, `{total_links_count}개` 문항의 해설 링크가 등록되어 있습니다.**")
             
-            col_dd, col_sc = st.columns(2)
-            with col_dd:
-                selected_dropdown_item = st.selectbox("📌 단원별 드롭다운 셀렉트", dropdown_options)
-            with col_sc:
-                search_link_input = st.text_input("🔍 직접 검색 (단원코드 또는 문제번호)", placeholder="예: B1353").strip()
-            
-            target_filter = search_link_input if search_link_input else (unit_count_map.get(selected_dropdown_item, "") if selected_dropdown_item != "-- 단원을 선택하세요 (등록된 링크 개수 표시) --" else "")
+            with st.container(border=True):
+                badges_html = ""
+                for u_code, cnt in unit_summary_rows:
+                    badges_html += (
+                        f'<span style="display:inline-block; background-color:var(--secondary-background-color); '
+                        f'border:1px solid rgba(128,128,128,0.4); border-radius:6px; padding:4px 10px; '
+                        f'margin:4px; font-size:13px; font-family:monospace;">'
+                        f'<b>{u_code}</b> : <span style="color:#0284C7; font-weight:bold;">{cnt}문항</span>'
+                        f'</span>'
+                    )
+                st.markdown(badges_html, unsafe_allow_html=True)
+        else:
+            st.info("아직 등록된 해설 링크가 없습니다.")
 
-            if target_filter:
-                searched_links, search_cnt = get_all_problem_links_searched(target_filter)
-                st.markdown(f"**📂 검색/선택 결과: 총 {search_cnt}개**")
-                
-                if searched_links:
-                    st.markdown("💡 *삭제할 링크들을 체크하신 후 하단의 **'선택한 해설 링크 일괄 삭제하기'** 버튼을 누르세요!*")
-                    
-                    if "select_all_links_flag" not in st.session_state:
-                        st.session_state["select_all_links_flag"] = False
-
-                    col_btn1, col_btn2 = st.columns([1, 1])
-                    with col_btn1:
-                        if st.button("☑️ 전체 선택 / 해제 반전", use_container_width=True):
-                            st.session_state["select_all_links_flag"] = not st.session_state["select_all_links_flag"]
-                            for l_id, _, _, _ in searched_links:
-                                st.session_state[f"chk_link_del_{l_id}"] = st.session_state["select_all_links_flag"]
-                            st.rerun()
-                    
-                    st.markdown("---")
-
-                    links_to_delete = []
-                    for l_id, f_code, v_url, u_code in searched_links:
-                        chk_key = f"chk_link_del_{l_id}"
-                        if chk_key not in st.session_state:
-                            st.session_state[chk_key] = st.session_state["select_all_links_flag"]
-                        
-                        is_checked = st.checkbox(f"📌 [{f_code}] ({v_url})", key=chk_key)
-                        if is_checked:
-                            links_to_delete.append(l_id)
-                    
-                    st.markdown("---")
-                    if st.button("🗑️ 선택한 해설 링크 일괄 삭제하기", type="primary", use_container_width=True):
-                        if links_to_delete:
-                            conn, _ = get_db_connection()
-                            c = conn.cursor()
-                            for l_id in links_to_delete:
-                                q(c, "DELETE FROM problem_links WHERE id = ?", (l_id,))
-                            conn.commit()
-                            st.cache_data.clear()
-                            
-                            st.session_state["select_all_links_flag"] = False
-                            for l_id in links_to_delete:
-                                session_key = f"chk_link_del_{l_id}"
-                                if session_key in st.session_state:
-                                    del st.session_state[session_key]
-                                    
-                            st.success(f"🎉 총 {len(links_to_delete)}개의 해설 링크가 삭제되었습니다!")
-                            st.rerun()
-                        else:
-                            st.warning("삭제할 링크를 체크박스에서 선택해 주세요.")
-                else:
-                    st.info("해당 조건에 일치하는 해설 링크가 없습니다.")
+        st.divider()
+        st.markdown("#### 🔍 특정 단원코드 / 문제번호 상세 검색 및 수정·삭제")
+        search_link_filter = st.text_input("검색어 입력 (단원코드 또는 문제번호)", placeholder="예: B1353 또는 B1353015", key="search_link_filter_box").strip().upper()
+        
+        if search_link_filter:
+            searched_links, total_searched = get_all_problem_links_searched(search_link_filter)
+            if searched_links:
+                st.markdown(f"**🔎 검색 결과: `{search_link_filter}` 일치 항목 {total_searched}건**")
+                for link_id, f_code, v_url, u_code in searched_links:
+                    with st.container(border=True):
+                        col_lk1, col_lk2, col_lk3 = st.columns([2, 4, 1])
+                        with col_lk1:
+                            st.markdown(f"**`{f_code}`**")
+                        with col_lk2:
+                            st.markdown(f"<a href='{v_url}' target='_blank' style='font-size:13px; color:#0284C7; text-decoration:none;'>🔗 {v_url}</a>", unsafe_allow_html=True)
+                        with col_lk3:
+                            if st.button("🗑️ 삭제", key=f"del_plink_{link_id}"):
+                                delete_problem_link(link_id)
+                                st.success("삭제되었습니다!")
+                                st.rerun()
             else:
-                st.info("💡 단원을 선택하시거나 검색어를 입력해 주세요.")
+                st.warning(f"'{search_link_filter}'에 해당하는 등록된 링크가 없습니다.")
+        else:
+            st.caption("💡 전체 링크 목록을 한 번에 띄우지 않아 로딩 속도가 매우 빠릅니다. 확인이나 삭제가 필요한 단원코드만 입력해 주세요!")
 
     with t_cfg_stats:
-        st.markdown("#### 📈 실시간 학습 참여 현황")
+        st.markdown("#### 📈 실시간 학습 참여 및 방문 통계")
+        
+        col_st_title, col_st_btn = st.columns([3.5, 1.5])
+        with col_st_title:
+            st.caption("학생들의 접속 로그 및 일일 과제·루틴 성취도를 한눈에 모니터링합니다.")
+        with col_st_btn:
+            if st.button("🔄 통계 새로고침", key="btn_refresh_stats", use_container_width=True):
+                st.cache_data.clear()
+                st.toast("최신 통계를 반영했습니다!", icon="📊")
+                st.rerun()
+
         today_active_cnt, total_visits, s_summary, daily_logs = get_visitor_stats()
-        col_st1, col_st2 = st.columns(2)
-        with col_st1: st.metric(label="📌 오늘 접속 학생 현황", value=f"{today_active_cnt}명")
-        with col_st2: st.metric(label="📈 누적 방문 횟수", value=f"{total_visits}회")
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("👤 전체 등록 학생 수", f"{len(student_list)}명")
+        with col_m2:
+            st.metric("🔥 오늘 학습실 방문 학생", f"{today_active_cnt}명")
+        with col_m3:
+            st.metric("📊 누적 총 방문 횟수", f"{total_visits}회")
+
         st.markdown("---")
-        if s_summary:
-            for s_name, last_time, v_count in s_summary:
+        
+        if student_list:
+            st.markdown("##### 🎯 학생별 최근 접속 및 주간 루틴 달성률 요약")
+            visit_map = {r[0]: (r[1], r[2]) for r in s_summary}
+            
+            for s_name in student_list:
+                last_time, v_count = visit_map.get(s_name, ("방문 기록 없음", 0))
+                r_rate, _, _ = get_routine_completion_rate(s_name, days_limit=7)
+                streak_days = get_student_routine_streak(s_name)
+                
                 with st.container(border=True):
-                    st.markdown(f"👤 **{s_name}** | 🕒 최근: {last_time} | **총 {v_count}회**")
+                    c1, c2, c3, c4 = st.columns([1.8, 2.5, 1.5, 1.5])
+                    with c1:
+                        st.markdown(f"**👤 {s_name}**")
+                    with c2:
+                        st.caption(f"최근 방문: `{last_time}` (총 {v_count}회)")
+                    with c3:
+                        st.markdown(f"루틴(7일): <b style='color:#F59E0B;'>{r_rate}%</b>", unsafe_allow_html=True)
+                    with c4:
+                        st.markdown(f"🔥 연속: <b>{streak_days}일</b>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        if daily_logs:
+            st.markdown("##### 📅 최근 7일 일자별 방문 통계")
+            df_daily = pd.DataFrame(daily_logs, columns=["날짜", "방문 학생 수 (명)", "총 페이지 조회수 (회)"])
+            st.dataframe(df_daily, use_container_width=True, hide_index=True)
+        else:
+            st.info("아직 기록된 일자별 방문 로그가 없습니다.")
 
     with t_cfg_tests:
-        st.markdown("#### 🛒 클라우드 동기화 대기 장바구니")
-        cart_list = st.session_state.get("pending_sync_cart", [])
+        st.markdown("#### 📋 학생 온라인 테스트 제출 현황 및 답안 검사")
         
-        if cart_list:
-            st.info(f"현재 클라우드 전송 대기 중인 테스트가 **{len(cart_list)}개** 있습니다.")
-            with st.expander("📦 대기 중인 테스트 목록 보기", expanded=False):
-                for c_idx, (c_stu, c_title, c_pids) in enumerate(cart_list):
-                    st.markdown(f"{c_idx+1}. 학생: **{c_stu}** | 테스트명: **{c_title}** (문항 수: {len(c_pids)}개)")
-            
-            col_sync1, col_sync2 = st.columns(2)
-            with col_sync1:
-                if st.button("🚀 장바구니 항목 클라우드에 일괄 동기화하기", type="primary", use_container_width=True):
-                    with st.spinner("클라우드로 일괄 전송 중..."):
-                        st.session_state["pending_sync_cart"] = []
-                        st.success("🎉 모든 테스트가 클라우드에 성공적으로 동기화되었습니다!")
-                        st.rerun()
-            with col_sync2:
-                if st.button("🗑️ 장바구니 비우기", use_container_width=True):
-                    st.session_state["pending_sync_cart"] = []
-                    st.success("장바구니가 비워졌습니다.")
-                    st.rerun()
-        else:
-            st.caption("💡 현재 동기화 대기 중인 항목이 없습니다. (과제 생성 시 자동으로 장바구니에 쌓입니다.)")
-
-        st.divider()
-        
-        conn_sub, _ = get_db_connection()
-        c_sub = conn_sub.cursor()
-        is_postgres_sub = "psycopg2" in str(type(conn_sub))
-
-        st.markdown("#### 🗑️ 출제된 온라인 테스트 목록 관리 (일괄 삭제)")
-        st.caption("아래 박스를 터치해 목록을 펼치고, 삭제할 테스트를 체크한 뒤 맨 아래 버튼을 누르세요.")
-
-        all_sessions_rows = get_cached_all_sessions()
-
-        if all_sessions_rows:
-            filter_sess_stu = st.selectbox(
-                "목록 관리할 학생 선택", 
-                ["전체 학생 보기"] + student_list, 
-                key="filter_sess_manage_stu"
-            )
-            student_filtered_sessions = all_sessions_rows if filter_sess_stu == "전체 학생 보기" else [r for r in all_sessions_rows if r[1] == filter_sess_stu]
-
-            sess_view_mode = st.radio(
-                "목록 보기 방식",
-                ["최근 날짜순(전체)", "주간별 보기", "날짜별 보기"],
-                horizontal=True,
-                key="sess_manage_view_mode"
-            )
-
-            enriched_sessions = []
-            for sess_id, s_name, t_title, created_at, is_comp in student_filtered_sessions:
-                p_date = extract_test_date(t_title, created_at)
-                enriched_sessions.append((sess_id, s_name, t_title, created_at, is_comp, p_date))
-
-            enriched_sessions.sort(
-                key=lambda x: (x[5] is not None, x[5] or date.min, x[0]),
-                reverse=True
-            )
-
-            filtered_sessions = []
-            if sess_view_mode == "최근 날짜순(전체)":
-                filtered_sessions = enriched_sessions
-            elif sess_view_mode == "주간별 보기":
-                today_k = get_korean_today()
-                this_week_mon = today_k - timedelta(days=today_k.weekday())
-                last_week_mon = this_week_mon - timedelta(days=7)
-
-                week_choice = st.selectbox(
-                    "주간 선택",
-                    [
-                        f"이번 주 ({this_week_mon.strftime('%m/%d')} ~ {(this_week_mon + timedelta(days=6)).strftime('%m/%d')})",
-                        f"지난 주 ({last_week_mon.strftime('%m/%d')} ~ {(last_week_mon + timedelta(days=6)).strftime('%m/%d')})",
-                        "그 이전 주 전체",
-                    ],
-                    key="sess_manage_week_sel"
-                )
-
-                if week_choice.startswith("이번 주"):
-                    filtered_sessions = [x for x in enriched_sessions if x[5] and this_week_mon <= x[5] < this_week_mon + timedelta(days=7)]
-                elif week_choice.startswith("지난 주"):
-                    filtered_sessions = [x for x in enriched_sessions if x[5] and last_week_mon <= x[5] < this_week_mon]
-                else:
-                    filtered_sessions = [x for x in enriched_sessions if not x[5] or x[5] < last_week_mon]
-            else:
-                available_sess_dates = sorted({x[5].strftime("%Y-%m-%d") for x in enriched_sessions if x[5]}, reverse=True)
-                if available_sess_dates:
-                    picked_sess_date = st.selectbox("날짜 선택 (최근 날짜순)", available_sess_dates, key="sess_manage_date_sel")
-                    filtered_sessions = [x for x in enriched_sessions if x[5] and x[5].strftime("%Y-%m-%d") == picked_sess_date]
-                else:
-                    st.info("날짜 정보가 있는 테스트가 없습니다.")
-                    filtered_sessions = []
-
-            unsubmitted_cnt = sum(1 for x in filtered_sessions if x[4] != 1)
-            completed_cnt = sum(1 for x in filtered_sessions if x[4] == 1)
-
-            if filtered_sessions:
-                with st.expander(
-                    f"📋 등록된 테스트 목록 ({len(filtered_sessions)}개 · 🆕 미제출 {unsubmitted_cnt} / ✅ 완료 {completed_cnt}) — 터치하여 펼치기",
-                    expanded=False
-                ):
-                    with st.form("batch_delete_sessions_form"):
-                        sessions_to_bulk_delete = []
-                        prev_group_label = None
-
-                        for sess_id, s_name, t_title, created_at, is_comp, p_date in filtered_sessions:
-                            group_label = (
-                                f"{p_date.strftime('%y%m%d')} ({get_weekday_short_kr(str(p_date))})"
-                                if p_date
-                                else (created_at[:10] if created_at else "날짜 미상")
-                            )
-                            if group_label != prev_group_label:
-                                if prev_group_label is not None:
-                                    st.markdown(
-                                        "<hr style='margin: 8px 0 6px 0; border: none; border-top: 1px solid rgba(148,163,184,0.22);'>",
-                                        unsafe_allow_html=True
-                                    )
-                                day_items = [
-                                    x for x in filtered_sessions
-                                    if (
-                                        (f"{x[5].strftime('%y%m%d')} ({get_weekday_short_kr(str(x[5]))})"
-                                         if x[5] else (x[3][:10] if x[3] else "날짜 미상"))
-                                        == group_label
-                                    )
-                                ]
-                                st.markdown(
-                                    f"<div style='font-size:12px; font-weight:700; color:#38BDF8; margin: 2px 0 4px 2px;'>"
-                                    f"📅 {group_label} · {len(day_items)}건</div>",
-                                    unsafe_allow_html=True
-                                )
-                                prev_group_label = group_label
-
-                            clean_title = re.sub(
-                                r"\s*\[?\d{6}\([월화수목금토일]\)\]?\s*",
-                                " ",
-                                str(t_title or "")
-                            ).strip()
-                            date_tag = (
-                                f"[{p_date.strftime('%y%m%d')}({get_weekday_short_kr(str(p_date))})] "
-                                if p_date else ""
-                            )
-                            status_txt = "제출완료" if is_comp == 1 else "미제출"
-                            status_icon = "✅" if is_comp == 1 else "🆕"
-
-                            label_str = f"[{s_name}] {date_tag}{clean_title}  —  {status_icon} {status_txt}"
-
-                            is_checked = st.checkbox(label_str, key=f"form_chk_sess_del_{sess_id}")
-                            if is_checked:
-                                sessions_to_bulk_delete.append((sess_id, s_name, t_title))
-
-                        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-                        submit_bulk_del = st.form_submit_button(
-                            "🗑️ 선택한 테스트들 한 번에 영구 삭제하기",
-                            type="primary",
-                            use_container_width=True
-                        )
-
-                    if submit_bulk_del:
-                        if not sessions_to_bulk_delete:
-                            st.warning("⚠️ 삭제할 테스트를 하나 이상 먼저 체크해 주세요.")
-                        else:
-                            for del_id, del_stu, del_title in sessions_to_bulk_delete:
-                                if is_postgres_sub:
-                                    c_sub.execute("DELETE FROM online_test_items WHERE session_id = %s", (del_id,))
-                                    c_sub.execute("DELETE FROM online_test_sessions WHERE id = %s", (del_id,))
-                                    c_sub.execute("DELETE FROM student_test_submissions WHERE student_name = %s AND test_title = %s", (del_stu, del_title))
-                                else:
-                                    q(c_sub, "DELETE FROM online_test_items WHERE session_id = ?", (del_id,))
-                                    q(c_sub, "DELETE FROM online_test_sessions WHERE id = ?", (del_id,))
-                                    q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (del_stu, del_title))
-                            conn_sub.commit()
-                            st.cache_data.clear()
-                            st.success(f"🎉 총 {len(sessions_to_bulk_delete)}개의 테스트가 한 번에 영구 삭제되었습니다!")
-                            st.rerun()
-            else:
-                st.info("선택한 조건에 해당하는 테스트가 없습니다.")
-        else:
-            st.info("등록된 온라인 테스트가 없습니다.")
-
-        st.divider()
-
-        st.markdown("#### 📋 학생 온라인 테스트 제출물 및 풀이 검사")
-        
-        submission_summaries = get_cached_test_submission_summaries()
-        
-        if submission_summaries:
-            filter_stu = st.selectbox("검사할 학생 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
-            
-            filtered_summaries = [
-                row for row in submission_summaries
-                if filter_stu == "전체 학생 보기" or row[0] == filter_stu
-            ]
-            
-            if not filtered_summaries:
-                st.info("해당 학생의 제출 내역이 없습니다.")
-            else:
-                for idx_sum, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(filtered_summaries):
-                    correct_cnt = int(correct_cnt or 0)
-                    total_cnt = int(total_cnt or 0)
-                    expander_title = f"👤 [{s_name}] {t_title} — 정답: {correct_cnt} / {total_cnt}문항 (제출: {sub_at})"
-
-                    with st.expander(expander_title, expanded=False):
-                        if is_postgres_sub:
-                            c_sub.execute(
-                                "SELECT id, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
-                                (s_name, t_title)
-                            )
-                        else:
-                            q(
-                                c_sub,
-                                "SELECT id, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
-                                (s_name, t_title)
-                            )
-                        items = c_sub.fetchall()
-
-                        item_meta_map = {}
-                        try:
-                            if is_postgres_sub:
-                                c_sub.execute(
-                                    """
-                                    SELECT i.problem_order, i.unit_code, i.prob_num, i.answer, i.img_base64, i.solution_img_path, s.id
-                                    FROM online_test_items i
-                                    JOIN online_test_sessions s ON i.session_id = s.id
-                                    WHERE s.student_name = %s AND s.test_title = %s
-                                    ORDER BY i.problem_order ASC
-                                    """,
-                                    (s_name, t_title)
-                                )
-                            else:
-                                q(
-                                    c_sub,
-                                    """
-                                    SELECT i.problem_order, i.unit_code, i.prob_num, i.answer, i.img_base64, i.solution_img_path, s.id
-                                    FROM online_test_items i
-                                    JOIN online_test_sessions s ON i.session_id = s.id
-                                    WHERE s.student_name = ? AND s.test_title = ?
-                                    ORDER BY i.problem_order ASC
-                                    """,
-                                    (s_name, t_title)
-                                )
-                            matched_sess_id = None
-                            for p_order, u_code, p_num, real_ans, img_b64, sol_path, s_id_val in c_sub.fetchall():
-                                matched_sess_id = s_id_val
-                                f_code_key = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
-                                dec_img = None
-                                if img_b64:
-                                    try:
-                                        dec_img = base64.b64decode(img_b64)
-                                    except Exception:
-                                        pass
-                                item_meta_map[f_code_key] = {
-                                    "order": p_order,
-                                    "answer": str(real_ans).strip() if real_ans else "",
-                                    "img_bytes": dec_img,
-                                    "filename": str(sol_path) if sol_path else "",
-                                    "session_id": s_id_val
-                                }
-                        except Exception:
-                            matched_sess_id = None
-
-                        if matched_sess_id is not None and item_meta_map:
-                            summary_prob_list = [
-                                {"full_code": k, "order": v["order"]}
-                                for k, v in sorted(item_meta_map.items(), key=lambda kv: kv[1]["order"])
-                            ]
-                            summary_res_list = [
-                                {"full_code": str(r[1]).strip().upper(), "is_correct": int(r[3] or 0)}
-                                for r in items
-                            ]
-                            render_teacher_process_summary(summary_prob_list, summary_res_list, matched_sess_id, s_name)
-
-                        for idx_item, (sub_id, p_id, s_ans, is_chk, img_path, sub_time) in enumerate(items, start=1):
-                            p_code_upper = str(p_id).strip().upper()
-                            meta_info = item_meta_map.get(p_code_upper, {})
-                            p_order_num = meta_info.get("order", idx_item)
-                            real_ans_val = meta_info.get("answer", "")
-                            img_bytes_val = meta_info.get("img_bytes", None)
-                            fn_str_val = meta_info.get("filename", "")
-
-                            is_mc_teacher = detect_multiple_choice(real_ans_val, fn_str_val)
-                            type_tag = "객관식" if is_mc_teacher else "주관식/서술형"
-                            ox_badge = "⭕ 정답" if is_chk == 1 else "❌ 오답"
-                            ox_color = "#10B981" if is_chk == 1 else "#EF4444"
-
-                            f_code_clean = p_code_upper
-                            u_part = f_code_clean[:4] if len(f_code_clean) > 4 else "A114"
-                            num_part = f_code_clean[4:] if len(f_code_clean) > 4 else f_code_clean
-                            n_digits = "".join(filter(str.isdigit, num_part))
-                            project_id = "qfpclacalaaxbhhheosw"
-                            target_filename = f"{u_part}_ans_({n_digits}).png"
-                            ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
-
-                            if real_ans_val and real_ans_val != "-":
-                                clean_real_ans = real_ans_val.replace("@", "").strip()
-                                real_ans_html = f"<b style='color:#10B981;'>{clean_real_ans}</b>"
-                            else:
-                                real_ans_html = f"<img src='{ans_img_url}' style='height:32px; width:auto; background:white; padding:2px 6px; border-radius:4px; vertical-align:middle; border:1px solid #ccc;' />"
-
-                            with st.container(border=True):
-                                st.markdown(
-                                    f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;'>"
-                                    f"<div><b>{p_order_num}번 문제</b> (`{p_code_upper}`) <span style='color:#38BDF8; font-size:12px;'>[{type_tag}]</span></div>"
-                                    f"<div style='color:{ox_color}; font-weight:bold;'>{ox_badge}</div>"
-                                    f"</div>",
-                                    unsafe_allow_html=True
-                                )
-
-                                if img_bytes_val:
-                                    st.image(img_bytes_val, width=480)
-                                else:
-                                    st.caption("💡 등록된 문제 이미지가 없습니다.")
-
-                                st.markdown(
-                                    f"<div style='font-size:13.5px; margin:6px 0;'>"
-                                    f"📌 <b>정답:</b> {real_ans_html} &nbsp;|&nbsp; "
-                                    f"✍️ <b>학생 제출 답안:</b> <b style='color:{ox_color};'>{s_ans if s_ans else '미입력'}</b>"
-                                    f"</div>",
-                                    unsafe_allow_html=True
-                                )
-
-                                col_t_ox, col_t_img = st.columns([2, 3])
-                                with col_t_ox:
-                                    new_chk_val = st.checkbox(
-                                        "⭕ 선생님 최종 정답 인정",
-                                        value=bool(is_chk),
-                                        key=f"teacher_chk_{sub_id}"
-                                    )
-                                    if int(new_chk_val) != int(is_chk or 0):
-                                        if is_postgres_sub:
-                                            c_sub.execute(
-                                                "UPDATE student_test_submissions SET is_checked = %s WHERE id = %s",
-                                                (int(new_chk_val), sub_id)
-                                            )
-                                        else:
-                                            q(
-                                                c_sub,
-                                                "UPDATE student_test_submissions SET is_checked = ? WHERE id = ?",
-                                                (int(new_chk_val), sub_id)
-                                            )
-                                        conn_sub.commit()
-                                        st.cache_data.clear()
-                                        st.rerun()
-
-                                with col_t_img:
-                                    if img_path and os.path.exists(img_path):
-                                        with st.expander("📸 학생 풀이 사진 확인", expanded=False):
-                                            st.image(img_path, use_container_width=True)
-        else:
-            st.info("아직 제출된 온라인 테스트 내역이 없습니다.")
-
-    with t_cfg_schedule:
-        st.markdown("#### 🗓️ 주간·요일별 테스트 일정 관리")
-        st.caption("주간 단위로 대상 학생과 요일을 선택해 테스트 일정을 한 번에 등록·관리합니다.")
-
-        if "ts_week_offset" not in st.session_state:
-            st.session_state.ts_week_offset = 0
-
-        nav1, nav2, nav3 = st.columns([1, 2, 1])
-        with nav1:
-            if st.button("◀ 이전 주", key="ts_prev_week", use_container_width=True):
-                st.session_state.ts_week_offset -= 1
-                st.rerun()
-        with nav2:
-            if st.button("이번 주로 이동", key="ts_this_week", use_container_width=True):
-                st.session_state.ts_week_offset = 0
-                st.rerun()
-        with nav3:
-            if st.button("다음 주 ▶", key="ts_next_week", use_container_width=True):
-                st.session_state.ts_week_offset += 1
+        col_ts_title, col_ts_btn = st.columns([3.5, 1.5])
+        with col_ts_title:
+            st.caption("학생들이 온라인으로 제출한 테스트 결과 및 정오답 여부를 확인·관리합니다.")
+        with col_ts_btn:
+            if st.button("🔄 제출 현황 새로고침", key="btn_refresh_tests", use_container_width=True):
+                st.cache_data.clear()
+                st.toast("제출 현황을 업데이트했습니다!", icon="✅")
                 st.rerun()
 
-        today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
-        base_monday = today_kst - timedelta(days=today_kst.weekday()) + timedelta(weeks=st.session_state.ts_week_offset)
-        week_dates = [base_monday + timedelta(days=i) for i in range(7)]
-        week_date_strs = [d.strftime("%Y-%m-%d") for d in week_dates]
-        prev_monday = base_monday - timedelta(days=7)
-        prev_week_strs = [(prev_monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+        sub_summaries = get_cached_test_submission_summaries()
+        all_sessions = get_cached_all_sessions()
 
-        st.info(f"📅 선택 주간: **{_ts_week_range_str(base_monday)}**")
-
-        student_names_list = list(student_list) if "student_list" in globals() and student_list else []
-
-        with st.container(border=True):
-            st.markdown("##### ➕ 주간·요일별 테스트 일괄 등록")
-            assign_all = st.checkbox("전체 학생 공통 일정으로 등록 (ALL)", value=False, key="ts_assign_all")
-
-            if assign_all:
-                selected_targets = ["ALL"]
-                st.caption("전체 학생(`ALL`)에게 해당 요일 테스트 일정이 표시됩니다.")
-            else:
-                selected_targets = st.multiselect(
-                    "대상 학생 선택 (복수 선택 가능)",
-                    options=student_names_list,
-                    default=student_names_list[:1] if student_names_list else [],
-                    key="ts_target_students",
-                )
-
-            st.markdown("**등록할 요일 선택 (해당 주의 날짜로 자동 매핑)**")
-            day_cols = st.columns(7)
-            selected_day_indices = []
-            for idx, d_obj in enumerate(week_dates):
-                with day_cols[idx]:
-                    chk = st.checkbox(
-                        f"{_ts_weekday_short_kr(d_obj)}\n({d_obj.strftime('%m/%d')})",
-                        value=(idx in [0, 2, 4]),
-                        key=f"ts_day_chk_{st.session_state.ts_week_offset}_{idx}",
-                    )
-                    if chk:
-                        selected_day_indices.append(idx)
-
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                ts_title = st.text_input(
-                    "테스트명 *",
-                    placeholder="예: 수1 삼각함수 주간테스트 / 단원평가",
-                    key="ts_title_input",
-                )
-            with c2:
-                ts_type = st.selectbox(
-                    "테스트 구분",
-                    ["정규 테스트", "재시험", "클리닉/보충", "온라인 테스트"],
-                    key="ts_type_select",
-                )
-
-            ts_scope = st.text_input(
-                "출제 범위 / 단원",
-                placeholder="예: 삼각함수 그래프 ~ 삼각방정식",
-                key="ts_scope_input",
-            )
-            ts_memo = st.text_input(
-                "응시 안내 / 메모",
-                placeholder="예: 수업 시작 15분 전 착석, 오답 3회 이상 재시험",
-                key="ts_memo_input",
-            )
-
-            btn_col1, btn_col2 = st.columns([2, 1])
-            with btn_col1:
-                if st.button("✅ 선택 주간·요일에 테스트 등록", type="primary", use_container_width=True, key="ts_save_btn"):
-                    if not ts_title.strip():
-                        st.error("테스트명을 입력해 주세요.")
-                    elif not selected_targets:
-                        st.error("대상 학생을 1명 이상 선택하거나 '전체 학생'을 체크해 주세요.")
-                    elif not selected_day_indices:
-                        st.error("등록할 요일을 1개 이상 선택해 주세요.")
-                    else:
-                        target_date_strs = [week_date_strs[i] for i in selected_day_indices]
-                        cnt = add_test_schedule_entries(
-                            targets=selected_targets,
-                            test_dates=target_date_strs,
-                            title=ts_title,
-                            scope=ts_scope,
-                            test_type=ts_type,
-                            status="scheduled",
-                            memo=ts_memo,
-                        )
-                        st.success(f"총 {cnt}건의 테스트 일정이 등록되었습니다.")
-                        st.rerun()
-
-            with btn_col2:
-                if st.button("📋 전주 일정 그대로 복사", use_container_width=True, key="ts_copy_prev_btn"):
-                    prev_df = get_test_schedules_by_range(prev_week_strs[0], prev_week_strs[-1])
-                    if prev_df.empty:
-                        st.warning("전주에 등록된 테스트 일정이 없습니다.")
-                    else:
-                        copied_count = 0
-                        for _, r in prev_df.iterrows():
-                            try:
-                                p_date = datetime.strptime(str(r["test_date"]), "%Y-%m-%d").date()
-                                day_offset = (p_date - prev_monday).days
-                                if 0 <= day_offset <= 6:
-                                    new_date_str = week_date_strs[day_offset]
-                                    copied_count += add_test_schedule_entries(
-                                        targets=[r["student_name"]],
-                                        test_dates=[new_date_str],
-                                        title=str(r["title"]),
-                                        scope=str(r["scope"] or ""),
-                                        test_type=str(r["test_type"] or "정규 테스트"),
-                                        status="scheduled",
-                                        memo=str(r["memo"] or ""),
-                                    )
-                            except Exception:
-                                pass
-                        st.success(f"전주 일정 {copied_count}건을 이번 주에 복사했습니다.")
-                        st.rerun()
-
-        st.markdown("---")
-        st.markdown("##### 📋 이번 주 등록된 테스트 일정 현황")
-
-        week_schedules_df = get_test_schedules_by_range(week_date_strs[0], week_date_strs[-1])
-        filter_student = st.selectbox(
-            "학생별 필터",
-            ["전체 보기", "전체학생공통(ALL)"] + student_names_list,
-            key="ts_filter_student",
+        sub_view_mode = st.radio(
+            "조회 방식 선택",
+            ["📊 제출 완료된 테스트 채점 결과", "🗂️ 전체 출제된 온라인 테스트 세션 관리"],
+            horizontal=True
         )
 
-        if week_schedules_df.empty:
-            st.info("선택한 주간에 등록된 테스트 일정이 없습니다.")
-        else:
-            view_df = week_schedules_df.copy()
-            if filter_student == "전체학생공통(ALL)":
-                view_df = view_df[view_df["student_name"] == "ALL"]
-            elif filter_student != "전체 보기":
-                view_df = view_df[view_df["student_name"].isin([filter_student, "ALL"])]
+        if sub_view_mode == "📊 제출 완료된 테스트 채점 결과":
+            if sub_summaries:
+                filter_stu = st.selectbox("학생 필터", ["전체 학생"] + student_list, key="filter_test_sub_stu")
+                filtered_subs = sub_summaries if filter_stu == "전체 학생" else [r for r in sub_summaries if r[0] == filter_stu]
 
-            if view_df.empty:
-                st.info("해당 조건에 맞는 테스트 일정이 없습니다.")
+                for s_name, t_title, sub_at, total_cnt, correct_cnt in filtered_subs:
+                    correct_cnt = int(correct_cnt or 0)
+                    total_cnt = int(total_cnt or 0)
+                    wrong_cnt = total_cnt - correct_cnt
+                    score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
+
+                    with st.expander(
+                        f"👤 {s_name} | 📝 {t_title}  —  점수: {correct_cnt}/{total_cnt} ({score_pct}%)  [제출: {sub_at}]",
+                        expanded=False
+                    ):
+                        conn_sub, _ = get_db_connection()
+                        c_sub = conn_sub.cursor()
+                        q(c_sub, """
+                            SELECT problem_id, student_answer, is_checked 
+                            FROM student_test_submissions 
+                            WHERE student_name = ? AND test_title = ? 
+                            ORDER BY id ASC
+                        """, (s_name, t_title))
+                        detail_rows = c_sub.fetchall()
+
+                        if detail_rows:
+                            df_details = pd.DataFrame(detail_rows, columns=["문항 코드", "학생 제출 답안", "정답 여부"])
+                            df_details["정답 여부"] = df_details["정답 여부"].apply(lambda x: "⭕ 정답 (O)" if x == 1 else "❌ 오답 (X)")
+                            st.dataframe(df_details, use_container_width=True, hide_index=True)
+
+                            wrong_codes_only = [r[0] for r in detail_rows if r[2] != 1]
+                            if wrong_codes_only:
+                                st.markdown(f"<div style='color:#EF4444; font-size:13px; font-weight:bold; margin-top:6px;'>❌ 틀린 문항 코드 ({len(wrong_codes_only)}개): {', '.join(wrong_codes_only)}</div>", unsafe_allow_html=True)
+
+                        if st.button("🗑️ 이 제출 기록 삭제", key=f"del_sub_rec_{s_name}_{t_title}_{sub_at}"):
+                            q(c_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                            q(c_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
+                            conn_sub.commit()
+                            st.cache_data.clear()
+                            st.success("제출 기록이 삭제되고 미제출 상태로 복원되었습니다!")
+                            st.rerun()
             else:
-                for d_str in week_date_strs:
-                    day_rows = view_df[view_df["test_date"] == d_str]
-                    if day_rows.empty:
-                        continue
-                    d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
-                    st.markdown(f"**📌 {d_obj.strftime('%m/%d')} ({_ts_weekday_short_kr(d_obj)}) — {len(day_rows)}건**")
-                    for _, item in day_rows.iterrows():
-                        item_id = int(item["id"])
-                        target_label = "전체 학생" if item["student_name"] == "ALL" else item["student_name"]
-                        st_label = get_test_status_label(item["status"])
-                        with st.container(border=True):
-                            st.markdown(
-                                f"**[{st_label}] {item['title']}** · 대상: `{target_label}` · 구분: `{item['test_type']}`"
-                            )
-                            if item["scope"]:
-                                st.caption(f"출제 범위: {item['scope']}")
-                            if item["memo"]:
-                                st.caption(f"안내 메모: {item['memo']}")
+                st.info("아직 제출 완료된 온라인 테스트 기록이 없습니다.")
 
-                            act1, act2, act3, act4 = st.columns([2, 1.5, 1.5, 1])
-                            status_options = ["scheduled", "completed", "retest"]
-                            cur_idx = status_options.index(item["status"]) if item["status"] in status_options else 0
-                            with act1:
-                                new_status = st.selectbox(
-                                    "상태",
-                                    status_options,
-                                    index=cur_idx,
-                                    format_func=get_test_status_label,
-                                    key=f"ts_status_{item_id}",
-                                    label_visibility="collapsed",
+        else:
+            if all_sessions:
+                filter_sess_stu = st.selectbox("학생 선택", ["전체 학생"] + student_list, key="filter_all_sess_stu")
+                filtered_sessions = all_sessions if filter_sess_stu == "전체 학생" else [s for s in all_sessions if s[1] == filter_sess_stu]
+
+                for sess_id, s_name, t_title, c_at, is_comp in filtered_sessions:
+                    badge_txt = "✅ 제출 완료" if is_comp == 1 else "🆕 미제출"
+                    with st.container(border=True):
+                        c_s1, c_s2 = st.columns([4.5, 1.5])
+                        with c_s1:
+                            st.markdown(f"**[{badge_txt}] 👤 {s_name} — {t_title}**")
+                            st.caption(f"출제 일시: {c_at} (세션 ID: {sess_id})")
+                        with c_s2:
+                            if st.button("🗑️ 세션 삭제", key=f"del_sess_admin_{sess_id}", use_container_width=True):
+                                conn_del, _ = get_db_connection()
+                                c_del = conn_del.cursor()
+                                q(c_del, "DELETE FROM online_test_items WHERE session_id = ?", (sess_id,))
+                                q(c_del, "DELETE FROM online_test_sessions WHERE id = ?", (sess_id,))
+                                conn_del.commit()
+                                st.cache_data.clear()
+                                st.success("테스트 세션이 삭제되었습니다!")
+                                st.rerun()
+            else:
+                st.info("등록된 온라인 테스트 세션이 없습니다.")
+
+    with t_cfg_schedule:
+        st.subheader("🗓️ 학생별 테스트 일정 달력 · 주간 관리")
+        st.caption("학생들의 주간·월간 테스트 일정을 한눈에 확인하고, 일괄 등록 및 상태(예정/완료/재시험)를 관리합니다.")
+
+        import calendar as py_calendar
+
+        today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
+        all_students = get_students()
+
+        # 1. 테스트 일정 등록 / 일괄 배정 폼
+        with st.expander("➕ 새 테스트 일정 등록 / 여러 학생·날짜 일괄 배정", expanded=True):
+            with st.form("teacher_add_test_schedule_form", clear_on_submit=True):
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    ts_title = st.text_input("테스트 제목 *", placeholder="예: 11월 4주차 주간평가 / 수1 지수로그 단원평가")
+                with c2:
+                    ts_type = st.selectbox("테스트 구분", ["주간 테스트", "정규 테스트", "단원평가", "재시험", "모의고사"])
+
+                ts_scope = st.text_input("출제 범위 (선택)", placeholder="예: 쎈 수학1 p.12 ~ p.35 / 오답 유사문항")
+
+                c3, c4 = st.columns(2)
+                with c3:
+                    apply_all = st.checkbox("전체 학생(ALL) 공통 일정으로 등록", value=False)
+                    selected_targets = st.multiselect(
+                        "대상 학생 선택 (복수 선택 가능)",
+                        options=all_students,
+                        default=[],
+                        help="위 '전체 학생(ALL)' 체크 시 개별 선택을 무시하고 전체 공통 일정으로 등록됩니다.",
+                    )
+                with c4:
+                    base_date = st.date_input("기본 테스트 날짜 *", value=today_kst)
+                    extra_dates_str = st.text_input(
+                        "추가 반복 날짜 (선택, 쉼표 구분 YYYY-MM-DD)",
+                        placeholder="예: 2026-12-02, 2026-12-09",
+                    )
+
+                c5, c6 = st.columns([1, 2])
+                with c5:
+                    ts_status = st.selectbox(
+                        "초기 상태",
+                        options=["scheduled", "completed", "retest"],
+                        format_func=get_test_status_label,
+                    )
+                with c6:
+                    ts_memo = st.text_input("선생님 메모 / 준비물 안내 (선택)", placeholder="예: 오답노트 지참, 통과 기준 80점")
+
+                submitted_ts = st.form_submit_button("✅ 테스트 일정 등록하기", type="primary", use_container_width=True)
+                if submitted_ts:
+                    if not ts_title.strip():
+                        st.error("테스트 제목을 입력해 주세요.")
+                    else:
+                        target_list = ["ALL"] if apply_all else selected_targets
+                        if not target_list:
+                            st.error("대상 학생을 선택하거나 '전체 학생(ALL)'을 체크해 주세요.")
+                        else:
+                            date_list = [base_date.strftime("%Y-%m-%d")]
+                            invalid_dates = []
+                            if extra_dates_str.strip():
+                                for raw_d in extra_dates_str.split(","):
+                                    s_d = raw_d.strip()
+                                    if not s_d:
+                                        continue
+                                    try:
+                                        datetime.strptime(s_d, "%Y-%m-%d")
+                                        date_list.append(s_d)
+                                    except ValueError:
+                                        invalid_dates.append(s_d)
+                            if invalid_dates:
+                                st.error(f"날짜 형식이 올바르지 않습니다 (YYYY-MM-DD 필요): {', '.join(invalid_dates)}")
+                            else:
+                                cnt = add_test_schedule_entries(
+                                    targets=target_list,
+                                    test_dates=date_list,
+                                    title=ts_title,
+                                    scope=ts_scope,
+                                    test_type=ts_type,
+                                    status=ts_status,
+                                    memo=ts_memo,
                                 )
-                            with act2:
-                                if st.button("상태 저장", key=f"ts_upd_{item_id}", use_container_width=True):
-                                    update_test_schedule_item(
-                                        schedule_id=item_id,
-                                        test_date=str(item["test_date"]),
-                                        title=str(item["title"]),
-                                        scope=str(item["scope"] or ""),
-                                        test_type=str(item["test_type"] or "정규 테스트"),
-                                        status=new_status,
-                                        memo=str(item["memo"] or ""),
-                                    )
-                                    st.success("상태가 저장되었습니다.")
+                                st.success(f"총 {cnt}건의 테스트 일정이 등록되었습니다.")
+                                st.rerun()
+
+        st.markdown("---")
+
+        # 2. 필터 및 보기 방식 (월간 캘린더 / 주간 일정표 / 목록 관리)
+        f1, f2, f3 = st.columns([1.4, 1.4, 1.2])
+        with f1:
+            t_view_mode = st.radio(
+                "조회 보기",
+                ["📅 월간 캘린더", "📆 주간 일정표", "📋 전체 목록·수정"],
+                horizontal=True,
+                key="t_ts_view_mode",
+            )
+        with f2:
+            stu_filter_opts = ["전체 학생 보기", "전체 공통(ALL)만"] + all_students
+            t_stu_filter = st.selectbox("학생 필터", stu_filter_opts, key="t_ts_stu_filter")
+        with f3:
+            t_status_filter = st.selectbox(
+                "상태 필터",
+                ["전체 상태", "scheduled", "completed", "retest"],
+                format_func=lambda x: "전체 상태" if x == "전체 상태" else get_test_status_label(x),
+                key="t_ts_status_filter",
+            )
+
+        def _filter_schedule_df(df: pd.DataFrame) -> pd.DataFrame:
+            if df.empty:
+                return df
+            out = df.copy()
+            if t_stu_filter == "전체 공통(ALL)만":
+                out = out[out["student_name"] == "ALL"]
+            elif t_stu_filter != "전체 학생 보기":
+                out = out[(out["student_name"] == t_stu_filter) | (out["student_name"] == "ALL")]
+            if t_status_filter != "전체 상태":
+                out = out[out["status"] == t_status_filter]
+            return out
+
+        # --- 보기 1: 월간 캘린더 ---
+        if t_view_mode == "📅 월간 캘린더":
+            if "t_cal_year" not in st.session_state:
+                st.session_state.t_cal_year = today_kst.year
+            if "t_cal_month" not in st.session_state:
+                st.session_state.t_cal_month = today_kst.month
+            if "t_selected_date" not in st.session_state:
+                st.session_state.t_selected_date = today_kst.strftime("%Y-%m-%d")
+
+            nav1, nav2, nav3 = st.columns([1, 2, 1])
+            with nav1:
+                if st.button("◀ 이전 달", key="t_cal_prev", use_container_width=True):
+                    if st.session_state.t_cal_month == 1:
+                        st.session_state.t_cal_year -= 1
+                        st.session_state.t_cal_month = 12
+                    else:
+                        st.session_state.t_cal_month -= 1
+                    st.rerun()
+            with nav2:
+                st.markdown(
+                    f"<div style='text-align:center; font-weight:700; font-size:1.1rem; padding-top:6px;'>"
+                    f"{st.session_state.t_cal_year}년 {st.session_state.t_cal_month}월 테스트 캘린더</div>",
+                    unsafe_allow_html=True,
+                )
+            with nav3:
+                if st.button("다음 달 ▶", key="t_cal_next", use_container_width=True):
+                    if st.session_state.t_cal_month == 12:
+                        st.session_state.t_cal_year += 1
+                        st.session_state.t_cal_month = 1
+                    else:
+                        st.session_state.t_cal_month += 1
+                    st.rerun()
+
+            yr = st.session_state.t_cal_year
+            mo = st.session_state.t_cal_month
+            last_day = py_calendar.monthrange(yr, mo)[1]
+            m_start = f"{yr:04d}-{mo:02d}-01"
+            m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
+
+            raw_month_df = get_test_schedules_by_range(m_start, m_end)
+            month_df = _filter_schedule_df(raw_month_df)
+
+            date_map = {}
+            if not month_df.empty:
+                for _, r in month_df.iterrows():
+                    date_map.setdefault(str(r["test_date"]), []).append(r)
+
+            st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜를 클릭하면 하단에서 즉시 수정·삭제할 수 있습니다)")
+
+            st.markdown(
+                """
+                <style>
+                .t-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
+                    display: grid !important;
+                    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+                    gap: 4px !important;
+                }
+                .t-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                }
+                .t-cal-grid-wrap button {
+                    padding: 4px 2px !important;
+                    min-height: 46px !important;
+                    font-size: 0.78rem !important;
+                    line-height: 1.15 !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            st.markdown('<div class="t-cal-grid-wrap">', unsafe_allow_html=True)
+            dow_cols = st.columns(7)
+            for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
+                with dow_cols[i]:
+                    st.markdown(
+                        f"<div style='text-align:center; font-size:0.8rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            for week in py_calendar.monthcalendar(yr, mo):
+                cols = st.columns(7)
+                for d_idx, day_num in enumerate(week):
+                    with cols[d_idx]:
+                        if day_num == 0:
+                            st.markdown("<div style='height:46px;'></div>", unsafe_allow_html=True)
+                        else:
+                            d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
+                            items = date_map.get(d_str, [])
+                            badge = ""
+                            if items:
+                                sts = [str(x["status"]) for x in items]
+                                if "retest" in sts:
+                                    badge = f"\n🔴{len(items)}"
+                                elif "scheduled" in sts:
+                                    badge = f"\n🔵{len(items)}"
+                                else:
+                                    badge = f"\n🟢{len(items)}"
+                            is_sel = (st.session_state.t_selected_date == d_str)
+                            lbl = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
+                            if st.button(
+                                lbl,
+                                key=f"t_cal_btn_{yr}_{mo}_{day_num}",
+                                use_container_width=True,
+                                type="primary" if is_sel else "secondary",
+                            ):
+                                st.session_state.t_selected_date = d_str
+                                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            sel_d_str = st.session_state.t_selected_date
+            st.markdown("---")
+            st.markdown(f"### 📌 {sel_d_str} 등록된 테스트 일정 관리")
+            day_list = date_map.get(sel_d_str, [])
+            if not day_list:
+                st.info("선택한 날짜에 등록된 테스트 일정이 없습니다.")
+            else:
+                for item in day_list:
+                    sid = int(item["id"])
+                    who = "🌐 전체 학생(ALL)" if item["student_name"] == "ALL" else f"👤 {item['student_name']}"
+                    st_lbl = get_test_status_label(item["status"])
+                    with st.expander(f"{who} · [{st_lbl}] {item['title']} ({item['test_type']})", expanded=True):
+                        with st.form(f"edit_ts_day_{sid}"):
+                            ec1, ec2, ec3 = st.columns([1.2, 1.5, 1])
+                            with ec1:
+                                new_d = st.text_input("날짜 (YYYY-MM-DD)", value=str(item["test_date"]))
+                            with ec2:
+                                new_t = st.text_input("제목", value=str(item["title"]))
+                            with ec3:
+                                status_opts = ["scheduled", "completed", "retest"]
+                                cur_idx = status_opts.index(item["status"]) if item["status"] in status_opts else 0
+                                new_st = st.selectbox("상태", status_opts, index=cur_idx, format_func=get_test_status_label)
+
+                            ec4, ec5 = st.columns([1, 2])
+                            with ec4:
+                                type_opts = ["주간 테스트", "정규 테스트", "단원평가", "재시험", "모의고사"]
+                                t_idx = type_opts.index(item["test_type"]) if item["test_type"] in type_opts else 0
+                                new_tp = st.selectbox("구분", type_opts, index=t_idx)
+                            with ec5:
+                                new_sc = st.text_input("출제 범위", value=str(item["scope"] or ""))
+
+                            new_mm = st.text_input("메모", value=str(item["memo"] or ""))
+
+                            b1, b2 = st.columns([3, 1])
+                            with b1:
+                                if st.form_submit_button("💾 수정 저장", type="primary", use_container_width=True):
+                                    update_test_schedule_item(sid, new_d, new_t, new_sc, new_tp, new_st, new_mm)
+                                    st.success("수정되었습니다.")
                                     st.rerun()
-                            with act3:
-                                if st.button("재시험 추가", key=f"ts_retest_{item_id}", use_container_width=True):
-                                    next_day = (d_obj + timedelta(days=1)).strftime("%Y-%m-%d")
-                                    add_test_schedule_entries(
-                                        targets=[str(item["student_name"])],
-                                        test_dates=[next_day],
-                                        title=f"[재시험] {item['title']}",
-                                        scope=str(item["scope"] or ""),
-                                        test_type="재시험",
-                                        status="retest",
-                                        memo=str(item["memo"] or ""),
-                                    )
-                                    st.success("익일 재시험 일정이 추가되었습니다.")
+                            with b2:
+                                if st.form_submit_button("🗑️ 삭제", use_container_width=True):
+                                    delete_test_schedule_item(sid)
+                                    st.warning("삭제되었습니다.")
                                     st.rerun()
-                            with act4:
-                                if st.button("삭제", key=f"ts_del_{item_id}", use_container_width=True):
-                                    delete_test_schedule_item(item_id)
-                                    st.success("삭제되었습니다.")
-                                    st.rerun()
+
+        # --- 보기 2: 주간 일정표 ---
+        elif t_view_mode == "📆 주간 일정표":
+            if "t_week_offset" not in st.session_state:
+                st.session_state.t_week_offset = 0
+
+            wnav1, wnav2, wnav3 = st.columns([1, 2, 1])
+            with wnav1:
+                if st.button("◀ 이전 주", key="t_wk_prev", use_container_width=True):
+                    st.session_state.t_week_offset -= 1
+                    st.rerun()
+            with wnav2:
+                if st.button("이번 주 기준", key="t_wk_today", use_container_width=True):
+                    st.session_state.t_week_offset = 0
+                    st.rerun()
+            with wnav3:
+                if st.button("다음 주 ▶", key="t_wk_next", use_container_width=True):
+                    st.session_state.t_week_offset += 1
+                    st.rerun()
+
+            base_mon = today_kst - timedelta(days=today_kst.weekday()) + timedelta(weeks=st.session_state.t_week_offset)
+            base_sun = base_mon + timedelta(days=6)
+            st.info(f"📆 선택 주간: **{_ts_week_range_str(base_mon)}**")
+
+            wk_raw = get_test_schedules_by_range(base_mon.strftime("%Y-%m-%d"), base_sun.strftime("%Y-%m-%d"))
+            wk_df = _filter_schedule_df(wk_raw)
+
+            for offset in range(7):
+                d_cur = base_mon + timedelta(days=offset)
+                d_str = d_cur.strftime("%Y-%m-%d")
+                day_rows = wk_df[wk_df["test_date"] == d_str] if not wk_df.empty else pd.DataFrame()
+                is_today_mark = " (오늘)" if d_cur == today_kst else ""
+                with st.container(border=True):
+                    st.markdown(f"**{d_cur.strftime('%m/%d')} ({_ts_weekday_short_kr(d_cur)}){is_today_mark}** — {len(day_rows)}건")
+                    if day_rows.empty:
+                        st.caption("등록된 일정 없음")
+                    else:
+                        for _, r in day_rows.iterrows():
+                            who = "🌐 전체(ALL)" if r["student_name"] == "ALL" else f"👤 {r['student_name']}"
+                            st_lbl = get_test_status_label(r["status"])
+                            scope_txt = f" | 범위: {r['scope']}" if r["scope"] else ""
+                            st.write(f"- **[{st_lbl}]** {who} · **{r['title']}** (`{r['test_type']}`){scope_txt}")
+
+        # --- 보기 3: 전체 목록·수정 (최근 -30일 ~ +90일 범위) ---
+        else:
+            r_start = (today_kst - timedelta(days=30)).strftime("%Y-%m-%d")
+            r_end = (today_kst + timedelta(days=90)).strftime("%Y-%m-%d")
+            all_raw = get_test_schedules_by_range(r_start, r_end)
+            list_df = _filter_schedule_df(all_raw)
+            if list_df.empty:
+                st.info("조회 기간(최근 30일 ~ 향후 90일) 내 등록된 테스트 일정이 없습니다.")
+            else:
+                disp = list_df[["id", "test_date", "student_name", "test_type", "title", "scope", "status", "memo"]].copy()
+                disp["status"] = disp["status"].apply(get_test_status_label)
+                disp.columns = ["ID", "날짜", "대상 학생", "구분", "테스트 제목", "출제 범위", "상태", "메모"]
+                st.dataframe(disp, use_container_width=True, hide_index=True)
+
+                del_id = st.number_input("빠른 삭제할 일정 ID 입력", min_value=0, step=1, value=0, key="t_ts_quick_del_id")
+                if st.button("🗑️ 입력한 ID 일정 삭제", key="t_ts_quick_del_btn"):
+                    if del_id > 0:
+                        delete_test_schedule_item(int(del_id))
+                        st.success(f"ID {del_id} 일정이 삭제되었습니다.")
+                        st.rerun()
