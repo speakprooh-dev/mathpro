@@ -1319,15 +1319,33 @@ def get_student_daily_logs_by_dates(student_name, date_strs):
     if not date_strs:
         return {}
     date_tuple = tuple(sorted(list(set(str(d) for d in date_strs))))
-    conn, db_type = get_db_connection()
-    c = conn.cursor()
-    placeholders = ", ".join(["%s" if db_type == "postgres" else "?"] * len(date_tuple))
-    q(
-        c,
-        f"SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date IN ({placeholders})",
-        [student_name] + list(date_tuple)
-    )
-    rows = c.fetchall()
+
+    def _run_daily_logs_query():
+        conn_inner, db_t = get_db_connection()
+        cur_inner = conn_inner.cursor()
+        try:
+            placeholders = ", ".join(["%s" if db_t == "postgres" else "?"] * len(date_tuple))
+            q(
+                cur_inner,
+                f"SELECT routine_id, log_date, is_checked FROM daily_routine_logs WHERE student_name = ? AND log_date IN ({placeholders})",
+                [student_name] + list(date_tuple)
+            )
+            return cur_inner.fetchall()
+        finally:
+            try:
+                cur_inner.close()
+            except Exception:
+                pass
+
+    try:
+        rows = _run_daily_logs_query()
+    except Exception:
+        st.cache_resource.clear()
+        try:
+            rows = _run_daily_logs_query()
+        except Exception:
+            return {}
+
     return {(str(r_id), str(l_date)): bool(val) for r_id, l_date, val in rows}
 
 @st.cache_data(ttl=60, show_spinner=False)
