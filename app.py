@@ -4724,117 +4724,183 @@ else:
             st.info("아직 기록된 일자별 방문 로그가 없습니다.")
 
     with t_cfg_tests:
-        st.markdown("#### 📋 학생 온라인 테스트 제출 현황 및 답안 검사")
+        st.markdown("#### 📋 학생 온라인 테스트 제출물 및 풀이 검사")
         
-        col_ts_title, col_ts_btn = st.columns([3.5, 1.5])
-        with col_ts_title:
-            st.caption("학생들이 온라인으로 제출한 테스트 결과 및 정오답 여부를 확인·관리합니다.")
-        with col_ts_btn:
-            if st.button("🔄 제출 현황 새로고침", key="btn_refresh_tests", use_container_width=True):
-                st.cache_data.clear()
-                st.toast("제출 현황을 업데이트했습니다!", icon="✅")
-                st.rerun()
-
-        sub_summaries = get_cached_test_submission_summaries()
-        all_sessions = get_cached_all_sessions()
-
-        sub_view_mode = st.radio(
-            "조회 방식 선택",
-            ["📊 제출 완료된 테스트 채점 결과", "🗂️ 전체 출제된 온라인 테스트 세션 관리"],
-            horizontal=True
-        )
-
-        if sub_view_mode == "📊 제출 완료된 테스트 채점 결과":
-            if sub_summaries:
-                filter_stu = st.selectbox("학생 필터", ["전체 학생"] + student_list, key="filter_test_sub_stu")
-                filtered_subs = sub_summaries if filter_stu == "전체 학생" else [r for r in sub_summaries if r[0] == filter_stu]
-
-                for s_name, t_title, sub_at, total_cnt, correct_cnt in filtered_subs:
+        submission_summaries = get_cached_test_submission_summaries()
+        
+        if submission_summaries:
+            filter_stu = st.selectbox("검사할 학생 필터링", ["전체 학생 보기"] + student_list, key="filter_sub_stu")
+            
+            filtered_summaries = [
+                row for row in submission_summaries
+                if filter_stu == "전체 학생 보기" or row[0] == filter_stu
+            ]
+            
+            if not filtered_summaries:
+                st.info("해당 학생의 제출 내역이 없습니다.")
+            else:
+                for idx_sum, (s_name, t_title, sub_at, total_cnt, correct_cnt) in enumerate(filtered_summaries):
                     correct_cnt = int(correct_cnt or 0)
                     total_cnt = int(total_cnt or 0)
-                    wrong_cnt = total_cnt - correct_cnt
-                    score_pct = int((correct_cnt / total_cnt) * 100) if total_cnt > 0 else 0
+                    expander_title = f"👤 [{s_name}] {t_title} — 정답: {correct_cnt} / {total_cnt}문항 (제출: {sub_at})"
 
-                    with st.expander(
-                        f"👤 {s_name} | 📝 {t_title}  —  점수: {correct_cnt}/{total_cnt} ({score_pct}%)  [제출: {sub_at}]",
-                        expanded=False
-                    ):
-                        detail_rows = []
-                        c_sub = None
+                    with st.expander(expander_title, expanded=False):
+                        conn_sub, _ = get_db_connection()
+                        c_sub = conn_sub.cursor()
+                        is_postgres_sub = "psycopg2" in str(type(conn_sub))
+
+                        if is_postgres_sub:
+                            c_sub.execute(
+                                "SELECT id, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions WHERE student_name = %s AND test_title = %s ORDER BY id ASC",
+                                (s_name, t_title)
+                            )
+                        else:
+                            q(
+                                c_sub,
+                                "SELECT id, problem_id, student_answer, is_checked, solution_img_path, submitted_at FROM student_test_submissions WHERE student_name = ? AND test_title = ? ORDER BY id ASC",
+                                (s_name, t_title)
+                            )
+                        items = c_sub.fetchall()
+
+                        item_meta_map = {}
                         try:
-                            conn_sub, _ = get_db_connection()
-                            c_sub = conn_sub.cursor()
-                            q(c_sub, """
-                                SELECT problem_id, student_answer, is_checked 
-                                FROM student_test_submissions 
-                                WHERE student_name = ? AND test_title = ? 
-                                ORDER BY id ASC
-                            """, (s_name, t_title))
-                            detail_rows = c_sub.fetchall()
-                        except Exception as e_sub:
-                            st.error(f"제출 상세 조회 중 오류가 발생했습니다: {e_sub}")
-                        finally:
-                            if c_sub is not None:
-                                try:
-                                    c_sub.close()
-                                except Exception:
-                                    pass
-
-                        if detail_rows:
-                            df_details = pd.DataFrame(detail_rows, columns=["문항 코드", "학생 제출 답안", "정답 여부"])
-                            df_details["정답 여부"] = df_details["정답 여부"].apply(lambda x: "⭕ 정답 (O)" if x == 1 else "❌ 오답 (X)")
-                            st.dataframe(df_details, use_container_width=True, hide_index=True)
-
-                            wrong_codes_only = [r[0] for r in detail_rows if r[2] != 1]
-                            if wrong_codes_only:
-                                st.markdown(f"<div style='color:#EF4444; font-size:13px; font-weight:bold; margin-top:6px;'>❌ 틀린 문항 코드 ({len(wrong_codes_only)}개): {', '.join(wrong_codes_only)}</div>", unsafe_allow_html=True)
-
-                        if st.button("🗑️ 이 제출 기록 삭제", key=f"del_sub_rec_{s_name}_{t_title}_{sub_at}"):
-                            c_del_sub = None
-                            try:
-                                conn_del_sub, _ = get_db_connection()
-                                c_del_sub = conn_del_sub.cursor()
-                                q(c_del_sub, "DELETE FROM student_test_submissions WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                                q(c_del_sub, "UPDATE online_test_sessions SET is_completed = 0 WHERE student_name = ? AND test_title = ?", (s_name, t_title))
-                                conn_del_sub.commit()
-                                st.cache_data.clear()
-                                st.success("제출 기록이 삭제되고 미제출 상태로 복원되었습니다!")
-                                st.rerun()
-                            except Exception as e_del:
-                                st.error(f"제출 기록 삭제 중 오류가 발생했습니다: {e_del}")
-                            finally:
-                                if c_del_sub is not None:
+                            if is_postgres_sub:
+                                c_sub.execute(
+                                    """
+                                    SELECT i.problem_order, i.unit_code, i.prob_num, i.answer, i.img_base64, i.solution_img_path, s.id
+                                    FROM online_test_items i
+                                    JOIN online_test_sessions s ON i.session_id = s.id
+                                    WHERE s.student_name = %s AND s.test_title = %s
+                                    ORDER BY i.problem_order ASC
+                                    """,
+                                    (s_name, t_title)
+                                )
+                            else:
+                                q(
+                                    c_sub,
+                                    """
+                                    SELECT i.problem_order, i.unit_code, i.prob_num, i.answer, i.img_base64, i.solution_img_path, s.id
+                                    FROM online_test_items i
+                                    JOIN online_test_sessions s ON i.session_id = s.id
+                                    WHERE s.student_name = ? AND s.test_title = ?
+                                    ORDER BY i.problem_order ASC
+                                    """,
+                                    (s_name, t_title)
+                                )
+                            matched_sess_id = None
+                            for p_order, u_code, p_num, real_ans, img_b64, sol_path, s_id_val in c_sub.fetchall():
+                                matched_sess_id = s_id_val
+                                f_code_key = f"{u_code}{str(p_num).zfill(3)}".upper() if u_code else f"PROB_{p_order:02d}"
+                                dec_img = None
+                                if img_b64:
                                     try:
-                                        c_del_sub.close()
+                                        dec_img = base64.b64decode(img_b64)
                                     except Exception:
                                         pass
-            else:
-                st.info("아직 제출 완료된 온라인 테스트 기록이 없습니다.")
+                                item_meta_map[f_code_key] = {
+                                    "order": p_order,
+                                    "answer": str(real_ans).strip() if real_ans else "",
+                                    "img_bytes": dec_img,
+                                    "filename": str(sol_path) if sol_path else "",
+                                    "session_id": s_id_val
+                                }
+                        except Exception:
+                            matched_sess_id = None
 
+                        if matched_sess_id is not None and item_meta_map:
+                            summary_prob_list = [
+                                {"full_code": k, "order": v["order"]}
+                                for k, v in sorted(item_meta_map.items(), key=lambda kv: kv[1]["order"])
+                            ]
+                            summary_res_list = [
+                                {"full_code": str(r[1]).strip().upper(), "is_correct": int(r[3] or 0)}
+                                for r in items
+                            ]
+                            render_teacher_process_summary(summary_prob_list, summary_res_list, matched_sess_id, s_name)
+
+                        for idx_item, (sub_id, p_id, s_ans, is_chk, img_path, sub_time) in enumerate(items, start=1):
+                            p_code_upper = str(p_id).strip().upper()
+                            meta_info = item_meta_map.get(p_code_upper, {})
+                            p_order_num = meta_info.get("order", idx_item)
+                            real_ans_val = meta_info.get("answer", "")
+                            img_bytes_val = meta_info.get("img_bytes", None)
+                            fn_str_val = meta_info.get("filename", "")
+
+                            is_mc_teacher = detect_multiple_choice(real_ans_val, fn_str_val)
+                            type_tag = "객관식" if is_mc_teacher else "주관식/서술형"
+                            ox_badge = "⭕ 정답" if is_chk == 1 else "❌ 오답"
+                            ox_color = "#10B981" if is_chk == 1 else "#EF4444"
+
+                            f_code_clean = p_code_upper
+                            u_part = f_code_clean[:4] if len(f_code_clean) > 4 else "A114"
+                            num_part = f_code_clean[4:] if len(f_code_clean) > 4 else f_code_clean
+                            n_digits = "".join(filter(str.isdigit, num_part))
+                            project_id = "qfpclacalaaxbhhheosw"
+                            target_filename = f"{u_part}_ans_({n_digits}).png"
+                            ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
+
+                            if real_ans_val and real_ans_val != "-":
+                                clean_real_ans = real_ans_val.replace("@", "").strip()
+                                real_ans_html = f"<b style='color:#10B981;'>{clean_real_ans}</b>"
+                            else:
+                                real_ans_html = f"<img src='{ans_img_url}' style='height:32px; width:auto; background:white; padding:2px 6px; border-radius:4px; vertical-align:middle; border:1px solid #ccc;' />"
+
+                            with st.container(border=True):
+                                st.markdown(
+                                    f"<div style='display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;'>"
+                                    f"<div><b>{p_order_num}번 문제</b> (`{p_code_upper}`) <span style='color:#38BDF8; font-size:12px;'>[{type_tag}]</span></div>"
+                                    f"<div style='color:{ox_color}; font-weight:bold;'>{ox_badge}</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
+
+                                if img_bytes_val:
+                                    st.image(img_bytes_val, width=480)
+                                else:
+                                    st.caption("💡 등록된 문제 이미지가 없습니다.")
+
+                                st.markdown(
+                                    f"<div style='font-size:13.5px; margin:6px 0;'>"
+                                    f"📌 <b>정답:</b> {real_ans_html} &nbsp;|&nbsp; "
+                                    f"✍️ <b>학생 제출 답안:</b> <b style='color:{ox_color};'>{s_ans if s_ans else '미입력'}</b>"
+                                    f"</div>",
+                                    unsafe_allow_html=True
+                                )
+
+                                col_t_ox, col_t_img = st.columns([2, 3])
+                                with col_t_ox:
+                                    new_chk_val = st.checkbox(
+                                        "⭕ 선생님 최종 정답 인정",
+                                        value=bool(is_chk),
+                                        key=f"teacher_chk_{sub_id}"
+                                    )
+                                    if int(new_chk_val) != int(is_chk or 0):
+                                        if is_postgres_sub:
+                                            c_sub.execute(
+                                                "UPDATE student_test_submissions SET is_checked = %s WHERE id = %s",
+                                                (int(new_chk_val), sub_id)
+                                            )
+                                        else:
+                                            q(
+                                                c_sub,
+                                                "UPDATE student_test_submissions SET is_checked = ? WHERE id = ?",
+                                                (int(new_chk_val), sub_id)
+                                            )
+                                        conn_sub.commit()
+                                        st.cache_data.clear()
+                                        st.rerun()
+
+                                with col_t_img:
+                                    if img_path and os.path.exists(img_path):
+                                        with st.expander("📸 학생 풀이 사진 확인", expanded=False):
+                                            st.image(img_path, use_container_width=True)
+
+                        try:
+                            c_sub.close()
+                        except Exception:
+                            pass
         else:
-            if all_sessions:
-                filter_sess_stu = st.selectbox("학생 선택", ["전체 학생"] + student_list, key="filter_all_sess_stu")
-                filtered_sessions = all_sessions if filter_sess_stu == "전체 학생" else [s for s in all_sessions if s[1] == filter_sess_stu]
-
-                for sess_id, s_name, t_title, c_at, is_comp in filtered_sessions:
-                    badge_txt = "✅ 제출 완료" if is_comp == 1 else "🆕 미제출"
-                    with st.container(border=True):
-                        c_s1, c_s2 = st.columns([4.5, 1.5])
-                        with c_s1:
-                            st.markdown(f"**[{badge_txt}] 👤 {s_name} — {t_title}**")
-                            st.caption(f"출제 일시: {c_at} (세션 ID: {sess_id})")
-                        with c_s2:
-                            if st.button("🗑️ 세션 삭제", key=f"del_sess_admin_{sess_id}", use_container_width=True):
-                                conn_del, _ = get_db_connection()
-                                c_del = conn_del.cursor()
-                                q(c_del, "DELETE FROM online_test_items WHERE session_id = ?", (sess_id,))
-                                q(c_del, "DELETE FROM online_test_sessions WHERE id = ?", (sess_id,))
-                                conn_del.commit()
-                                st.cache_data.clear()
-                                st.success("테스트 세션이 삭제되었습니다!")
-                                st.rerun()
-            else:
-                st.info("등록된 온라인 테스트 세션이 없습니다.")
+            st.info("아직 제출된 온라인 테스트 내역이 없습니다.")
 
     with t_cfg_schedule:
         st.subheader("🗓️ 학생별 테스트 일정 달력 · 주간 관리")
