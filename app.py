@@ -1438,14 +1438,36 @@ def get_routine_completion_rate(student_name, days_limit=7):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_student_routine_streak(student_name):
-    conn, db_type = get_db_connection()
-    c = conn.cursor()
+    def _fetch_active_routine_rows():
+        conn_inner, _ = get_db_connection()
+        cur_inner = conn_inner.cursor()
+        try:
+            q(cur_inner, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
+            return cur_inner.fetchall()
+        except Exception:
+            cur_inner2 = conn_inner.cursor()
+            try:
+                q(cur_inner2, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
+                return cur_inner2.fetchall()
+            finally:
+                try:
+                    cur_inner2.close()
+                except Exception:
+                    pass
+        finally:
+            try:
+                cur_inner.close()
+            except Exception:
+                pass
+
     try:
-        q(c, "SELECT id, COALESCE(active_days, '0,1,2,3,4,5,6') FROM daily_routines WHERE student_name = ? AND COALESCE(is_active, 1) = 1", (student_name,))
-        active_rows = c.fetchall()
+        active_rows = _fetch_active_routine_rows()
     except Exception:
-        q(c, "SELECT id, '0,1,2,3,4,5,6' FROM daily_routines WHERE student_name = ?", (student_name,))
-        active_rows = c.fetchall()
+        st.cache_resource.clear()
+        try:
+            active_rows = _fetch_active_routine_rows()
+        except Exception:
+            return 0
 
     if not active_rows:
         return 0
@@ -1453,11 +1475,58 @@ def get_student_routine_streak(student_name):
     active_days_by_id = {str(r[0]): set(parse_active_days(r[1])) for r in active_rows}
     today_obj = get_korean_today()
     start_date_obj = today_obj - timedelta(days=60)
-    if db_type == "postgres":
-        q(c, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1", (student_name, str(start_date_obj)))
-    else:
-        q(c, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1", (student_name, str(start_date_obj)))
-    rows = c.fetchall()
+
+    def _fetch_routine_log_rows():
+        conn_log, db_t = get_db_connection()
+        cur_log = conn_log.cursor()
+        try:
+            if db_t == "postgres":
+                q(cur_log, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = %s AND log_date >= %s AND is_checked = 1", (student_name, str(start_date_obj)))
+            else:
+                q(cur_log, "SELECT log_date, routine_id FROM daily_routine_logs WHERE student_name = ? AND log_date >= ? AND is_checked = 1", (student_name, str(start_date_obj)))
+            return cur_log.fetchall()
+        finally:
+            try:
+                cur_log.close()
+            except Exception:
+                pass
+
+    try:
+        rows = _fetch_routine_log_rows()
+    except Exception:
+        st.cache_resource.clear()
+        rows = _fetch_routine_log_rows()
+
+    completed_by_date = {}
+    for l_date, r_id in rows:
+        r_key = str(r_id)
+        if r_key in active_days_by_id:
+            completed_by_date.setdefault(str(l_date), set()).add(r_key)
+
+    def is_day_completed(d_obj):
+        required_ids = {r_id for r_id, a_days in active_days_by_id.items() if d_obj.weekday() in a_days}
+        if not required_ids:
+            return None
+        done_ids = completed_by_date.get(str(d_obj), set())
+        return required_ids.issubset(done_ids)
+
+    streak = 0
+    check_date = today_obj
+    today_status = is_day_completed(check_date)
+    if today_status is False:
+        check_date -= timedelta(days=1)
+
+    for _ in range(60):
+        day_status = is_day_completed(check_date)
+        if day_status is None:
+            check_date -= timedelta(days=1)
+            continue
+        if day_status is True:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+    return streak
 
     completed_by_date = {}
     for l_date, r_id in rows:
