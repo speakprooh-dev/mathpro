@@ -3661,217 +3661,217 @@ if not st.session_state["teacher_authenticated"]:
                             st.balloons()
                             st.rerun()
 
-with tab5:
-    st.subheader("🗓️ 나의 테스트 일정 달력")
-    st.caption("월간 달력에서 날짜를 선택하거나 주간 보기로 이번 주 테스트 일정을 확인하세요.")
-
-    import calendar as py_calendar
-
-    stu_target_name = selected_student if "selected_student" in locals() else student_name
-    today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
-    if "stu_cal_year" not in st.session_state:
-        st.session_state.stu_cal_year = today_kst.year
-    if "stu_cal_month" not in st.session_state:
-        st.session_state.stu_cal_month = today_kst.month
-    if "stu_selected_date" not in st.session_state:
-        st.session_state.stu_selected_date = today_kst.strftime("%Y-%m-%d")
-
-    view_mode = st.radio(
-        "보기 방식 선택",
-        ["📅 월간 달력", "📆 주간 보기"],
-        horizontal=True,
-        key="stu_ts_view_mode",
-    )
-
-    if view_mode == "📅 월간 달력":
-        m_prev, m_title, m_next = st.columns([1, 2, 1])
-        with m_prev:
-            if st.button("◀ 이전 달", key="stu_cal_prev", use_container_width=True):
-                if st.session_state.stu_cal_month == 1:
-                    st.session_state.stu_cal_year -= 1
-                    st.session_state.stu_cal_month = 12
-                else:
-                    st.session_state.stu_cal_month -= 1
-                st.rerun()
-        with m_title:
-            st.markdown(
-                f"<div style='text-align:center; font-weight:700; font-size:1.05rem; padding-top:6px;'>"
-                f"{st.session_state.stu_cal_year}년 {st.session_state.stu_cal_month}월</div>",
-                unsafe_allow_html=True,
-            )
-        with m_next:
-            if st.button("다음 달 ▶", key="stu_cal_next", use_container_width=True):
-                if st.session_state.stu_cal_month == 12:
-                    st.session_state.stu_cal_year += 1
-                    st.session_state.stu_cal_month = 1
-                else:
-                    st.session_state.stu_cal_month += 1
-                st.rerun()
-
-        yr = st.session_state.stu_cal_year
-        mo = st.session_state.stu_cal_month
-        last_day = py_calendar.monthrange(yr, mo)[1]
-        m_start = f"{yr:04d}-{mo:02d}-01"
-        m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
-
-        stu_ts_df = get_student_test_schedules(stu_target_name, m_start, m_end)
-        date_to_rows = {}
-        if not stu_ts_df.empty:
-            for _, r in stu_ts_df.iterrows():
-                date_to_rows.setdefault(str(r["test_date"]), []).append(r)
-
-        st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜 버튼을 누르면 아래에 상세 일정이 표시됩니다)")
-
-        st.markdown(
-            """
-            <style>
-            .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
-                display: grid !important;
-                grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-                gap: 4px !important;
-            }
-            .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
-                width: 100% !important;
-                min-width: 0 !important;
-            }
-            .stu-cal-grid-wrap button {
-                padding: 4px 2px !important;
-                min-height: 44px !important;
-                font-size: 0.78rem !important;
-                line-height: 1.15 !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
+    with tab5:
+        st.subheader("🗓️ 나의 테스트 일정 달력")
+        st.caption("월간 달력에서 날짜를 선택하거나 주간 보기로 이번 주 테스트 일정을 확인하세요.")
+    
+        import calendar as py_calendar
+    
+        stu_target_name = selected_student if "selected_student" in locals() else student_name
+        today_kst = get_korean_today() if "get_korean_today" in globals() else datetime.now().date()
+        if "stu_cal_year" not in st.session_state:
+            st.session_state.stu_cal_year = today_kst.year
+        if "stu_cal_month" not in st.session_state:
+            st.session_state.stu_cal_month = today_kst.month
+        if "stu_selected_date" not in st.session_state:
+            st.session_state.stu_selected_date = today_kst.strftime("%Y-%m-%d")
+    
+        view_mode = st.radio(
+            "보기 방식 선택",
+            ["📅 월간 달력", "📆 주간 보기"],
+            horizontal=True,
+            key="stu_ts_view_mode",
         )
-
-        st.markdown('<div class="stu-cal-grid-wrap">', unsafe_allow_html=True)
-        dow_cols = st.columns(7)
-        for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
-            with dow_cols[i]:
+    
+        if view_mode == "📅 월간 달력":
+            m_prev, m_title, m_next = st.columns([1, 2, 1])
+            with m_prev:
+                if st.button("◀ 이전 달", key="stu_cal_prev", use_container_width=True):
+                    if st.session_state.stu_cal_month == 1:
+                        st.session_state.stu_cal_year -= 1
+                        st.session_state.stu_cal_month = 12
+                    else:
+                        st.session_state.stu_cal_month -= 1
+                    st.rerun()
+            with m_title:
                 st.markdown(
-                    f"<div style='text-align:center; font-size:0.78rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
+                    f"<div style='text-align:center; font-weight:700; font-size:1.05rem; padding-top:6px;'>"
+                    f"{st.session_state.stu_cal_year}년 {st.session_state.stu_cal_month}월</div>",
                     unsafe_allow_html=True,
                 )
-
-        cal_weeks = py_calendar.monthcalendar(yr, mo)
-        for w_idx, week in enumerate(cal_weeks):
-            cols = st.columns(7)
-            for d_idx, day_num in enumerate(week):
-                with cols[d_idx]:
-                    if day_num == 0:
-                        st.markdown("<div style='height:44px;'></div>", unsafe_allow_html=True)
+            with m_next:
+                if st.button("다음 달 ▶", key="stu_cal_next", use_container_width=True):
+                    if st.session_state.stu_cal_month == 12:
+                        st.session_state.stu_cal_year += 1
+                        st.session_state.stu_cal_month = 1
                     else:
-                        d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
-                        day_items = date_to_rows.get(d_str, [])
-                        badge = ""
-                        if day_items:
-                            statuses = [str(x["status"]) for x in day_items]
-                            if "retest" in statuses:
-                                badge = f"\n🔴{len(day_items)}"
-                            elif "scheduled" in statuses:
-                                badge = f"\n🔵{len(day_items)}"
-                            else:
-                                badge = f"\n🟢{len(day_items)}"
-                        is_sel = (st.session_state.stu_selected_date == d_str)
-                        btn_label = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
-                        if st.button(
-                            btn_label,
-                            key=f"stu_cal_btn_{yr}_{mo}_{day_num}",
-                            use_container_width=True,
-                            type="primary" if is_sel else "secondary",
-                        ):
-                            st.session_state.stu_selected_date = d_str
-                            st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        sel_str = st.session_state.stu_selected_date
-        try:
-            sel_obj = datetime.strptime(sel_str, "%Y-%m-%d").date()
-            sel_title = f"{sel_obj.month}월 {sel_obj.day}일 ({_ts_weekday_short_kr(sel_obj)}) 테스트 상세"
-        except Exception:
-            sel_title = f"{sel_str} 테스트 상세"
-
-        st.markdown("---")
-        st.markdown(f"### 📌 {sel_title}")
-        selected_items = date_to_rows.get(sel_str, [])
-        if not selected_items:
-            st.info("선택한 날짜에 예정된 테스트 일정이 없습니다.")
-        else:
-            for item in selected_items:
-                st_label = get_test_status_label(item["status"])
-                with st.container(border=True):
-                    st.markdown(f"**[{st_label}] {item['title']}** · `{item['test_type']}`")
-                    if item["scope"]:
-                        st.write(f"**출제 범위:** {item['scope']}")
-                    if item["memo"]:
-                        st.caption(f"**안내 메모:** {item['memo']}")
-
-    else:
-        mon = today_kst - timedelta(days=today_kst.weekday())
-        sun = mon + timedelta(days=6)
-        st.info(f"📆 이번 주간: **{_ts_week_range_str(mon)}**")
-        wk_df = get_student_test_schedules(stu_target_name, mon.strftime("%Y-%m-%d"), sun.strftime("%Y-%m-%d"))
-        if wk_df.empty:
-            st.info("이번 주에 등록된 테스트 일정이 없습니다.")
-        else:
-            for _, item in wk_df.iterrows():
-                d_obj = datetime.strptime(str(item["test_date"]), "%Y-%m-%d").date()
-                st_label = get_test_status_label(item["status"])
-                with st.container(border=True):
-                    st.markdown(
-                        f"**{d_obj.strftime('%m/%d')} ({_ts_weekday_short_kr(d_obj)}) · [{st_label}] {item['title']}**"
-                    )
-                    st.caption(f"구분: {item['test_type']}" + (f" | 범위: {item['scope']}" if item["scope"] else ""))
-                    if item["memo"]:
-                        st.caption(f"안내: {item['memo']}")
-
-
-# ====================================================
-# 2. [선생님 전용 관리 모드]
-# ====================================================
-else:
-    with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
-        col_s2, col_s3 = st.columns(2)
-        with col_s2:
-            with st.form("add_student_inline_form"):
-                new_s_name = st.text_input("새 학생 이름")
-                if st.form_submit_button("➕ 학생 등록", type="primary"):
-                    if new_s_name.strip() and add_student(new_s_name.strip()):
-                        st.success("등록 완료!")
-                        st.rerun()
-        with col_s3:
-            if student_list:
-                del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
-                if st.button("🗑️ 선택 학생 삭제"):
-                    delete_student(del_target_student)
-                    st.success("삭제되었습니다!")
+                        st.session_state.stu_cal_month += 1
                     st.rerun()
-
-        if student_list:
-            st.divider()
-            base_url = get_base_url()
-            for s in student_list:
-                personal_link = f"{base_url}/?student={s}"
-                with st.container(border=True):
-                    st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
-                    st.code(personal_link, language="text")
-
-    st.divider()
-    st.markdown("### ⚙️ 통합 관리 대시보드")
-
-    t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests, t_cfg_schedule = st.tabs([
-        "👤 1. [개별] 학생 진도 관리", 
-        "📢 2. 공지사항 관리",
-        "📅 3. 개별 과제 관리", 
-        "📚 4. 커리큘럼 진도 배정", 
-        "🔍 5. 오답노트 모아보기",
-        "📊 6. 전체 숙제 매트릭스",
-        "🎥 7. 해설 링크 관리",
-        "📈 8. 실시간 학습 참여 현황",
-        "📋 9. 학생 제출물 및 풀이 검사",
-        "🗓️ 10. 테스트 일정 관리"
-    ])
+    
+            yr = st.session_state.stu_cal_year
+            mo = st.session_state.stu_cal_month
+            last_day = py_calendar.monthrange(yr, mo)[1]
+            m_start = f"{yr:04d}-{mo:02d}-01"
+            m_end = f"{yr:04d}-{mo:02d}-{last_day:02d}"
+    
+            stu_ts_df = get_student_test_schedules(stu_target_name, m_start, m_end)
+            date_to_rows = {}
+            if not stu_ts_df.empty:
+                for _, r in stu_ts_df.iterrows():
+                    date_to_rows.setdefault(str(r["test_date"]), []).append(r)
+    
+            st.caption("범례: 🔵 예정 · 🟢 완료 · 🔴 재시험 (날짜 버튼을 누르면 아래에 상세 일정이 표시됩니다)")
+    
+            st.markdown(
+                """
+                <style>
+                .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] {
+                    display: grid !important;
+                    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+                    gap: 4px !important;
+                }
+                .stu-cal-grid-wrap div[data-testid="stHorizontalBlock"] > div {
+                    width: 100% !important;
+                    min-width: 0 !important;
+                }
+                .stu-cal-grid-wrap button {
+                    padding: 4px 2px !important;
+                    min-height: 44px !important;
+                    font-size: 0.78rem !important;
+                    line-height: 1.15 !important;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+    
+            st.markdown('<div class="stu-cal-grid-wrap">', unsafe_allow_html=True)
+            dow_cols = st.columns(7)
+            for i, d_lbl in enumerate(["월", "화", "수", "목", "금", "토", "일"]):
+                with dow_cols[i]:
+                    st.markdown(
+                        f"<div style='text-align:center; font-size:0.78rem; font-weight:700; color:#64748B;'>{d_lbl}</div>",
+                        unsafe_allow_html=True,
+                    )
+    
+            cal_weeks = py_calendar.monthcalendar(yr, mo)
+            for w_idx, week in enumerate(cal_weeks):
+                cols = st.columns(7)
+                for d_idx, day_num in enumerate(week):
+                    with cols[d_idx]:
+                        if day_num == 0:
+                            st.markdown("<div style='height:44px;'></div>", unsafe_allow_html=True)
+                        else:
+                            d_str = f"{yr:04d}-{mo:02d}-{day_num:02d}"
+                            day_items = date_to_rows.get(d_str, [])
+                            badge = ""
+                            if day_items:
+                                statuses = [str(x["status"]) for x in day_items]
+                                if "retest" in statuses:
+                                    badge = f"\n🔴{len(day_items)}"
+                                elif "scheduled" in statuses:
+                                    badge = f"\n🔵{len(day_items)}"
+                                else:
+                                    badge = f"\n🟢{len(day_items)}"
+                            is_sel = (st.session_state.stu_selected_date == d_str)
+                            btn_label = f"{'[' if is_sel else ''}{day_num}{']' if is_sel else ''}{badge}"
+                            if st.button(
+                                btn_label,
+                                key=f"stu_cal_btn_{yr}_{mo}_{day_num}",
+                                use_container_width=True,
+                                type="primary" if is_sel else "secondary",
+                            ):
+                                st.session_state.stu_selected_date = d_str
+                                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+    
+            sel_str = st.session_state.stu_selected_date
+            try:
+                sel_obj = datetime.strptime(sel_str, "%Y-%m-%d").date()
+                sel_title = f"{sel_obj.month}월 {sel_obj.day}일 ({_ts_weekday_short_kr(sel_obj)}) 테스트 상세"
+            except Exception:
+                sel_title = f"{sel_str} 테스트 상세"
+    
+            st.markdown("---")
+            st.markdown(f"### 📌 {sel_title}")
+            selected_items = date_to_rows.get(sel_str, [])
+            if not selected_items:
+                st.info("선택한 날짜에 예정된 테스트 일정이 없습니다.")
+            else:
+                for item in selected_items:
+                    st_label = get_test_status_label(item["status"])
+                    with st.container(border=True):
+                        st.markdown(f"**[{st_label}] {item['title']}** · `{item['test_type']}`")
+                        if item["scope"]:
+                            st.write(f"**출제 범위:** {item['scope']}")
+                        if item["memo"]:
+                            st.caption(f"**안내 메모:** {item['memo']}")
+    
+        else:
+            mon = today_kst - timedelta(days=today_kst.weekday())
+            sun = mon + timedelta(days=6)
+            st.info(f"📆 이번 주간: **{_ts_week_range_str(mon)}**")
+            wk_df = get_student_test_schedules(stu_target_name, mon.strftime("%Y-%m-%d"), sun.strftime("%Y-%m-%d"))
+            if wk_df.empty:
+                st.info("이번 주에 등록된 테스트 일정이 없습니다.")
+            else:
+                for _, item in wk_df.iterrows():
+                    d_obj = datetime.strptime(str(item["test_date"]), "%Y-%m-%d").date()
+                    st_label = get_test_status_label(item["status"])
+                    with st.container(border=True):
+                        st.markdown(
+                            f"**{d_obj.strftime('%m/%d')} ({_ts_weekday_short_kr(d_obj)}) · [{st_label}] {item['title']}**"
+                        )
+                        st.caption(f"구분: {item['test_type']}" + (f" | 범위: {item['scope']}" if item["scope"] else ""))
+                        if item["memo"]:
+                            st.caption(f"안내: {item['memo']}")
+    
+    
+    # ====================================================
+    # 2. [선생님 전용 관리 모드]
+    # ====================================================
+    else:
+        with st.expander("⚙️ 학생 관리 및 전용 링크 복사 설정", expanded=False):
+            col_s2, col_s3 = st.columns(2)
+            with col_s2:
+                with st.form("add_student_inline_form"):
+                    new_s_name = st.text_input("새 학생 이름")
+                    if st.form_submit_button("➕ 학생 등록", type="primary"):
+                        if new_s_name.strip() and add_student(new_s_name.strip()):
+                            st.success("등록 완료!")
+                            st.rerun()
+            with col_s3:
+                if student_list:
+                    del_target_student = st.selectbox("삭제할 학생 선택", student_list, key="del_stu_box")
+                    if st.button("🗑️ 선택 학생 삭제"):
+                        delete_student(del_target_student)
+                        st.success("삭제되었습니다!")
+                        st.rerun()
+    
+            if student_list:
+                st.divider()
+                base_url = get_base_url()
+                for s in student_list:
+                    personal_link = f"{base_url}/?student={s}"
+                    with st.container(border=True):
+                        st.markdown(f"👤 **<a href='{personal_link}' target='_blank' style='color:#0284C7; text-decoration:none;'>{s}</a>**", unsafe_allow_html=True)
+                        st.code(personal_link, language="text")
+    
+        st.divider()
+        st.markdown("### ⚙️ 통합 관리 대시보드")
+    
+        t_cfg_student, t_cfg_notice, t_cfg_hw, t_cfg_curriculum, t_cfg_wrong, t_cfg_matrix, t_cfg_links, t_cfg_stats, t_cfg_tests, t_cfg_schedule = st.tabs([
+            "👤 1. [개별] 학생 진도 관리", 
+            "📢 2. 공지사항 관리",
+            "📅 3. 개별 과제 관리", 
+            "📚 4. 커리큘럼 진도 배정", 
+            "🔍 5. 오답노트 모아보기",
+            "📊 6. 전체 숙제 매트릭스",
+            "🎥 7. 해설 링크 관리",
+            "📈 8. 실시간 학습 참여 현황",
+            "📋 9. 학생 제출물 및 풀이 검사",
+            "🗓️ 10. 테스트 일정 관리"
+        ])
 
     with t_cfg_student:
         st.markdown("#### 🎯 학생 종합 현황 및 진도 관리")
