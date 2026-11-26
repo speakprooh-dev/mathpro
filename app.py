@@ -2986,7 +2986,7 @@ if not st.session_state["teacher_authenticated"]:
                                 except Exception as e:
                                     st.error(f"⚠️ 오답노트 저장 중 오류 발생: {e}")
 
-                    def evaluate_retry_answer(w_prob, raw_retry_ans):
+                    def evaluate_retry_answer(w_prob, raw_retry_ans, is_user_self_check=False):
                         u_ans = str(raw_retry_ans or "").strip()
                         ans_str = str(w_prob.get("answer", "")).strip()
                         fn_str = str(w_prob.get("filename", "")).strip()
@@ -2999,7 +2999,7 @@ if not st.session_state["teacher_authenticated"]:
                                 if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
                                     is_difficulty_empty = True
                     
-                        if ans_str == "-" or not ans_str or is_difficulty_empty:
+                        if ans_str == "-" or not ans_str or is_difficulty_empty or is_user_self_check:
                             return "manual"
                     
                         if not u_ans:
@@ -3013,7 +3013,9 @@ if not st.session_state["teacher_authenticated"]:
                         fn_str = str(prob.get("filename", "")).strip()
                         return not detect_multiple_choice(ans_str, fn_str)
                     
-                    def _is_essay_item(prob):
+                    def _is_essay_item(prob, user_ans_str=""):
+                        if str(user_ans_str or "").strip() == "셀프채점시대기":
+                            return True
                         ans_str = str(prob.get("answer", "")).strip()
                         fn_str = str(prob.get("filename", "")).strip()
                         is_diff_empty = False
@@ -3029,7 +3031,7 @@ if not st.session_state["teacher_authenticated"]:
                         u_raw = str(written_ans or "").strip()
                         if not u_raw:
                             return False
-                        if _is_essay_item(prob):
+                        if _is_essay_item(prob, u_raw):
                             return True
 
                         r_raw = str(prob.get("answer") or "").replace("@", "").replace("번", "").strip()
@@ -3133,8 +3135,10 @@ if not st.session_state["teacher_authenticated"]:
                             graded_summary = {}
                             for w_item in wrong_items_for_retry:
                                 code = w_item["full_code"]
+                                matched_orig = next((r for r in res_list if r["full_code"] == code), {})
+                                was_self_check = (str(matched_orig.get("user_ans") or "").strip() == "셀프채점시대기")
                                 ans_given = str(retry_ans_map.get(code, "")).strip()
-                                status = evaluate_retry_answer(w_item, ans_given)
+                                status = evaluate_retry_answer(w_item, ans_given, is_user_self_check=was_self_check)
                                 graded_summary[code] = status
                                 reolved_map[code] = (ans_given != "")
                             st.session_state[retry_res_key] = graded_summary
@@ -3159,7 +3163,7 @@ if not st.session_state["teacher_authenticated"]:
                                 raw_user_ans = str(matched_r.get("user_ans", "")).strip()
                                 user_written = raw_user_ans if raw_user_ans else "미입력 (다시풀기 대상)"
                                 real_answer_txt = str(matched_r.get("real_ans") or q_prob.get("answer") or "-").strip()
-                                is_essay = _is_essay_item(q_prob)
+                                is_essay = _is_essay_item(q_prob, raw_user_ans)
                     
                                 cur_ox = quick_grade_map.get(q_code, "X")
                                 default_idx = 0 if cur_ox == "O" else 1
@@ -3173,17 +3177,21 @@ if not st.session_state["teacher_authenticated"]:
                                         project_id = "qfpclacalaaxbhhheosw"
                                         target_filename = f"{u_part}_ans_({n_digits}).png"
                                         ans_img_url = f"https://{project_id}.supabase.co/storage/v1/object/public/master_answer/{target_filename}"
+                                        clean_real_txt = real_answer_txt.replace("@", "").strip()
                     
-                                        st.markdown(f"**서술형 — {q_prob['order']}번 문제** <span style='color:#9CA3AF; font-size:12px;'>(연습장 풀이와 정답지 비교)</span>", unsafe_allow_html=True)
-                                        st.markdown(
-                                            f"<div style='margin: 4px 0 8px 0;'>"
-                                            f"<span style='font-size: 13px; color: #9CA3AF;'>정답지:</span><br>"
-                                            f"<img src='{ans_img_url}' onerror=\"this.style.display='none'; this.nextElementSibling.style.display='inline';\" "
-                                            f"style='max-height: 90px; width: auto; background: white; padding: 4px 8px; border-radius: 6px; border: 1px solid #ddd; margin-top: 4px;' />"
-                                            f"<span style='display: none; font-size: 13px; color: #9CA3AF;'>정답 이미지 없음 — 본인 풀이 기준 셀프채점</span>"
-                                            f"</div>",
-                                            unsafe_allow_html=True
-                                        )
+                                        st.markdown(f"**셀프채점 — {q_prob['order']}번 문제** <span style='color:#9CA3AF; font-size:12px;'>(연습장 풀이와 정답 비교)</span>", unsafe_allow_html=True)
+                                        if clean_real_txt and clean_real_txt != "-":
+                                            st.markdown(f"- **정답:** `{clean_real_txt}`")
+                                        else:
+                                            st.markdown(
+                                                f"<div style='margin: 4px 0 8px 0;'>"
+                                                f"<span style='font-size: 13px; color: #9CA3AF;'>정답지:</span><br>"
+                                                f"<img src='{ans_img_url}' onerror=\"this.style.display='none'; this.nextElementSibling.style.display='inline';\" "
+                                                f"style='max-height: 90px; width: auto; background: white; padding: 4px 8px; border-radius: 6px; border: 1px solid #ddd; margin-top: 4px;' />"
+                                                f"<span style='display: none; font-size: 13px; color: #9CA3AF;'>정답 이미지 없음 — 본인 풀이 기준 셀프채점</span>"
+                                                f"</div>",
+                                                unsafe_allow_html=True
+                                            )
                                     else:
                                         st.markdown(f"**주관식 #{idx_q}** <span style='color:#9CA3AF; font-size:12px;'>(띄어쓰기·표기 차이만 정답 인정)</span>", unsafe_allow_html=True)
                                         st.markdown(f"- **정답:** `{real_answer_txt}`")
@@ -3361,6 +3369,8 @@ if not st.session_state["teacher_authenticated"]:
                     else:
                         with st.form(key=f"test_form_{selected_session_id}"):
                             form_answers = {}
+                            form_self_check_flags = {}
+
                             for idx, prob in enumerate(problem_list):
                                 p_key = f"form_{selected_session_id}_{prob['item_id']}"
                                 
@@ -3381,9 +3391,9 @@ if not st.session_state["teacher_authenticated"]:
                                         if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
                                             is_difficulty_empty = True
 
-                                is_self_check = (ans_str == "-" or is_difficulty_empty)
+                                is_auto_self_check = (ans_str == "-" or is_difficulty_empty)
 
-                                if is_self_check:
+                                if is_auto_self_check:
                                     st.markdown(
                                         "<div style='background-color: var(--secondary-background-color); border-left: 3px solid #0284C7; padding: 10px 12px; border-radius: 6px; font-size: 13px; color: #0284C7; margin-bottom: 10px;'>"
                                         "📝 <b>노트에 정답(풀이)을 적고 넘어가세요!</b><br>"
@@ -3392,6 +3402,7 @@ if not st.session_state["teacher_authenticated"]:
                                         unsafe_allow_html=True
                                     )
                                     user_ans = "셀프채점시대기"
+                                    form_self_check_flags[p_key] = True
                                 else:
                                     is_multiple_choice = detect_multiple_choice(ans_str, filename_str)
 
@@ -3405,13 +3416,20 @@ if not st.session_state["teacher_authenticated"]:
                                             horizontal=True
                                         )
                                         user_ans = selected_choice.replace("번", "").strip() if selected_choice != "잘 모름" else ""
+                                        form_self_check_flags[p_key] = False
                                     else:
                                         user_ans = st.text_input(
                                             f"{idx + 1}번 정답 입력 (주관식 단답형):",
                                             value="",
                                             key=f"text_{p_key}",
-                                            placeholder="정답을 입력하세요 (예: 제4사분면 또는 4사분면)"
+                                            placeholder="정답을 입력하세요 (식·서술형은 아래 셀프채점 옵션 체크)"
                                         ).strip()
+                                        use_self_check = st.checkbox(
+                                            f"☑️ {idx + 1}번 셀프채점으로 풀기 (노트에 풀이 후 제출 뒤 직접 O/X 채점)",
+                                            value=False,
+                                            key=f"self_opt_{p_key}"
+                                        )
+                                        form_self_check_flags[p_key] = use_self_check
         
                                 form_answers[p_key] = user_ans
                                 st.markdown("<hr style='margin: 20px 0; border: 1px dashed rgba(128,128,128,0.3);'>", unsafe_allow_html=True)
@@ -3436,13 +3454,20 @@ if not st.session_state["teacher_authenticated"]:
                                         if "@" not in after_diff and not any(c.isdigit() for c in after_diff.split(".")[0]):
                                             is_difficulty_empty = True
 
-                                is_self_check = (ans_str == "-" or is_difficulty_empty)
-                                u_ans = form_answers.get(p_key, "")
+                                is_auto_self_check = (ans_str == "-" or is_difficulty_empty)
+                                is_user_self_check = form_self_check_flags.get(p_key, False)
+                                raw_u_ans = form_answers.get(p_key, "")
 
-                                if is_self_check:
+                                if is_auto_self_check:
                                     is_correct = 0
                                     real_ans = "-"
+                                    u_ans = "셀프채점시대기"
+                                elif is_user_self_check:
+                                    is_correct = 0
+                                    real_ans = ans_str.replace("@", "").replace("번", "").strip() or "-"
+                                    u_ans = "셀프채점시대기"
                                 else:
+                                    u_ans = raw_u_ans
                                     real_ans = ans_str.replace("@", "").replace("번", "").strip()
                                     is_correct = 1 if (u_ans != "" and real_ans != "" and check_subjective_answer(u_ans, real_ans)) else 0
 
